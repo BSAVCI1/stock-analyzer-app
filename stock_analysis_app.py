@@ -38,31 +38,40 @@ resistance = np.percentile(hist['High'], 90)
 # --- PRICE CHANGES ---
 def calc_change(current, past):
     if not current or not past:
-        return "N/A", "N/A"
+        return "N/A", "N/A", "gray", "No significant movement."
     change = current - past
     pct = (change / past * 100) if past else 0
-    return f"${change:.2f}", f"{pct:.2f}%"
+    if pct > 1:
+        color = "green"
+        note = "Positive price action, likely due to optimism or strong performance."
+    elif pct < -1:
+        color = "red"
+        note = "Negative price trend, possibly due to weaker sentiment or earnings."
+    else:
+        color = "orange"
+        note = "Stable with no major shift."
+    return f"${change:.2f}", f"{pct:.2f}%", color, note
 
 current_price = info.get("currentPrice", 0.0)
 price_1d = hist["Close"].iloc[-2] if len(hist) > 1 else None
 price_1w = hist["Close"].iloc[-6] if len(hist) > 5 else None
 price_1m = hist["Close"].iloc[0] if len(hist) > 0 else None
 
-change_1d, pct_1d = calc_change(current_price, price_1d)
-change_1w, pct_1w = calc_change(current_price, price_1w)
-change_1m, pct_1m = calc_change(current_price, price_1m)
+change_1d, pct_1d, color_1d, note_1d = calc_change(current_price, price_1d)
+change_1w, pct_1w, color_1w, note_1w = calc_change(current_price, price_1w)
+change_1m, pct_1m, color_1m, note_1m = calc_change(current_price, price_1m)
 
 # --- DISPLAY PANEL ---
 st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}", label_visibility="visible")
 col1.markdown(f"<div style='font-size:14px; color:#000000;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
-col2.metric("24h Change", pct_1d, delta_color="inverse")
-col2.markdown("<div style='font-size:14px; color:#000000;'>A positive change may indicate short-term optimism.</div>", unsafe_allow_html=True)
-col3.metric("1 Week Change", pct_1w)
-col3.markdown("<div style='font-size:14px; color:#000000;'>Reflects weekly trend direction.</div>", unsafe_allow_html=True)
-col4.metric("1 Month Change", pct_1m)
-col4.markdown("<div style='font-size:14px; color:#000000;'>Shows price momentum over the last month.</div>", unsafe_allow_html=True)
+col2.markdown(f"<h4 style='color:{color_1d};'>{pct_1d}</h4>", unsafe_allow_html=True)
+col2.markdown(f"<div style='font-size:14px; color:#000000;'>{note_1d}</div>", unsafe_allow_html=True)
+col3.markdown(f"<h4 style='color:{color_1w};'>{pct_1w}</h4>", unsafe_allow_html=True)
+col3.markdown(f"<div style='font-size:14px; color:#000000;'>{note_1w}</div>", unsafe_allow_html=True)
+col4.markdown(f"<h4 style='color:{color_1m};'>{pct_1m}</h4>", unsafe_allow_html=True)
+col4.markdown(f"<div style='font-size:14px; color:#000000;'>{note_1m}</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
 st.markdown("## 🧾 Market & Trading Overview")
