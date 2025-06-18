@@ -3,8 +3,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import openai
-import os
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
@@ -28,78 +26,79 @@ if not ticker:
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
 info = data.info
-hist = data.history(period="1y")
+hist = data.history(period="1mo")
 
-st.header(f"{info.get('shortName', ticker)} ({ticker})")
-st.metric("Current Price", f"${info.get('currentPrice', 'N/A')}")
-st.metric("Market Cap", f"${info.get('marketCap', 'N/A'):,}")
+# --- PRICE CHANGES ---
+def calc_change(current, past):
+    if not current or not past:
+        return "N/A", "N/A"
+    change = current - past
+    pct = (change / past * 100) if past else 0
+    return f"${change:.2f}", f"{pct:.2f}%"
 
-# --- FUNDAMENTALS SECTION ---
-with st.expander("🔍 Fundamentals Overview"):
-    st.subheader("📊 Key Financial Metrics with Insights")
+current_price = info.get("currentPrice", 0.0)
+price_1d = hist["Close"].iloc[-2] if len(hist) > 1 else None
+price_1w = hist["Close"].iloc[-6] if len(hist) > 5 else None
+price_1m = hist["Close"].iloc[0] if len(hist) > 0 else None
 
-    def interpret_metric(label, value):
-        status = ""
-        note = ""
-        color = "black"
+change_1d, pct_1d = calc_change(current_price, price_1d)
+change_1w, pct_1w = calc_change(current_price, price_1w)
+change_1m, pct_1m = calc_change(current_price, price_1m)
 
-        if label == "PE Ratio":
-            if value is None:
-                return ("N/A", "No earnings data available", "gray")
-            elif value < 15:
-                status, note, color = "✅ Good", "Undervalued compared to peers", "green"
-            elif value < 30:
-                status, note, color = "⚠️ Moderate", "Fairly valued", "orange"
-            else:
-                status, note, color = "❌ High", "Likely overvalued", "red"
+# --- PRICE PANEL ---
+st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Current Price", f"${current_price:.2f}")
+col2.metric("24h Change", pct_1d, delta_color="inverse")
+col3.metric("1 Week Change", pct_1w)
+col4.metric("1 Month Change", pct_1m)
 
-        elif label == "Profit Margin":
-            if value is None:
-                return ("N/A", "Data not available", "gray")
-            elif value > 0.15:
-                status, note, color = "✅ Strong", "Healthy profitability", "green"
-            elif value > 0:
-                status, note, color = "⚠️ Low", "Slim margins", "orange"
-            else:
-                status, note, color = "❌ Negative", "Losing money", "red"
+# --- MARKET OVERVIEW ---
+st.markdown("## 🧾 Market & Trading Overview")
+col1, col2, col3 = st.columns(3)
 
-        elif label == "Debt-to-Equity":
-            if value is None:
-                return ("N/A", "No data", "gray")
-            elif value < 1:
-                status, note, color = "✅ Low", "Financially safe", "green"
-            elif value < 2:
-                status, note, color = "⚠️ Moderate", "Manageable debt", "orange"
-            else:
-                status, note, color = "❌ High", "Debt-heavy balance sheet", "red"
+col1.metric("Volume (Last)", f"{info.get('volume', 0):,}")
+col2.metric("Avg Volume", f"{info.get('averageVolume', 0):,}")
+col3.metric("Market Cap", f"${info.get('marketCap', 0):,}")
 
-        return (f"{value:.2f}", note, color)
+col1.metric("Revenue (TTM)", f"${info.get('totalRevenue', 0):,}")
+col2.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get("dividendYield") else "N/A")
+col3.metric("Beta", f"{info.get('beta', 'N/A')}")
 
-    metrics = [
-        ("PE Ratio", info.get("trailingPE")),
-        ("Profit Margin", info.get("profitMargins")),
-        ("Debt-to-Equity", info.get("debtToEquity")),
-        ("EPS", info.get("trailingEps")),
-        ("ROE", info.get("returnOnEquity")),
-        ("ROA", info.get("returnOnAssets"))
-    ]
+# --- TECHNICAL INDICATORS ---
+st.markdown("## 📊 Technical Indicators")
 
-    for label, value in metrics:
-        display_val, insight, color = interpret_metric(label, value)
-        st.markdown(f"<b style='color:{color}'>{label}: {display_val}</b> — <i>{insight}</i>", unsafe_allow_html=True)
+# RSI
+delta = hist['Close'].diff()
+gain = delta.where(delta > 0, 0).rolling(14).mean()
+loss = -delta.where(delta < 0, 0).rolling(14).mean()
+rs = gain / loss
+hist['RSI'] = 100 - (100 / (1 + rs))
 
-# --- TECHNICALS ---
-with st.expander("📈 Price Trend and RSI"):
-    hist['MA20'] = hist['Close'].rolling(20).mean()
-    hist['MA50'] = hist['Close'].rolling(50).mean()
-    delta = hist['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / loss
-    hist['RSI'] = 100 - (100 / (1 + rs))
+# MACD
+hist['EMA12'] = hist['Close'].ewm(span=12, adjust=False).mean()
+hist['EMA26'] = hist['Close'].ewm(span=26, adjust=False).mean()
+hist['MACD'] = hist['EMA12'] - hist['EMA26']
 
-    st.line_chart(hist[['Close', 'MA20', 'MA50']])
-    st.line_chart(hist['RSI'])
+# Moving Averages
+hist['MA20'] = hist['Close'].rolling(20).mean()
+hist['MA50'] = hist['Close'].rolling(50).mean()
+
+# Visuals
+st.line_chart(hist[['Close', 'MA20', 'MA50']], use_container_width=True)
+st.line_chart(hist[['RSI', 'MACD']], use_container_width=True)
+
+# --- COMING SOON PANELS ---
+st.markdown("## 🧠 Coming Soon: Deep Analysis")
+st.info("""
+- 🔍 Resistance & Support Levels
+- 📐 ADX and Trend Strength
+- 🧾 Analyst Ratings and Forecasts
+- 📊 Candlestick Patterns
+- 🧠 AI-based Technical & Sentiment Summary
+- 💼 Financial Health and Risk Profile
+- 📈 Valuation Multiples and Profitability Ratios
+""")
 
 # --- FOOTER ---
 st.markdown("""
