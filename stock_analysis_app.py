@@ -26,19 +26,19 @@ st.markdown("""
             color: #FFFFFF;
         }
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-            color: #CCCCCC;
+            color: #FFFFFF;
         }
         div[data-testid="metric-container"] label {
-            color: #CCCCCC !important;
+            color: #FFFFFF !important;
         }
         div[data-testid="metric-container"] .stMetricLabel,
         div[data-testid="metric-container"] .stMetricValue,
         div[data-testid="metric-container"] .stMetricDelta {
-            color: #CCCCCC !important;
+            color: #FFFFFF !important;
         }
         .note {
             font-size: 14px;
-            color: #CCCCCC;
+            color: #FFFFFF;
             margin-top: -10px;
         }
     </style>
