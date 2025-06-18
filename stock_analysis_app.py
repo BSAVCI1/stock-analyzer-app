@@ -1,3 +1,5 @@
+# ai_stock_analyzer_app/main.py
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
