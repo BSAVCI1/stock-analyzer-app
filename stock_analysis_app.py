@@ -1,6 +1,3 @@
-
-# ai_stock_analyzer_app/main.py
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -10,27 +7,27 @@ from io import BytesIO
 import base64
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
+st.set_page_config(page_title="📈 BSAV Stock Analyzer", layout="wide")
 
 # --- DARK THEME STYLE ---
 st.markdown("""
     <style>
         body, .stApp {
             background-color: #111111;
-            color: #F5F5F5;
+            color: #E0E0E0;
         }
         .css-1v0mbdj, .css-1cpxqw2, .css-qrbaxs {
             background-color: #1E1E1E;
-            color: #F5F5F5;
+            color: #E0E0E0;
         }
         .st-bb, .st-bc, .st-bd {
-            color: #F5F5F5;
+            color: #E0E0E0;
         }
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
             color: #4CAF50;
         }
         .stMetricValue, .stMetricDelta {
-            color: #F5F5F5 !important;
+            color: #E0E0E0 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -38,8 +35,8 @@ st.markdown("""
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
-    <h1 style="color:#4CAF50;">📊 AI Stock Analyzer</h1>
-    <p style="font-size:18px;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
+    <h1>📊 AI Stock Analyzer</h1>
+    <p style="font-size:18px; color:#BBBBBB;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -102,22 +99,6 @@ sr_col1, sr_col2 = st.columns(2)
 sr_col1.metric("🔻 Support Level", f"${support:.2f}", help="A lower price range where the stock may find buying interest.")
 sr_col2.metric("🔺 Resistance Level", f"${resistance:.2f}", help="An upper price range where the stock may face selling pressure.")
 
-# --- ANALYST RATINGS & EARNINGS CALENDAR ---
-analysts = data.recommendations.dropna() if hasattr(data, 'recommendations') else pd.DataFrame()
-next_earnings = data.calendar.get('Earnings Date', [None])[0] if hasattr(data, 'calendar') else None
-
-# --- PDF EXPORT HELPERS ---
-def create_pdf_image(fig):
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight')
-    buf.seek(0)
-    return buf
-
-def get_table_download_link(fig, filename="report.png"):
-    img_buf = create_pdf_image(fig)
-    b64 = base64.b64encode(img_buf.read()).decode()
-    return f'<a href="data:file/png;base64,{b64}" download="{filename}">📥 Download Chart</a>'
-
 # --- TECHNICAL INDICATORS TABLE ---
 st.markdown("## 📊 Technical Indicators Summary")
 delta = hist['Close'].diff()
@@ -149,51 +130,6 @@ tech_df = pd.DataFrame({
     ]
 })
 st.dataframe(tech_df, use_container_width=True)
-
-# --- TECHNICAL INDICATORS ---
-st.markdown("## 📊 Technical Indicators")
-delta = hist['Close'].diff()
-gain = delta.where(delta > 0, 0).rolling(14).mean()
-loss = -delta.where(delta < 0, 0).rolling(14).mean()
-rs = gain / loss
-hist['RSI'] = 100 - (100 / (1 + rs))
-
-hist['EMA12'] = hist['Close'].ewm(span=12, adjust=False).mean()
-hist['EMA26'] = hist['Close'].ewm(span=26, adjust=False).mean()
-hist['MACD'] = hist['EMA12'] - hist['EMA26']
-
-hist['MA20'] = hist['Close'].rolling(20).mean()
-hist['MA50'] = hist['Close'].rolling(50).mean()
-
-st.line_chart(hist[['Close', 'MA20', 'MA50']], use_container_width=True)
-st.line_chart(hist[['RSI', 'MACD']], use_container_width=True)
-
-# --- SUPPORT/RESISTANCE & MOVING AVERAGES CHART ---
-st.markdown("### 🔍 Support & Resistance")
-fig, ax = plt.subplots(figsize=(10, 4))
-hist['Close'].plot(ax=ax, label='Close', color='blue')
-hist['MA20'].plot(ax=ax, label='MA20', color='orange')
-hist['MA50'].plot(ax=ax, label='MA50', color='green')
-ax.axhline(support, linestyle='--', color='red', label='Support')
-ax.axhline(resistance, linestyle='--', color='purple', label='Resistance')
-ax.legend(loc='upper left')
-st.pyplot(fig)
-st.markdown(get_table_download_link(fig), unsafe_allow_html=True)
-
-# --- ANALYST RATINGS ---
-st.subheader("📋 Analyst Ratings")
-if not analysts.empty:
-    recent = analysts.groupby(['Firm', 'To Grade']).size().reset_index(name='Count').sort_values('Count', ascending=False)
-    st.write(recent.head(5))
-else:
-    st.info("No recent analyst rating data available.")
-
-# --- EARNINGS CALENDAR ---
-st.subheader("🗓️ Upcoming Earnings")
-if next_earnings:
-    st.info(f"Next earnings date: {next_earnings.date()}")
-else:
-    st.info("Earnings calendar unavailable.")
 
 # --- FOOTER ---
 st.markdown("""
