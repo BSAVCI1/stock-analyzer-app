@@ -1,5 +1,3 @@
-# ai_stock_analyzer_app/main.py
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -29,7 +27,12 @@ st.markdown("""
             color: #4CAF50;
         }
         .stMetricValue, .stMetricDelta {
-            color: #E0E0E0 !important;
+            color: white !important;
+        }
+        .note {
+            font-size: 14px;
+            color: #BBBBBB;
+            margin-top: -10px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -79,9 +82,13 @@ change_1m, pct_1m = calc_change(current_price, price_1m)
 st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}")
+col1.markdown(f"<div class='note'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
 col2.metric("24h Change", pct_1d, delta_color="inverse")
+col2.markdown("<div class='note'>A positive change may indicate short-term optimism.</div>", unsafe_allow_html=True)
 col3.metric("1 Week Change", pct_1w)
+col3.markdown("<div class='note'>Reflects weekly trend direction.</div>", unsafe_allow_html=True)
 col4.metric("1 Month Change", pct_1m)
+col4.markdown("<div class='note'>Shows price momentum over the last month.</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
 st.markdown("## 🧾 Market & Trading Overview")
