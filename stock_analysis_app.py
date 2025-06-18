@@ -42,13 +42,13 @@ def calc_change(current, past):
     change = current - past
     pct = (change / past * 100) if past else 0
     if pct > 1:
-        color = "green"
+        color = "normal"
         note = "Positive price action, likely due to optimism or strong performance."
     elif pct < -1:
-        color = "red"
+        color = "inverse"
         note = "Negative price trend, possibly due to weaker sentiment or earnings."
     else:
-        color = "orange"
+        color = "off"
         note = "Stable with no major shift."
     return f"${change:.2f}", f"{pct:.2f}%", color, note
 
@@ -64,7 +64,7 @@ change_1m, pct_1m, color_1m, note_1m = calc_change(current_price, price_1m)
 # --- DISPLAY PANEL ---
 st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Current Price", f"${current_price:.2f}", label_visibility="visible")
+col1.metric("Current Price", f"${current_price:.2f}")
 col1.markdown(f"<div style='font-size:14px; color:#000000;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
 col2.metric("24h Change", pct_1d, delta_color=color_1d)
 col2.markdown(f"<div style='font-size:14px; color:#000000;'>{note_1d}</div>", unsafe_allow_html=True)
