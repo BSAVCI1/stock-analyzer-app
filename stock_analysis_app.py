@@ -11,44 +11,11 @@ import base64
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 BSAV Stock Analyzer", layout="wide")
 
-# --- DARK THEME STYLE ---
-st.markdown("""
-    <style>
-        body, .stApp {
-            background-color: #111111;
-            color: #FFFFFF;
-        }
-        .css-1v0mbdj, .css-1cpxqw2, .css-qrbaxs {
-            background-color: #1E1E1E;
-            color: #FFFFFF;
-        }
-        .st-bb, .st-bc, .st-bd {
-            color: #FFFFFF;
-        }
-        .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-            color: #FFFFFF;
-        }
-        div[data-testid="metric-container"] label {
-            color: #FFFFFF !important;
-        }
-        div[data-testid="metric-container"] .stMetricLabel,
-        div[data-testid="metric-container"] .stMetricValue,
-        div[data-testid="metric-container"] .stMetricDelta {
-            color: #FFFFFF !important;
-        }
-        .note {
-            font-size: 14px;
-            color: #FFFFFF;
-            margin-top: -10px;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
     <h1>📊 AI Stock Analyzer</h1>
-    <p style="font-size:18px; color:#BBBBBB;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
+    <p style="font-size:18px; color:#333333;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -89,13 +56,13 @@ change_1m, pct_1m = calc_change(current_price, price_1m)
 st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}", label_visibility="visible")
-col1.markdown(f"<div class='note'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
+col1.markdown(f"<div style='font-size:14px; color:#000000;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
 col2.metric("24h Change", pct_1d, delta_color="inverse")
-col2.markdown("<div class='note'>A positive change may indicate short-term optimism.</div>", unsafe_allow_html=True)
+col2.markdown("<div style='font-size:14px; color:#000000;'>A positive change may indicate short-term optimism.</div>", unsafe_allow_html=True)
 col3.metric("1 Week Change", pct_1w)
-col3.markdown("<div class='note'>Reflects weekly trend direction.</div>", unsafe_allow_html=True)
+col3.markdown("<div style='font-size:14px; color:#000000;'>Reflects weekly trend direction.</div>", unsafe_allow_html=True)
 col4.metric("1 Month Change", pct_1m)
-col4.markdown("<div class='note'>Shows price momentum over the last month.</div>", unsafe_allow_html=True)
+col4.markdown("<div style='font-size:14px; color:#000000;'>Shows price momentum over the last month.</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
 st.markdown("## 🧾 Market & Trading Overview")
