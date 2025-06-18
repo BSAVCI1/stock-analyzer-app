@@ -40,58 +40,51 @@ resistance = np.percentile(hist['High'], 90)
 # --- PRICE CHANGES ---
 def calc_change(current, past):
     if not current or not past:
-        return "N/A", "N/A", "off", "⚪ No significant movement.", "⚪"
+        return "N/A", "N/A", "off", "No significant movement."
     change = current - past
     pct = (change / past * 100) if past else 0
     if pct >= 10:
         color = "normal"
-        note = "📈 Strong growth — likely driven by exceptional earnings or market catalysts."
-        symbol = "🟢⬆️⬆️"
+        note = "Strong growth — likely driven by exceptional earnings or market catalysts."
     elif pct >= 3:
         color = "normal"
-        note = "📈 Solid uptrend — reflecting positive sentiment or sector performance."
-        symbol = "🟢⬆️"
+        note = "Solid uptrend — reflecting positive sentiment or sector performance."
     elif pct > 0:
         color = "normal"
-        note = "📈 Mild gain — modest optimism or technical rebound."
-        symbol = "🟢↗️"
+        note = "Mild gain — modest optimism or technical rebound."
     elif pct == 0:
         color = "off"
-        note = "➖ Sideways — price has stabilized or market is undecided."
-        symbol = "🟡➖"
+        note = "Flat trend — price has stabilized or market is undecided."
     elif pct > -3:
         color = "inverse"
-        note = "📉 Slight dip — typical short-term fluctuation."
-        symbol = "🔴↘️"
+        note = "Slight dip — typical short-term fluctuation."
     elif pct > -10:
         color = "inverse"
-        note = "📉 Noticeable drop — may indicate weakening fundamentals or negative sentiment."
-        symbol = "🔴⬇️"
+        note = "Noticeable drop — may indicate weakening fundamentals or negative sentiment."
     else:
         color = "inverse"
-        note = "📉 Sharp sell-off — likely triggered by significant bad news or earnings miss."
-        symbol = "🔴⬇️⬇️"
-    return f"${change:.2f}", f"{pct:.2f}%", color, note, symbol
+        note = "Sharp sell-off — likely triggered by significant bad news or earnings miss."
+    return f"${change:.2f}", f"{pct:.2f}%", color, note
 
 current_price = info.get("currentPrice", 0.0)
 price_1d = hist["Close"].iloc[-2] if len(hist) > 1 else None
 price_1m = hist["Close"].iloc[-21] if len(hist) > 21 else None
 price_6m = hist["Close"].iloc[0] if len(hist) > 0 else None
 
-change_1d, pct_1d, color_1d, note_1d, symbol_1d = calc_change(current_price, price_1d)
-change_1m, pct_1m, color_1m, note_1m, symbol_1m = calc_change(current_price, price_1m)
-change_6m, pct_6m, color_6m, note_6m, symbol_6m = calc_change(current_price, price_6m)
+change_1d, pct_1d, color_1d, note_1d = calc_change(current_price, price_1d)
+change_1m, pct_1m, color_1m, note_1m = calc_change(current_price, price_1m)
+change_6m, pct_6m, color_6m, note_6m = calc_change(current_price, price_6m)
 
 # --- DISPLAY PANEL ---
 st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}")
 col1.markdown(f"<div style='font-size:14px; color:#333;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
-col2.metric("24h Change", f"{pct_1d} {symbol_1d}", delta_color=color_1d)
+col2.metric("24h Change", f"{pct_1d}", delta_color=color_1d)
 col2.markdown(f"<div style='font-size:14px; color:#333;'>{note_1d}</div>", unsafe_allow_html=True)
-col3.metric("1 Month Change", f"{pct_1m} {symbol_1m}", delta_color=color_1m)
+col3.metric("1 Month Change", f"{pct_1m}", delta_color=color_1m)
 col3.markdown(f"<div style='font-size:14px; color:#333;'>{note_1m}</div>", unsafe_allow_html=True)
-col4.metric("6 Month Change", f"{pct_6m} {symbol_6m}", delta_color=color_6m)
+col4.metric("6 Month Change", f"{pct_6m}", delta_color=color_6m)
 col4.markdown(f"<div style='font-size:14px; color:#333;'>{note_6m}</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
