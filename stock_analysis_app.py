@@ -121,17 +121,23 @@ st.markdown(get_table_download_link(fig), unsafe_allow_html=True)
 
 # --- ANALYST RATINGS ---
 st.subheader("📋 Analyst Ratings")
-if not analysts.empty:
-  expected_columns = ['Firm', 'To Grade']
-if all(col in analysts.columns for col in expected_columns):
-    recent = analysts.groupby(expected_columns).size().reset_index(name='Count').sort_values('Count', ascending=False)
-    st.write(recent.head(5))
-else:
-    st.info("Analyst ratings are available, but necessary columns are missing for grouped view.")
-    st.write(analysts.tail(5))
 
+if not analysts.empty:
+    expected_columns = ['Firm', 'To Grade']
+    if all(col in analysts.columns for col in expected_columns):
+        recent = (
+            analysts.groupby(expected_columns)
+            .size()
+            .reset_index(name='Count')
+            .sort_values('Count', ascending=False)
+        )
+        st.write(recent.head(5))
+    else:
+        st.info("Analyst ratings are available, but required columns ('Firm', 'To Grade') are missing.")
+        st.dataframe(analysts.tail(5))
 else:
     st.info("No recent analyst rating data available.")
+
 
 # --- EARNINGS CALENDAR ---
 st.subheader("🗓️ Upcoming Earnings")
