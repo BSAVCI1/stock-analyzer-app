@@ -11,12 +11,12 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="\ud83d\udcc8 BSAV Stock Analyzer", layout="wide")
+st.set_page_config(page_title="BSAV Stock Analyzer", layout="wide")
 
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
-    <h1 style="color:#4CAF50;">\ud83d\udcca AI Stock Analyzer</h1>
+    <h1 style="color:#4CAF50;">📊 AI Stock Analyzer</h1>
     <p style="font-size:18px; color:#888888;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
@@ -155,6 +155,7 @@ col3.markdown(f"**Operating Margin:** {oper_margin}")
 col1.markdown(f"**Net Margin:** {net_margin}")
 col2.markdown(f"**Return on Equity:** {roe}")
 col3.markdown(f"**Insider Ownership:** {insider}, Institutions: {instit}")
+
 
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
