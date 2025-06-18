@@ -1,6 +1,3 @@
-
-# ai_stock_analyzer_app/main.py
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -12,11 +9,31 @@ import base64
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 BSAV Stock Analyzer", layout="wide")
 
+# --- DARK THEME STYLE ---
+st.markdown("""
+    <style>
+        body, .stApp {
+            background-color: #111111;
+            color: #F5F5F5;
+        }
+        .css-1v0mbdj, .css-1cpxqw2, .css-qrbaxs {
+            background-color: #1E1E1E;
+            color: #F5F5F5;
+        }
+        .st-bb, .st-bc, .st-bd {
+            color: #F5F5F5;
+        }
+        .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+            color: #4CAF50;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
-    <h1 style="color:#4CAF50;">📊 AI Stock Analyzer</h1>
-    <p style="font-size:18px;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
+    <h1>📊 AI Stock Analyzer</h1>
+    <p style="font-size:18px; color:#AAAAAA;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -35,22 +52,6 @@ hist = data.history(period="6mo")
 # --- SUPPORT & RESISTANCE ---
 support = np.percentile(hist['Low'], 10)
 resistance = np.percentile(hist['High'], 90)
-
-# --- ANALYST RATINGS & EARNINGS CALENDAR ---
-analysts = data.recommendations.dropna() if hasattr(data, 'recommendations') else pd.DataFrame()
-next_earnings = data.calendar.get('Earnings Date', [None])[0] if hasattr(data, 'calendar') else None
-
-# --- PDF EXPORT HELPERS ---
-def create_pdf_image(fig):
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight')
-    buf.seek(0)
-    return buf
-
-def get_table_download_link(fig, filename="report.png"):
-    img_buf = create_pdf_image(fig)
-    b64 = base64.b64encode(img_buf.read()).decode()
-    return f'<a href="data:file/png;base64,{b64}" download="{filename}">📥 Download Chart</a>'
 
 # --- PRICE CHANGES ---
 def calc_change(current, past):
@@ -89,8 +90,8 @@ col1.metric("Revenue (TTM)", f"${info.get('totalRevenue', 0):,}")
 col2.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get("dividendYield") else "N/A")
 col3.metric("Beta", f"{info.get('beta', 'N/A')}")
 
-# --- TECHNICAL INDICATORS ---
-st.markdown("## 📊 Technical Indicators")
+# --- TECHNICAL INDICATORS TABLE ---
+st.markdown("## 📊 Technical Indicators Summary")
 delta = hist['Close'].diff()
 gain = delta.where(delta > 0, 0).rolling(14).mean()
 loss = -delta.where(delta < 0, 0).rolling(14).mean()
@@ -104,57 +105,31 @@ hist['MACD'] = hist['EMA12'] - hist['EMA26']
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
-st.line_chart(hist[['Close', 'MA20', 'MA50']], use_container_width=True)
-st.line_chart(hist[['RSI', 'MACD']], use_container_width=True)
-
-# --- SUPPORT/RESISTANCE & MOVING AVERAGES CHART ---
-st.markdown("### 🔍 Support & Resistance")
-fig, ax = plt.subplots(figsize=(10, 4))
-hist['Close'].plot(ax=ax, label='Close', color='blue')
-hist['MA20'].plot(ax=ax, label='MA20', color='orange')
-hist['MA50'].plot(ax=ax, label='MA50', color='green')
-ax.axhline(support, linestyle='--', color='red', label='Support')
-ax.axhline(resistance, linestyle='--', color='purple', label='Resistance')
-ax.legend(loc='upper left')
-st.pyplot(fig)
-st.markdown(get_table_download_link(fig), unsafe_allow_html=True)
-
-# --- ANALYST RATINGS ---
-st.subheader("📋 Analyst Ratings")
-
-if not analysts.empty:
-    st.markdown("Latest Analyst Actions (if available):")
-    
-    expected_cols = ['Firm', 'To Grade']
-    available_cols = [col for col in expected_cols if col in analysts.columns]
-    
-    if all(col in analysts.columns for col in expected_cols):
-        recent = (
-            analysts.groupby(['Firm', 'To Grade'])
-            .size()
-            .reset_index(name='Count')
-            .sort_values('Count', ascending=False)
-        )
-        st.dataframe(recent.head(5))
-    else:
-        st.info("Some expected columns like 'Firm' or 'To Grade' are missing.")
-        st.dataframe(analysts.tail(10))  # Show last few entries, whatever columns exist
-else:
-    st.info("No recent analyst rating data available.")
-
-
-
-# --- EARNINGS CALENDAR ---
-st.subheader("🗓️ Upcoming Earnings")
-if next_earnings:
-   st.info(f"Next earnings date: {next_earnings.strftime('%Y-%m-%d')}")
-else:
-    st.info("Earnings calendar unavailable.")
+tech_df = pd.DataFrame({
+    'Indicator': ['RSI (14)', 'MACD', 'MA20', 'MA50', 'Support Level', 'Resistance Level'],
+    'Value': [
+        round(hist['RSI'].iloc[-1], 2),
+        round(hist['MACD'].iloc[-1], 2),
+        round(hist['MA20'].iloc[-1], 2),
+        round(hist['MA50'].iloc[-1], 2),
+        round(support, 2),
+        round(resistance, 2)
+    ],
+    'Interpretation': [
+        'Overbought' if hist['RSI'].iloc[-1] > 70 else 'Oversold' if hist['RSI'].iloc[-1] < 30 else 'Neutral',
+        'Positive momentum' if hist['MACD'].iloc[-1] > 0 else 'Negative momentum',
+        'Trending above short MA' if current_price > hist['MA20'].iloc[-1] else 'Below short MA',
+        'Trending above long MA' if current_price > hist['MA50'].iloc[-1] else 'Below long MA',
+        'Potential buy zone',
+        'Potential sell zone'
+    ]
+})
+st.dataframe(tech_df, use_container_width=True)
 
 # --- FOOTER ---
 st.markdown("""
 <hr style="margin-top: 2em;">
 <div style="text-align:center">
-    <p>Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
+    <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
