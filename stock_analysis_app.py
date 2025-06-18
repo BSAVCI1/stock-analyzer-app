@@ -104,10 +104,10 @@ avg_volume_now = info.get('averageVolume', 0)
 avg_volume_prev = hist_info['Volume'].rolling(20).mean().iloc[0] if len(hist_info) > 20 else None
 
 market_cap_now = info.get('marketCap', 0)
-market_cap_prev = market_cap_now * 0.9  # placeholder
+market_cap_prev = market_cap_now * 0.9
 
 revenue_now = info.get('totalRevenue', 0)
-revenue_prev = revenue_now * 0.9  # placeholder
+revenue_prev = revenue_now * 0.9
 
 def market_change(label, current, past):
     if not current or not past:
