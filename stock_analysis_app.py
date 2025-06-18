@@ -142,7 +142,7 @@ else:
 # --- EARNINGS CALENDAR ---
 st.subheader("🗓️ Upcoming Earnings")
 if next_earnings:
-    st.info(f"Next earnings date: {next_earnings.date()}")
+   st.info(f"Next earnings date: {next_earnings.strftime('%Y-%m-%d')}")
 else:
     st.info("Earnings calendar unavailable.")
 
