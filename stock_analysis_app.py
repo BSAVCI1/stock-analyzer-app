@@ -122,8 +122,14 @@ st.markdown(get_table_download_link(fig), unsafe_allow_html=True)
 # --- ANALYST RATINGS ---
 st.subheader("📋 Analyst Ratings")
 if not analysts.empty:
-    recent = analysts.groupby(['Firm', 'To Grade']).size().reset_index(name='Count').sort_values('Count', ascending=False)
+  expected_columns = ['Firm', 'To Grade']
+if all(col in analysts.columns for col in expected_columns):
+    recent = analysts.groupby(expected_columns).size().reset_index(name='Count').sort_values('Count', ascending=False)
     st.write(recent.head(5))
+else:
+    st.info("Analyst ratings are available, but necessary columns are missing for grouped view.")
+    st.write(analysts.tail(5))
+
 else:
     st.info("No recent analyst rating data available.")
 
