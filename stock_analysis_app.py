@@ -26,15 +26,15 @@ st.markdown("""
             color: #FFFFFF;
         }
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-            color: #4CAF50;
+            color: #CCCCCC;
         }
         div[data-testid="metric-container"] label {
-            color: #FFFFFF !important;
+            color: #CCCCCC !important;
         }
         div[data-testid="metric-container"] .stMetricLabel,
         div[data-testid="metric-container"] .stMetricValue,
         div[data-testid="metric-container"] .stMetricDelta {
-            color: #FFFFFF !important;
+            color: #CCCCCC !important;
         }
         .note {
             font-size: 14px;
