@@ -9,7 +9,7 @@ from io import BytesIO
 import base64
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="📈 BSAV Stock Analyzer", layout="wide")
+st.set_page_config(page_title="\ud83d\udcc8 BSAV Stock Analyzer", layout="wide")
 
 # --- DARK THEME STYLE ---
 st.markdown("""
@@ -47,7 +47,7 @@ st.markdown("""
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
-    <h1>📊 AI Stock Analyzer</h1>
+    <h1>\ud83d\udcca AI Stock Analyzer</h1>
     <p style="font-size:18px; color:#BBBBBB;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
@@ -86,9 +86,9 @@ change_1w, pct_1w = calc_change(current_price, price_1w)
 change_1m, pct_1m = calc_change(current_price, price_1m)
 
 # --- DISPLAY PANEL ---
-st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
+st.markdown(f"### \ud83d\udcb5 **{info.get('shortName', ticker)} ({ticker})**")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Current Price", f"${current_price:.2f}")
+col1.metric("Current Price", f"${current_price:.2f}", label_visibility="visible")
 col1.markdown(f"<div class='note'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
 col2.metric("24h Change", pct_1d, delta_color="inverse")
 col2.markdown("<div class='note'>A positive change may indicate short-term optimism.</div>", unsafe_allow_html=True)
@@ -98,7 +98,7 @@ col4.metric("1 Month Change", pct_1m)
 col4.markdown("<div class='note'>Shows price momentum over the last month.</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
-st.markdown("## 🧾 Market & Trading Overview")
+st.markdown("## \ud83e\uddfe Market & Trading Overview")
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Volume (Last)", f"{info.get('volume', 0):,}")
@@ -110,13 +110,13 @@ col2.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info
 col3.metric("Beta", f"{info.get('beta', 'N/A')}")
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
-st.markdown("## 🧭 Key Price Levels")
+st.markdown("## \ud83e\udded Key Price Levels")
 sr_col1, sr_col2 = st.columns(2)
-sr_col1.metric("🔻 Support Level", f"${support:.2f}", help="A lower price range where the stock may find buying interest.")
-sr_col2.metric("🔺 Resistance Level", f"${resistance:.2f}", help="An upper price range where the stock may face selling pressure.")
+sr_col1.metric("\ud83d\udd3b Support Level", f"${support:.2f}", help="A lower price range where the stock may find buying interest.")
+sr_col2.metric("\ud83d\udd39 Resistance Level", f"${resistance:.2f}", help="An upper price range where the stock may face selling pressure.")
 
 # --- TECHNICAL INDICATORS TABLE ---
-st.markdown("## 📊 Technical Indicators Summary")
+st.markdown("## \ud83d\udcca Technical Indicators Summary")
 delta = hist['Close'].diff()
 gain = delta.where(delta > 0, 0).rolling(14).mean()
 loss = -delta.where(delta < 0, 0).rolling(14).mean()
