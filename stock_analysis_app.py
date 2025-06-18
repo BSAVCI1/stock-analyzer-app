@@ -26,7 +26,7 @@ st.markdown("""
             color: #FFFFFF;
         }
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-            color: #4CAF50;
+            color: #FFFFFF;
         }
         div[data-testid="metric-container"] label {
             color: #FFFFFF !important;
