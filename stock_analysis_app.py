@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
+import requests
+from bs4 import BeautifulSoup
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 BSAV Stock Analyzer", layout="wide")
@@ -54,7 +56,7 @@ def calc_change(current, past):
 
 current_price = info.get("currentPrice", 0.0)
 price_1d = hist["Close"].iloc[-2] if len(hist) > 1 else None
-price_1m = hist["Close"].iloc[0] if len(hist) > 0 else None
+price_1m = hist["Close"].iloc[-21] if len(hist) > 21 else None
 price_6m = hist["Close"].iloc[0] if len(hist) > 0 else None
 
 change_1d, pct_1d, color_1d, note_1d = calc_change(current_price, price_1d)
@@ -122,6 +124,23 @@ tech_df = pd.DataFrame({
     ]
 })
 st.dataframe(tech_df, use_container_width=True)
+
+# --- NEWS & SENTIMENT ---
+st.markdown("## 📰 Recent News & Market Sentiment")
+news_url = f"https://finance.yahoo.com/quote/{ticker}/news?p={ticker}"
+try:
+    res = requests.get(news_url, timeout=10)
+    soup = BeautifulSoup(res.text, "html.parser")
+    headlines = soup.find_all("h3")[:5]
+    if headlines:
+        for h in headlines:
+            link_tag = h.find("a")
+            if link_tag and link_tag.text:
+                st.markdown(f"- [{link_tag.text}](https://finance.yahoo.com{link_tag['href']})")
+    else:
+        st.info("No recent headlines available.")
+except Exception as e:
+    st.warning(f"Unable to fetch news. Reason: {e}")
 
 # --- FOOTER ---
 st.markdown("""
