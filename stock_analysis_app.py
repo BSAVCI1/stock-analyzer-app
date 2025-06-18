@@ -11,8 +11,13 @@ st.title("\U0001F4C8 AI Stock Analyzer")
 
 # User input
 st.sidebar.title("Stock Settings")
-ticker = st.sidebar.text_input("Enter Stock Ticker (e.g. AAPL)", value="AAPL")
-data = yf.Ticker(ticker)
+tickers = st.sidebar.text_input("Enter Stock Tickers (comma separated)", value="AAPL,NVDA").upper().split(",")
+
+st.title("📊 Stock Comparison")
+
+if len(tickers) > 1:
+    st.write(f"Comparing: {', '.join(tickers)}")
+
 
 # Get historical data
 hist = data.history(period="6mo")
