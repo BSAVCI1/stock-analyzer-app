@@ -78,7 +78,7 @@ if st.button("Generate Analysis"):
             for p in prompts:
                 query = p.format(ticker=ticker)
                 response = openai.ChatCompletion.create(
-                    model="gpt-4",
+                    model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": query}]
                 )
                 st.subheader(query.split(".")[0])
