@@ -6,18 +6,26 @@ import pandas as pd
 import openai
 import os
 
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
-st.title("📈 AI Stock Analyzer")
 
-# User input
+# --- HEADER ---
+st.markdown("""
+<div style="text-align:center">
+    <h1 style="color:#4CAF50;">📊 AI Stock Analyzer</h1>
+    <p style="font-size:18px;">Smart insights for smarter investing — built with ❤️ using Streamlit</p>
+</div>
+""", unsafe_allow_html=True)
+
+# --- USER INPUT ---
 st.sidebar.header("Enter Stock Ticker")
-ticker = st.sidebar.text_input("Example: SPCE", value="SPCE").upper()
+ticker = st.sidebar.text_input("Example: AAPL", value="SPCE").upper()
 
 if not ticker:
     st.warning("Please enter a valid ticker symbol.")
     st.stop()
 
-# Fetch data
+# --- FETCH DATA ---
 data = yf.Ticker(ticker)
 info = data.info
 hist = data.history(period="1y")
@@ -26,28 +34,62 @@ st.header(f"{info.get('shortName', ticker)} ({ticker})")
 st.metric("Current Price", f"${info.get('currentPrice', 'N/A')}")
 st.metric("Market Cap", f"${info.get('marketCap', 'N/A'):,}")
 
-# Show financials
-with st.expander("📊 Fundamental Metrics"):
-    fundamentals = {
-        "Revenue (TTM)": info.get("totalRevenue"),
-        "Profit Margin": info.get("profitMargins"),
-        "EPS": info.get("trailingEps"),
-        "PE Ratio": info.get("trailingPE"),
-        "Forward PE": info.get("forwardPE"),
-        "P/S Ratio": info.get("priceToSalesTrailing12Months"),
-        "P/B Ratio": info.get("priceToBook"),
-        "Book Value": info.get("bookValue"),
-        "Beta": info.get("beta"),
-        "Debt-to-Equity": info.get("debtToEquity"),
-        "Operating Margin": info.get("operatingMargins"),
-        "ROE": info.get("returnOnEquity"),
-        "ROA": info.get("returnOnAssets")
-    }
-    df_fundamentals = pd.DataFrame(fundamentals.items(), columns=["Metric", "Value"])
-    st.dataframe(df_fundamentals)
+# --- FUNDAMENTALS SECTION ---
+with st.expander("🔍 Fundamentals Overview"):
+    st.subheader("📊 Key Financial Metrics with Insights")
 
-# Technical indicators
-with st.expander("📈 Technical Indicators"):
+    def interpret_metric(label, value):
+        status = ""
+        note = ""
+        color = "black"
+
+        if label == "PE Ratio":
+            if value is None:
+                return ("N/A", "No earnings data available", "gray")
+            elif value < 15:
+                status, note, color = "✅ Good", "Undervalued compared to peers", "green"
+            elif value < 30:
+                status, note, color = "⚠️ Moderate", "Fairly valued", "orange"
+            else:
+                status, note, color = "❌ High", "Likely overvalued", "red"
+
+        elif label == "Profit Margin":
+            if value is None:
+                return ("N/A", "Data not available", "gray")
+            elif value > 0.15:
+                status, note, color = "✅ Strong", "Healthy profitability", "green"
+            elif value > 0:
+                status, note, color = "⚠️ Low", "Slim margins", "orange"
+            else:
+                status, note, color = "❌ Negative", "Losing money", "red"
+
+        elif label == "Debt-to-Equity":
+            if value is None:
+                return ("N/A", "No data", "gray")
+            elif value < 1:
+                status, note, color = "✅ Low", "Financially safe", "green"
+            elif value < 2:
+                status, note, color = "⚠️ Moderate", "Manageable debt", "orange"
+            else:
+                status, note, color = "❌ High", "Debt-heavy balance sheet", "red"
+
+        return (f"{value:.2f}", note, color)
+
+    metrics = [
+        ("PE Ratio", info.get("trailingPE")),
+        ("Profit Margin", info.get("profitMargins")),
+        ("Debt-to-Equity", info.get("debtToEquity")),
+        ("EPS", info.get("trailingEps")),
+        ("ROE", info.get("returnOnEquity")),
+        ("ROA", info.get("returnOnAssets"))
+    ]
+
+    for label, value in metrics:
+        display_val, insight, color = interpret_metric(label, value)
+        st.markdown(f"<b style='color:{color}'>{label}: {display_val}</b> — <i>{insight}</i>", unsafe_allow_html=True)
+
+# --- TECHNICALS ---
+with st.expander("📈 Price Trend and RSI"):
     hist['MA20'] = hist['Close'].rolling(20).mean()
     hist['MA50'] = hist['Close'].rolling(50).mean()
     delta = hist['Close'].diff()
@@ -59,29 +101,10 @@ with st.expander("📈 Technical Indicators"):
     st.line_chart(hist[['Close', 'MA20', 'MA50']])
     st.line_chart(hist['RSI'])
 
-# AI-powered analysis prompts
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-prompts = [
-    "Please analyze the most recent quarterly earnings report for {ticker}. Highlight changes in revenue, gross margin, operating margin, net income, cash flow from operations, and major asset or liability movements compared to the last 3 quarters.",
-    "Analyze {ticker}’s recent technical indicators—RSI, MACD, 50/200-day moving averages, Bollinger Bands, and ADX—over the last 30 trading days. What are the short-term and medium-term signals?",
-    "Summarize the top {ticker}-related news headlines from the past 30 days, and identify which items are likely to influence near-term stock price.",
-    "Provide {ticker}’s valuation multiples—P/E, P/S, EV/EBITDA, and PEG ratio. How do these align with its revenue growth and margin profile?",
-    "What are {ticker}’s major upcoming catalysts—such as contract wins, AI software updates, partnerships, or regulatory approvals?",
-    "Based on the latest technical and fundamental analysis, identify optimal entry points for a long position in {ticker}. Recommend stop-loss and take-profit levels."
-]
-
-st.header("🧠 AI-Generated Insights")
-if st.button("Generate Analysis"):
-    with st.spinner("Contacting GPT-4 for deep analysis..."):
-        try:
-            for p in prompts:
-                query = p.format(ticker=ticker)
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": query}]
-                )
-                st.subheader(query.split(".")[0])
-                st.write(response['choices'][0]['message']['content'])
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+# --- FOOTER ---
+st.markdown("""
+<hr style="margin-top: 2em;">
+<div style="text-align:center">
+    <p>Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
+</div>
+""", unsafe_allow_html=True)
