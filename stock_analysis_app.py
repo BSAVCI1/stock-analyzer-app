@@ -95,7 +95,6 @@ col1, col2, col3 = st.columns(3)
 hist_start = hist_6m.iloc[0] if not hist_6m.empty else None
 hist_end = hist_6m.iloc[-1] if not hist_6m.empty else None
 
-# --- Real Historical Data (example approach) ---
 hist_info = data.history(period="6mo")
 
 volume_prev = hist_info['Volume'].iloc[0] if 'Volume' in hist_info.columns else None
@@ -105,10 +104,10 @@ avg_volume_now = info.get('averageVolume', 0)
 avg_volume_prev = hist_info['Volume'].rolling(20).mean().iloc[0] if len(hist_info) > 20 else None
 
 market_cap_now = info.get('marketCap', 0)
-market_cap_prev = market_cap_now * 0.9  # still placeholder
+market_cap_prev = market_cap_now * 0.9  # placeholder
 
 revenue_now = info.get('totalRevenue', 0)
-revenue_prev = revenue_now * 0.9  # still placeholder
+revenue_prev = revenue_now * 0.9  # placeholder
 
 def market_change(label, current, past):
     if not current or not past:
@@ -134,6 +133,32 @@ col3.markdown(f"**Market Cap:** ${mc_val:,} {mc_pct}", unsafe_allow_html=True)
 col1.markdown(f"**Revenue (TTM):** ${rev_val:,} {rev_pct}", unsafe_allow_html=True)
 col2.markdown(f"**Dividend Yield:** {dividend_yield_now*100:.2f}%", unsafe_allow_html=True)
 col3.markdown(f"**Beta:** {beta_now}", unsafe_allow_html=True)
+
+# --- EXTENDED FUNDAMENTALS ---
+st.markdown("## 🧮 Extended Fundamentals")
+col1, col2, col3 = st.columns(3)
+
+ev = info.get("enterpriseValue", 0)
+pe = info.get("trailingPE", "N/A")
+peg = info.get("pegRatio", "N/A")
+debt_eq = info.get("debtToEquity", "N/A")
+fcf = info.get("freeCashflow", "N/A")
+oper_margin = info.get("operatingMargins", "N/A")
+net_margin = info.get("profitMargins", "N/A")
+roe = info.get("returnOnEquity", "N/A")
+insider = info.get("heldPercentInsiders", "N/A")
+instit = info.get("heldPercentInstitutions", "N/A")
+
+col1.markdown(f"**Enterprise Value:** ${ev:,}")
+col2.markdown(f"**P/E Ratio:** {pe}")
+col3.markdown(f"**PEG Ratio:** {peg}")
+col1.markdown(f"**Debt to Equity:** {debt_eq}")
+col2.markdown(f"**Free Cash Flow:** {fcf if isinstance(fcf, str) else f'${fcf:,}'}")
+col3.markdown(f"**Operating Margin:** {oper_margin}")
+col1.markdown(f"**Net Margin:** {net_margin}")
+col2.markdown(f"**Return on Equity:** {roe}")
+col3.markdown(f"**Insider Ownership:** {insider}, Institutions: {instit}")
+
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
 st.markdown("## 🧭 Key Price Levels")
