@@ -1,4 +1,5 @@
 # ai_stock_analyzer_app/main.py
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -15,11 +16,11 @@ st.markdown("""
     <style>
         body, .stApp {
             background-color: #111111;
-            color: #E0E0E0;
+            color: #FFFFFF;
         }
         .css-1v0mbdj, .css-1cpxqw2, .css-qrbaxs {
             background-color: #1E1E1E;
-            color: #E0E0E0;
+            color: #FFFFFF;
         }
         .st-bb, .st-bc, .st-bd {
             color: #E0E0E0;
