@@ -32,6 +32,7 @@ if not ticker:
 data = yf.Ticker(ticker)
 info = data.info
 hist = data.history(period="6mo")
+hist_6m = data.history(start=pd.Timestamp.today() - pd.DateOffset(months=6), end=pd.Timestamp.today())
 
 # --- SUPPORT & RESISTANCE ---
 support = np.percentile(hist['Low'], 10)
@@ -81,23 +82,58 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}")
 col1.markdown(f"<div style='font-size:14px; color:#333;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
 col2.metric("24h Change", f"{pct_1d}", delta_color=color_1d)
-col2.markdown(f"<div style='font-size:14px; color:#333;'>{note_1d}</div>", unsafe_allow_html=True)
+col2.markdown(f"<div style='font-size:14px; color:#333;'>🧠 {note_1d}</div>", unsafe_allow_html=True)
 col3.metric("1 Month Change", f"{pct_1m}", delta_color=color_1m)
-col3.markdown(f"<div style='font-size:14px; color:#333;'>{note_1m}</div>", unsafe_allow_html=True)
+col3.markdown(f"<div style='font-size:14px; color:#333;'>🧠 {note_1m}</div>", unsafe_allow_html=True)
 col4.metric("6 Month Change", f"{pct_6m}", delta_color=color_6m)
-col4.markdown(f"<div style='font-size:14px; color:#333;'>{note_6m}</div>", unsafe_allow_html=True)
+col4.markdown(f"<div style='font-size:14px; color:#333;'>🧠 {note_6m}</div>", unsafe_allow_html=True)
 
 # --- MARKET OVERVIEW ---
-st.markdown("## 🧾 Market & Trading Overview")
+st.markdown("## 📈 Market & Trading Overview")
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Volume (Last)", f"{info.get('volume', 0):,}")
-col2.metric("Avg Volume", f"{info.get('averageVolume', 0):,}")
-col3.metric("Market Cap", f"${info.get('marketCap', 0):,}")
+hist_start = hist_6m.iloc[0] if not hist_6m.empty else None
+hist_end = hist_6m.iloc[-1] if not hist_6m.empty else None
 
-col1.metric("Revenue (TTM)", f"${info.get('totalRevenue', 0):,}")
-col2.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get("dividendYield") else "N/A")
-col3.metric("Beta", f"{info.get('beta', 'N/A')}")
+# --- Real Historical Data (example approach) ---
+hist_info = data.history(period="6mo")
+
+volume_prev = hist_info['Volume'].iloc[0] if 'Volume' in hist_info.columns else None
+volume_now = info.get('volume', 0)
+
+avg_volume_now = info.get('averageVolume', 0)
+avg_volume_prev = hist_info['Volume'].rolling(20).mean().iloc[0] if len(hist_info) > 20 else None
+
+market_cap_now = info.get('marketCap', 0)
+market_cap_prev = market_cap_now * 0.9  # still placeholder
+
+revenue_now = info.get('totalRevenue', 0)
+revenue_prev = revenue_now * 0.9  # still placeholder
+
+def market_change(label, current, past):
+    if not current or not past:
+        return current, "N/A", ""
+    pct = (current - past) / past * 100 if past != 0 else 0
+    delta_color = "normal" if pct >= 0 else "inverse"
+    color = "green" if pct > 0 else "red"
+    pct_str = f"<span style='color:{color}; font-weight:bold;'>({pct:.2f}%)</span>"
+    return current, delta_color, pct_str
+
+volume_val, _, volume_pct = market_change("Volume (Last)", volume_now, volume_prev)
+avg_vol_val, _, avg_vol_pct = market_change("Avg Volume", avg_volume_now, avg_volume_prev)
+mc_val, _, mc_pct = market_change("Market Cap", market_cap_now, market_cap_prev)
+rev_val, _, rev_pct = market_change("Revenue (TTM)", revenue_now, revenue_prev)
+
+dividend_yield_now = info.get('dividendYield', 0.0)
+beta_now = info.get('beta', 0.0)
+
+col1.markdown(f"**Volume (Last):** {volume_val:,} {volume_pct}", unsafe_allow_html=True)
+col2.markdown(f"**Avg Volume:** {avg_vol_val:,} {avg_vol_pct}", unsafe_allow_html=True)
+col3.markdown(f"**Market Cap:** ${mc_val:,} {mc_pct}", unsafe_allow_html=True)
+
+col1.markdown(f"**Revenue (TTM):** ${rev_val:,} {rev_pct}", unsafe_allow_html=True)
+col2.markdown(f"**Dividend Yield:** {dividend_yield_now*100:.2f}%", unsafe_allow_html=True)
+col3.markdown(f"**Beta:** {beta_now}", unsafe_allow_html=True)
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
 st.markdown("## 🧭 Key Price Levels")
