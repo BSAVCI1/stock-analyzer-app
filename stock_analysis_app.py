@@ -123,20 +123,25 @@ st.markdown(get_table_download_link(fig), unsafe_allow_html=True)
 st.subheader("📋 Analyst Ratings")
 
 if not analysts.empty:
-    expected_columns = ['Firm', 'To Grade']
-    if all(col in analysts.columns for col in expected_columns):
+    st.markdown("Latest Analyst Actions (if available):")
+    
+    expected_cols = ['Firm', 'To Grade']
+    available_cols = [col for col in expected_cols if col in analysts.columns]
+    
+    if all(col in analysts.columns for col in expected_cols):
         recent = (
-            analysts.groupby(expected_columns)
+            analysts.groupby(['Firm', 'To Grade'])
             .size()
             .reset_index(name='Count')
             .sort_values('Count', ascending=False)
         )
-        st.write(recent.head(5))
+        st.dataframe(recent.head(5))
     else:
-        st.info("Analyst ratings are available, but required columns ('Firm', 'To Grade') are missing.")
-        st.dataframe(analysts.tail(5))
+        st.info("Some expected columns like 'Firm' or 'To Grade' are missing.")
+        st.dataframe(analysts.tail(10))  # Show last few entries, whatever columns exist
 else:
     st.info("No recent analyst rating data available.")
+
 
 
 # --- EARNINGS CALENDAR ---
