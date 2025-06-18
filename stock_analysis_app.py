@@ -1,3 +1,5 @@
+# ai_stock_analyzer_app/main.py
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -26,12 +28,12 @@ st.markdown("""
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
             color: #4CAF50;
         }
-        .stMetricValue, .stMetricDelta {
-            color: white !important;
+        div[data-testid="metric-container"] {
+            color: #FFFFFF !important;
         }
         .note {
             font-size: 14px;
-            color: #BBBBBB;
+            color: #CCCCCC;
             margin-top: -10px;
         }
     </style>
@@ -147,3 +149,4 @@ st.markdown("""
     <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
+
