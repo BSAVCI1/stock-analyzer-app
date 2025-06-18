@@ -23,20 +23,20 @@ st.markdown("""
             color: #FFFFFF;
         }
         .st-bb, .st-bc, .st-bd {
-            color: #E0E0E0;
+            color: #FFFFFF;
         }
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
             color: #4CAF50;
         }
         div[data-testid="metric-container"] label {
-            color: #AAAAAA !important;
+            color: #FFFFFF !important;
         }
         div[data-testid="metric-container"] div {
             color: #FFFFFF !important;
         }
         .note {
             font-size: 14px;
-            color: #CCCCCC;
+            color: #FFFFFF;
             margin-top: -10px;
         }
     </style>
