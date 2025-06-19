@@ -140,7 +140,13 @@ for name, key, tooltip in metrics:
     st.markdown(f"**{name}:** {display_html} <abbr title='{tooltip}'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 # AI Insight for Fundamentals
-st.info("🧠 **Fundamentals Insight:** P/E ratio is " + (f"{info.get('trailingPE'):.2f}, which is " + ("below" if info.get('trailingPE',0) < avg_pe else "above") + " the peer average." if info.get('trailingPE') else "not available, please proceed with caution.") ), unsafe_allow_html=True)
+pe = info.get('trailingPE')
+if pe:
+    comp = 'below' if pe < avg_pe else 'above'
+    insight_text = f"🧠 **Fundamentals Insight:** P/E ratio is {pe:.2f}, which is {comp} the peer average."
+else:
+    insight_text = "🧠 **Fundamentals Insight:** P/E ratio not available, please proceed with caution."
+st.info(insight_text, unsafe_allow_html=True)
 
 # --- COMPETITOR COMPARISON CARD ---
 st.markdown("<div class='card'> <h2>🤝 Competitor Comparison</h2>", unsafe_allow_html=True)
