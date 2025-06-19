@@ -74,7 +74,6 @@ def render_fundamental_analysis(ticker: str):
 render_fundamental_analysis(ticker)
 
 # --- FETCH PRICES & INDICATORS ---
-render_fundamental_analysis(ticker)
 
 # --- FETCH PRICES & INDICATORS ---
 data = yf.Ticker(ticker)
