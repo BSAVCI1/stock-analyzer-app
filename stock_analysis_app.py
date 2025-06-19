@@ -78,7 +78,11 @@ change_1m, pct_1m, color_1m, note_1m = calc_change(current_price, price_1m)
 change_6m, pct_6m, color_6m, note_6m = calc_change(current_price, price_6m)
 
 # --- DISPLAY PANEL ---
-st.markdown(f"### 💵 **{info.get('shortName', ticker)} ({ticker})**")
+st.markdown(f"""
+<div style="background:#f8f9fa; padding:15px; border-radius:10px;">
+    <h3 style="color:#333;">💵 {info.get('shortName', ticker)} ({ticker})</h3>
+</div>
+""", unsafe_allow_html=True)
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Current Price", f"${current_price:.2f}")
 col1.markdown(f"<div style='font-size:14px; color:#333;'>This is the latest trading price for {ticker}.</div>", unsafe_allow_html=True)
@@ -97,6 +101,18 @@ fig.add_trace(go.Scatter(x=hist.index, y=hist['MA20'], mode='lines', name='MA20'
 fig.add_trace(go.Scatter(x=hist.index, y=hist['MA50'], mode='lines', name='MA50'))
 fig.update_layout(title=f"{ticker} Stock Price with Moving Averages", xaxis_title="Date", yaxis_title="Price (USD)", template="plotly_dark")
 st.plotly_chart(fig, use_container_width=True)
+
+# --- MARKET MOVERS MOCK ---
+st.markdown("## 🚀 Market Movers (Mock Data)")
+movers = pd.DataFrame({
+    "Ticker": ["CRCL", "MA", "PYPL"],
+    "Name": ["Circle Internet", "Mastercard", "PayPal"],
+    "Change": [34.0, -5.0, -3.0],
+    "Price": [199, 539, 68.57]
+})
+for _, row in movers.iterrows():
+    delta_color = "normal" if row['Change'] > 0 else "inverse"
+    st.markdown(f"**{row['Ticker']}** – {row['Name']} | Price: ${row['Price']} | Change: {row['Change']}%", unsafe_allow_html=True)
 
 # --- NEWS SUMMARY ---
 st.markdown("## 📰 Latest Headline Summary")
