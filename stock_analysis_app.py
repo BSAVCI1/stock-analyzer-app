@@ -92,42 +92,17 @@ col4.markdown(f"<div style='font-size:14px; color:#333;'>🧠 {note_6m}</div>", 
 st.markdown("## 📈 Market & Trading Overview")
 col1, col2, col3 = st.columns(3)
 
-hist_info = data.history(period="6mo")
-
-volume_prev = hist_info['Volume'].iloc[0] if 'Volume' in hist_info.columns else None
 volume_now = info.get('volume', 0)
-
 avg_volume_now = info.get('averageVolume', 0)
-avg_volume_prev = hist_info['Volume'].rolling(20).mean().iloc[0] if len(hist_info) > 20 else None
-
 market_cap_now = info.get('marketCap', 0)
-market_cap_prev = market_cap_now * 0.9
-
 revenue_now = info.get('totalRevenue', 0)
-revenue_prev = revenue_now * 0.9
-
-def market_change(label, current, past):
-    if not current or not past:
-        return current, "N/A", ""
-    pct = (current - past) / past * 100 if past != 0 else 0
-    delta_color = "normal" if pct >= 0 else "inverse"
-    color = "green" if pct > 0 else "red"
-    pct_str = f"<span style='color:{color}; font-weight:bold;'>({pct:.2f}%)</span>"
-    return current, delta_color, pct_str
-
-volume_val, _, volume_pct = market_change("Volume (Last)", volume_now, volume_prev)
-avg_vol_val, _, avg_vol_pct = market_change("Avg Volume", avg_volume_now, avg_volume_prev)
-mc_val, _, mc_pct = market_change("Market Cap", market_cap_now, market_cap_prev)
-rev_val, _, rev_pct = market_change("Revenue (TTM)", revenue_now, revenue_prev)
-
 dividend_yield_now = info.get('dividendYield', 0.0)
 beta_now = info.get('beta', 0.0)
 
-col1.markdown(f"**Volume (Last):** {volume_val:,} {volume_pct}", unsafe_allow_html=True)
-col2.markdown(f"**Avg Volume:** {avg_vol_val:,} {avg_vol_pct}", unsafe_allow_html=True)
-col3.markdown(f"**Market Cap:** ${mc_val:,} {mc_pct}", unsafe_allow_html=True)
-
-col1.markdown(f"**Revenue (TTM):** ${rev_val:,} {rev_pct}", unsafe_allow_html=True)
+col1.markdown(f"**Volume (Last):** {volume_now:,}", unsafe_allow_html=True)
+col2.markdown(f"**Avg Volume:** {avg_volume_now:,}", unsafe_allow_html=True)
+col3.markdown(f"**Market Cap:** ${market_cap_now:,}", unsafe_allow_html=True)
+col1.markdown(f"**Revenue (TTM):** ${revenue_now:,}", unsafe_allow_html=True)
 col2.markdown(f"**Dividend Yield:** {dividend_yield_now*100:.2f}%", unsafe_allow_html=True)
 col3.markdown(f"**Beta:** {beta_now}", unsafe_allow_html=True)
 
@@ -148,30 +123,16 @@ fundamental_metrics = {
     "Institutional Ownership": "heldPercentInstitutions"
 }
 
-fundamental_results = {}
-
-for name, key in fundamental_metrics.items():
+for i, (name, key) in enumerate(fundamental_metrics.items()):
     current = info.get(key, "N/A")
-    if isinstance(current, (int, float)):
-        previous = current * 0.9
-        pct_change = ((current - previous) / previous * 100) if previous != 0 else 0
-        color = "green" if pct_change > 0 else "red"
-        display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}"
-        summary = f"<span style='color:{color}'>({pct_change:.2f}%)</span>"
+    display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}" if isinstance(current, (int, float)) else current
+    if i % 3 == 0:
+        col1.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
+    elif i % 3 == 1:
+        col2.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
     else:
-        display_value = current
-        summary = ""
-    fundamental_results[name] = (display_value, summary)
+        col3.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
 
-col1.markdown(f"**Enterprise Value:** {fundamental_results['Enterprise Value'][0]} {fundamental_results['Enterprise Value'][1]}", unsafe_allow_html=True)
-col2.markdown(f"**P/E Ratio:** {fundamental_results['P/E Ratio'][0]} {fundamental_results['P/E Ratio'][1]}", unsafe_allow_html=True)
-col3.markdown(f"**PEG Ratio:** {fundamental_results['PEG Ratio'][0]} {fundamental_results['PEG Ratio'][1]}", unsafe_allow_html=True)
-col1.markdown(f"**Debt to Equity:** {fundamental_results['Debt to Equity'][0]} {fundamental_results['Debt to Equity'][1]}", unsafe_allow_html=True)
-col2.markdown(f"**Free Cash Flow:** {fundamental_results['Free Cash Flow'][0]} {fundamental_results['Free Cash Flow'][1]}", unsafe_allow_html=True)
-col3.markdown(f"**Operating Margin:** {fundamental_results['Operating Margin'][0]} {fundamental_results['Operating Margin'][1]}", unsafe_allow_html=True)
-col1.markdown(f"**Net Margin:** {fundamental_results['Net Margin'][0]} {fundamental_results['Net Margin'][1]}", unsafe_allow_html=True)
-col2.markdown(f"**Return on Equity:** {fundamental_results['Return on Equity'][0]} {fundamental_results['Return on Equity'][1]}", unsafe_allow_html=True)
-col3.markdown(f"**Insider Ownership:** {fundamental_results['Insider Ownership'][0]} | Institutional: {fundamental_results['Institutional Ownership'][0]}", unsafe_allow_html=True)
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
 st.markdown("## 🧭 Key Price Levels")
