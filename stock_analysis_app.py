@@ -1,3 +1,18 @@
+# ai_stock_analyzer_app/main.py
+
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+import requests
+from bs4 import BeautifulSoup
+
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="BSAV Stock Analyzer", layout="wide")
+
 # --- HEADER ---
 st.markdown("""
 <div style="text-align:center">
