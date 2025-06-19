@@ -98,6 +98,8 @@ cols2[0].markdown(f"**Revenue:** ${rev:,} <abbr title='Trailing twelve months re
 cols2[1].markdown(f"**Dividend Yield:** {div_yield*100:.2f}% <abbr title='Annual dividend as % of price.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market (>1 = more volatile).'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
+# AI Insight for Market Overview
+st.info("🔍 **Market Insight:** Volume is " + ("above average indicating strong trading interest." if vol > avg_vol else "below average which may signal reduced liquidity.") + f" Market cap at ${mc:,} positions this company as {'a smaller player' if mc<1e9 else 'a mid/large cap'}."), unsafe_allow_html=True)
 
 # --- SUPPORT & RESISTANCE CARD ---
 st.markdown("<div class='card'> <h2>⚙️ Support & Resistance</h2>", unsafe_allow_html=True)
@@ -122,18 +124,18 @@ metrics = [
 for name, key, tooltip in metrics:
     raw = info.get(key, None)
     if isinstance(raw, (int, float)):
-        # Format number
         if 'Ratio' in name or 'Margin' in name or 'Return' in name:
             display = f"{raw*100:.2f}%" if 'Margin' in name or 'Return' in name else f"{raw:.2f}"
         else:
             display = f"${raw:,.2f}"
-        # Color coding
         color = 'green' if raw >= 0 else 'red'
         display_html = f"<span style='color:{color}; font-weight:bold;'>{display}</span>"
     else:
         display_html = 'N/A'
     st.markdown(f"**{name}:** {display_html} <abbr title='{tooltip}'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
+# AI Insight for Fundamentals
+st.info("🧠 **Fundamentals Insight:** P/E ratio is " + (f"{info.get('trailingPE'):.2f}, which is " + ("below" if info.get('trailingPE',0) < avg_pe else "above") + " the peer average." if info.get('trailingPE') else "not available, please proceed with caution.") ), unsafe_allow_html=True)
 
 # --- COMPETITOR COMPARISON CARD ---
 st.markdown("<div class='card'> <h2>🤝 Competitor Comparison</h2>", unsafe_allow_html=True)
