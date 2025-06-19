@@ -105,23 +105,8 @@ st.plotly_chart(fig,use_container_width=True)
 st.markdown("</div>",unsafe_allow_html=True)
 
 # --- EXTENDED FUNDAMENTALS CARD ---
-st.markdown("<div class='card'> <h2>🧲 Fundamental Breakdown</h2>",unsafe_allow_html=True)
-sections={
- 'Valuation':[('P/E','trailingPE','15-25= fair'),('PEG','pegRatio','~1=fair')],
- 'Profitability':[('Net Margin','profitMargins','>5% profitable'),('ROE','returnOnEquity','>15% strong')],
- 'Leverage':[('Debt/Eq','debtToEquity','<1 comfortable'),('EV','enterpriseValue','<1.5xMC typical')]
-}
-for sec, items in sections.items():
-    st.markdown(f"**{sec}**")
-    for name,key,tip in items:
-        raw=info.get(key)
-        if isinstance(raw,(int,float)):
-            disp=f"{raw*100:.2f}%" if 'Margin' in name or 'ROE' in name else f"{raw:.2f}"
-            colr='green' if raw>0 else 'red'
-            st.markdown(f"- {name}: <span style='color:{colr};'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>",unsafe_allow_html=True)
-st.markdown("</div>",unsafe_allow_html=True)
-st.markdown(f"<div class='card-dark'>🧠 Fundamentals Insight: {'Valuation attractive' if info.get('trailingPE',0)<avg_pe else 'Valuation above peers'}</div>",unsafe_allow_html=True)
-
+# Ensure avg_pe is defined for insights
+avg_pe = None
 # --- COMPETITOR OVERVIEW ---
 st.markdown("<div class='card'> <h2>🤝 Peer Comparison</h2>",unsafe_allow_html=True)
 peer_df=pd.DataFrame([{ 'Ticker':p, 'Price':yf.Ticker(p).info.get('currentPrice'), 'P/E':yf.Ticker(p).info.get('trailingPE')} for p in peer_list]).set_index('Ticker')
@@ -148,3 +133,4 @@ st.markdown("<div class='card-dark'> <h2 style='color:#4CAF50;'>🎯 Action Reco
 rec='Buy' if pct6m and pct6m>0 and info.get('trailingPE',999)<avg_pe else 'Hold'
 st.markdown(f"<b>Recommendation:</b> {rec} <br><b>Confidence:</b> ⭐️⭐️⭐️",unsafe_allow_html=True)
 st.markdown("</div>",unsafe_allow_html=True)
+
