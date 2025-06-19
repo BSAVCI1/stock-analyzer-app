@@ -1,4 +1,4 @@
-# Fundamental Analysis Module Implementation for AI Stock Analyzer
+# ai_stock_analyzer_app/main.py
 
 import streamlit as st
 import yfinance as yf
