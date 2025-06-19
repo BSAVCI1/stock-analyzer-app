@@ -99,7 +99,12 @@ cols2[1].markdown(f"**Dividend Yield:** {div_yield*100:.2f}% <abbr title='Annual
 cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market (>1 = more volatile).'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 # AI Insight for Market Overview
-st.info("🔍 **Market Insight:** Volume is " + ("above average indicating strong trading interest." if vol > avg_vol else "below average which may signal reduced liquidity.") + f" Market cap at ${mc:,} positions this company as {'a smaller player' if mc<1e9 else 'a mid/large cap'}."), unsafe_allow_html=True)
+st.info(
+    "🔍 **Market Insight:** Volume is " + 
+    ("above average indicating strong trading interest." if vol > avg_vol else "below average which may signal reduced liquidity.") + 
+    f" Market cap at ${mc:,} positions this company as {('a smaller player' if mc<1e9 else 'a mid/large cap')}.",
+    unsafe_allow_html=True
+)
 
 # --- SUPPORT & RESISTANCE CARD ---
 st.markdown("<div class='card'> <h2>⚙️ Support & Resistance</h2>", unsafe_allow_html=True)
