@@ -90,13 +90,13 @@ div_yield = info.get('dividendYield', 0)
 beta = info.get('beta', 0)
 
 cols = st.columns(3)
-cols[0].markdown(f"**Volume:** {vol:,} <span class='metric-tooltip' title='Total shares traded in last session.'>?</span>", unsafe_allow_html=True)
-cols[1].markdown(f"**Avg Volume:** {avg_vol:,} <span class='metric-tooltip' title='30-day average trading volume.'>?</span>", unsafe_allow_html=True)
-cols[2].markdown(f"**Market Cap:** ${mc:,} <span class='metric-tooltip' title='Total market value of equity.'>?</span>", unsafe_allow_html=True)
+cols[0].markdown(f"**Volume:** {vol:,} <abbr title='Total shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols[1].markdown(f"**Avg Volume:** {avg_vol:,} <abbr title='30-day average trading volume.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols[2].markdown(f"**Market Cap:** ${mc:,} <abbr title='Total market value of equity.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2 = st.columns(3)
-cols2[0].markdown(f"**Revenue:** ${rev:,} <span class='metric-tooltip' title='Trailing twelve months revenue.'>?</span>", unsafe_allow_html=True)
-cols2[1].markdown(f"**Dividend Yield:** {div_yield*100:.2f}% <span class='metric-tooltip' title='Annual dividend as % of price.'>?</span>", unsafe_allow_html=True)
-cols2[2].markdown(f"**Beta:** {beta:.2f} <span class='metric-tooltip' title='Volatility vs market (>1 = more volatile).'>?</span>", unsafe_allow_html=True)
+cols2[0].markdown(f"**Revenue:** ${rev:,} <abbr title='Trailing twelve months revenue.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[1].markdown(f"**Dividend Yield:** {div_yield*100:.2f}% <abbr title='Annual dividend as % of price.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market (>1 = more volatile).'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- SUPPORT & RESISTANCE CARD ---
@@ -122,7 +122,7 @@ metrics = [
 for name, key, tooltip in metrics:
     val = info.get(key, 'N/A')
     display = f"{val:.2f}" if isinstance(val, (int, float)) else val
-    st.markdown(f"**{name}:** {display} <span class='metric-tooltip' title='{tooltip}'>?</span>", unsafe_allow_html=True)
+    st.markdown(f"**{name}:** {display} <abbr title='{tooltip}'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- COMPETITOR COMPARISON CARD ---
