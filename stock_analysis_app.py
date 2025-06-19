@@ -72,7 +72,6 @@ st.markdown(
 **6M Change:** {pct_6m}""",
     unsafe_allow_html=True
 )
-)
 # AI Feedback
 if pct_6m.strip('%') and pct_6m != 'N/A':
     if float(pct_6m.strip('%')) > 0:
