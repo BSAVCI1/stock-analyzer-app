@@ -44,6 +44,12 @@ hist = data.history(period="6mo")
 hist['MA20'] = hist['Close'].rolling(window=20).mean()
 hist['MA50'] = hist['Close'].rolling(window=50).mean()
 
+# --- SUPPORT & RESISTANCE ---
+support = np.percentile(hist['Low'], 10)
+resistance = np.percentile(hist['High'], 90)
+hist['MA20'] = hist['Close'].rolling(window=20).mean()
+hist['MA50'] = hist['Close'].rolling(window=50).mean()
+
 # --- PRICE CHANGE UTIL ---
 def arrow(pct): return "<span class='arrow-up'>▲</span>" if pct>0 else "<span class='arrow-down'>▼</span>" if pct<0 else "—"
 
@@ -142,4 +148,3 @@ st.markdown("<div class='card-dark'> <h2 style='color:#4CAF50;'>🎯 Action Reco
 rec='Buy' if pct6m and pct6m>0 and info.get('trailingPE',999)<avg_pe else 'Hold'
 st.markdown(f"<b>Recommendation:</b> {rec} <br><b>Confidence:</b> ⭐️⭐️⭐️",unsafe_allow_html=True)
 st.markdown("</div>",unsafe_allow_html=True)
-
