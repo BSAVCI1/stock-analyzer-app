@@ -66,11 +66,12 @@ price_6m, pct_6m, col_6m = calc_change(current_price, hist['Close'].iloc[0]    i
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 st.write(f"### 💵 Price Overview for {info.get('shortName', ticker)} ({ticker})")
 st.markdown(
-    f"**Now:** {price_1d}  
-    **24h Change:** {pct_1d}  
-    **1M Change:** {pct_1m}  
-    **6M Change:** {pct_6m}",
+    f"""**Now:** {price_1d}  
+**24h Change:** {pct_1d}  
+**1M Change:** {pct_1m}  
+**6M Change:** {pct_6m}""",
     unsafe_allow_html=True
+)
 )
 # AI Feedback
 if pct_6m.strip('%') and pct_6m != 'N/A':
