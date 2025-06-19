@@ -99,12 +99,12 @@ revenue_now = info.get('totalRevenue', 0)
 dividend_yield_now = info.get('dividendYield', 0.0)
 beta_now = info.get('beta', 0.0)
 
-col1.markdown(f"**Volume (Last):** {volume_now:,}", unsafe_allow_html=True)
-col2.markdown(f"**Avg Volume:** {avg_volume_now:,}", unsafe_allow_html=True)
-col3.markdown(f"**Market Cap:** ${market_cap_now:,}", unsafe_allow_html=True)
-col1.markdown(f"**Revenue (TTM):** ${revenue_now:,}", unsafe_allow_html=True)
-col2.markdown(f"**Dividend Yield:** {dividend_yield_now*100:.2f}%", unsafe_allow_html=True)
-col3.markdown(f"**Beta:** {beta_now}", unsafe_allow_html=True)
+col1.markdown(f"**Volume (Last):** {volume_now:,} (Reflects recent trading activity.)", unsafe_allow_html=True)
+col2.markdown(f"**Avg Volume:** {avg_volume_now:,} (Average daily trading volume; higher may indicate liquidity.)", unsafe_allow_html=True)
+col3.markdown(f"**Market Cap:** ${market_cap_now:,} (Total market value of equity.)", unsafe_allow_html=True)
+col1.markdown(f"**Revenue (TTM):** ${revenue_now:,} (Trailing 12-month total revenue.)", unsafe_allow_html=True)
+col2.markdown(f"**Dividend Yield:** {dividend_yield_now*100:.2f}% (Annual dividends as % of price.)", unsafe_allow_html=True)
+col3.markdown(f"**Beta:** {beta_now} (Volatility vs market; >1 = more volatile.)", unsafe_allow_html=True)
 
 # --- EXTENDED FUNDAMENTALS ---
 st.markdown("## 🧲 Extended Fundamentals")
@@ -128,22 +128,24 @@ for i, (name, key) in enumerate(fundamental_metrics.items()):
     display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}" if isinstance(current, (int, float)) else current
     comment = ""
     if isinstance(current, (int, float)):
-        if name in ["P/E Ratio", "PEG Ratio"]:
-            comment = " (Lower = Better for value investors)"
-        elif name in ["Debt to Equity"]:
-            comment = " (Too high may mean riskier leverage)"
-        elif name in ["Return on Equity"]:
-            comment = " (Higher = Better profitability use)"
-        elif name in ["Insider Ownership", "Institutional Ownership"]:
-            comment = " (Shows insider/institutional confidence)"
+        if name == "P/E Ratio":
+            comment = " (Below 15 is often seen as value; above 25 may be overvalued.)"
+        elif name == "PEG Ratio":
+            comment = " (Around 1.0 is considered fair; <1 may be undervalued.)"
+        elif name == "Debt to Equity":
+            comment = " (<1 is typically preferred; >2 can indicate high leverage.)"
+        elif name == "Return on Equity":
+            comment = " (>15% is strong; <10% might suggest inefficiency.)"
+        elif name == "Insider Ownership":
+            comment = " (5–10%+ shows insider confidence.)"
+        elif name == "Institutional Ownership":
+            comment = " (70%+ implies strong institutional backing.)"
     if i % 3 == 0:
         col1.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
     elif i % 3 == 1:
         col2.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
     else:
         col3.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
-
-
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
 st.markdown("## 🧭 Key Price Levels")
