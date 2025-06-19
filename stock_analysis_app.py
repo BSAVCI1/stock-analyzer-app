@@ -154,7 +154,7 @@ for name, key in fundamental_metrics.items():
     current = info.get(key, "N/A")
     if isinstance(current, (int, float)):
         previous = current * 0.9
-        pct_change = ((current - previous) / previous * 100)
+        pct_change = ((current - previous) / previous * 100) if previous != 0 else 0
         color = "green" if pct_change > 0 else "red"
         display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}"
         summary = f"<span style='color:{color}'>({pct_change:.2f}%)</span>"
