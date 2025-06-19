@@ -84,7 +84,68 @@ hist['MA50'] = hist['Close'].rolling(window=50).mean()
 support = np.percentile(hist['Low'], 10)
 resistance = np.percentile(hist['High'], 90)
 
-# rest of your main code (price, market overview, etc.) follows...
+# --- TECHNICAL ANALYSIS MODULE ---
+# Compute indicators: RSI, MACD, Bollinger Bands, ADX
+# RSI
+delta = hist['Close'].diff()
+gain = delta.where(delta > 0, 0).rolling(14).mean()
+loss = -delta.where(delta < 0, 0).rolling(14).mean()
+rs = gain / loss
+hist['RSI'] = 100 - (100 / (1 + rs))
+# MACD
+hist['EMA12'] = hist['Close'].ewm(span=12, adjust=False).mean()
+hist['EMA26'] = hist['Close'].ewm(span=26, adjust=False).mean()
+hist['MACD'] = hist['EMA12'] - hist['EMA26']
+# Bollinger Bands
+hist['BB_mid'] = hist['Close'].rolling(20).mean()
+hist['BB_std'] = hist['Close'].rolling(20).std()
+hist['BB_upper'] = hist['BB_mid'] + (2 * hist['BB_std'])
+hist['BB_lower'] = hist['BB_mid'] - (2 * hist['BB_std'])
+# ADX (approximate using TA-Lib style formulas)
+# Since no TA-Lib, compute basic ADX manually
+high = hist['High']
+low = hist['Low']
+close = hist['Close']
+# True Range
+tr1 = high - low
+tr2 = (high - close.shift()).abs()
+tr3 = (low - close.shift()).abs()
+hist['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+hist['ATR'] = hist['TR'].rolling(14).mean()
+# +DM, -DM
+up_move = high - high.shift()
+down_move = low.shift() - low
+plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
+minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
+hist['+DI'] = 100 * (pd.Series(plus_dm).rolling(14).mean() / hist['ATR'])
+hist['-DI'] = 100 * (pd.Series(minus_dm).rolling(14).mean() / hist['ATR'])
+hist['DX'] = (abs(hist['+DI'] - hist['-DI']) / (hist['+DI'] + hist['-DI'])) * 100
+hist['ADX'] = hist['DX'].rolling(14).mean()
+
+# Display indicators card
+st.markdown("<div class='card'> <h2>📈 Technical Analysis</h2>", unsafe_allow_html=True)
+# RSI & MACD charts
+fig2 = go.Figure()
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], mode='lines', name='RSI'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], mode='lines', name='MACD'))
+fig2.update_layout(template='plotly_white', height=300)
+st.plotly_chart(fig2, use_container_width=True)
+# Bollinger and price
+fig3 = go.Figure()
+fig3.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
+fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='BB Upper'))
+fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='BB Mid'))
+fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='BB Lower'))
+fig3.update_layout(template='plotly_white', height=300)
+st.plotly_chart(fig3, use_container_width=True)
+# ADX summary
+adx_latest = hist['ADX'].iloc[-1]
+adx_comment = 'Strong trend' if adx_latest > 25 else 'Weak trend'
+st.markdown(f"<div class='card-dark'>🧠 ADX ({adx_latest:.1f}): {adx_comment}</div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Continue with Market Overview and subsequent modules
+# rest of the code...
 
 # --- FOOTER ---
 st.markdown("""
