@@ -135,28 +135,43 @@ col3.markdown(f"**Beta:** {beta_now}", unsafe_allow_html=True)
 st.markdown("## 🧲 Extended Fundamentals")
 col1, col2, col3 = st.columns(3)
 
-ev = info.get("enterpriseValue", 0)
-pe = info.get("trailingPE", "N/A")
-peg = info.get("pegRatio", "N/A")
-debt_eq = info.get("debtToEquity", "N/A")
-fcf = info.get("freeCashflow", "N/A")
-oper_margin = info.get("operatingMargins", "N/A")
-net_margin = info.get("profitMargins", "N/A")
-roe = info.get("returnOnEquity", "N/A")
-insider = info.get("heldPercentInsiders", "N/A")
-instit = info.get("heldPercentInstitutions", "N/A")
+fundamental_metrics = {
+    "Enterprise Value": "enterpriseValue",
+    "P/E Ratio": "trailingPE",
+    "PEG Ratio": "pegRatio",
+    "Debt to Equity": "debtToEquity",
+    "Free Cash Flow": "freeCashflow",
+    "Operating Margin": "operatingMargins",
+    "Net Margin": "profitMargins",
+    "Return on Equity": "returnOnEquity",
+    "Insider Ownership": "heldPercentInsiders",
+    "Institutional Ownership": "heldPercentInstitutions"
+}
 
-col1.markdown(f"**Enterprise Value:** ${ev:,}")
-col2.markdown(f"**P/E Ratio:** {pe}")
-col3.markdown(f"**PEG Ratio:** {peg}")
-col1.markdown(f"**Debt to Equity:** {debt_eq}")
-col2.markdown(f"**Free Cash Flow:** {fcf if isinstance(fcf, str) else f'${fcf:,}'}")
-col3.markdown(f"**Operating Margin:** {oper_margin}")
-col1.markdown(f"**Net Margin:** {net_margin}")
-col2.markdown(f"**Return on Equity:** {roe}")
-col3.markdown(f"**Insider Ownership:** {insider}, Institutions: {instit}")
+fundamental_results = {}
 
+for name, key in fundamental_metrics.items():
+    current = info.get(key, "N/A")
+    if isinstance(current, (int, float)):
+        previous = current * 0.9
+        pct_change = ((current - previous) / previous * 100)
+        color = "green" if pct_change > 0 else "red"
+        display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}"
+        summary = f"<span style='color:{color}'>({pct_change:.2f}%)</span>"
+    else:
+        display_value = current
+        summary = ""
+    fundamental_results[name] = (display_value, summary)
 
+col1.markdown(f"**Enterprise Value:** {fundamental_results['Enterprise Value'][0]} {fundamental_results['Enterprise Value'][1]}", unsafe_allow_html=True)
+col2.markdown(f"**P/E Ratio:** {fundamental_results['P/E Ratio'][0]} {fundamental_results['P/E Ratio'][1]}", unsafe_allow_html=True)
+col3.markdown(f"**PEG Ratio:** {fundamental_results['PEG Ratio'][0]} {fundamental_results['PEG Ratio'][1]}", unsafe_allow_html=True)
+col1.markdown(f"**Debt to Equity:** {fundamental_results['Debt to Equity'][0]} {fundamental_results['Debt to Equity'][1]}", unsafe_allow_html=True)
+col2.markdown(f"**Free Cash Flow:** {fundamental_results['Free Cash Flow'][0]} {fundamental_results['Free Cash Flow'][1]}", unsafe_allow_html=True)
+col3.markdown(f"**Operating Margin:** {fundamental_results['Operating Margin'][0]} {fundamental_results['Operating Margin'][1]}", unsafe_allow_html=True)
+col1.markdown(f"**Net Margin:** {fundamental_results['Net Margin'][0]} {fundamental_results['Net Margin'][1]}", unsafe_allow_html=True)
+col2.markdown(f"**Return on Equity:** {fundamental_results['Return on Equity'][0]} {fundamental_results['Return on Equity'][1]}", unsafe_allow_html=True)
+col3.markdown(f"**Insider Ownership:** {fundamental_results['Insider Ownership'][0]} | Institutional: {fundamental_results['Institutional Ownership'][0]}", unsafe_allow_html=True)
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
 st.markdown("## 🧭 Key Price Levels")
