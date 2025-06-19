@@ -46,25 +46,34 @@ def render_fundamental_analysis(ticker: str):
     except Exception:
         st.error("Unable to fetch quarterly financials.")
         return
-    df4 = df_income.iloc[:4][[
-        'Total Revenue',
-        'Gross Profit',
-        'Operating Income',
-        'Net Income',
-        'Operating Cash Flow'
-    ]]
+    # Select available financial fields for last 4 quarters
+    desired = [
+        'Total Revenue', 'Revenue', 'Gross Profit', 'Operating Income',
+        'EBIT', 'Net Income', 'Net Income\(Loss\)', 'Operating Cash Flow'
+    ]
+    available = [col for col in desired if col in df_income.columns]
+    if not available:
+        st.error("No standard financial fields found in quarterly data.")
+        return
+    df4 = df_income[available].iloc[:4]
     df4.index = pd.to_datetime(df4.index).to_period('Q')
     st.dataframe(df4.style.format("${:,.0f}"))
+    # Compute QoQ changes
     changes = df4.pct_change().iloc[1:] * 100
     insight_lines = []
     for metric in df4.columns:
-        pct = changes.loc[df4.index[0], metric]
+        pct = changes.iloc[0].get(metric, None)
+        if pct is None or np.isnan(pct):
+            continue
         direction = 'increase' if pct > 0 else 'decrease'
         insight_lines.append(f"• {metric}: {direction} of {pct:.1f}% vs prior quarter.")
     insight_text = '<br>'.join(insight_lines)
     st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{insight_text}</div>", unsafe_allow_html=True)
 
 # --- RENDER QUARTERLY EARNINGS ---
+render_fundamental_analysis(ticker)
+
+# --- FETCH PRICES & INDICATORS ---
 render_fundamental_analysis(ticker)
 
 # --- FETCH PRICES & INDICATORS ---
@@ -85,4 +94,3 @@ st.markdown("""
     <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
-
