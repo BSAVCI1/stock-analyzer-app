@@ -85,3 +85,4 @@ st.markdown("""
     <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
+
