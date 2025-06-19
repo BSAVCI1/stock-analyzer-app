@@ -46,106 +46,89 @@ def render_fundamental_analysis(ticker: str):
     except Exception:
         st.error("Unable to fetch quarterly financials.")
         return
-    # Select available financial fields for last 4 quarters
-    desired = [
-        'Total Revenue', 'Revenue', 'Gross Profit', 'Operating Income',
-        'EBIT', 'Net Income', 'Net Income\(Loss\)', 'Operating Cash Flow'
-    ]
-    available = [col for col in desired if col in df_income.columns]
-    if not available:
-        st.error("No standard financial fields found in quarterly data.")
+    # Select available fields
+    desired = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Net Income(Loss)','Operating Cash Flow']
+    avail = [c for c in desired if c in df_income.columns]
+    if not avail:
+        st.error("No standard fields in quarterly data.")
         return
-    df4 = df_income[available].iloc[:4]
+    df4 = df_income[avail].iloc[:4]
     df4.index = pd.to_datetime(df4.index).to_period('Q')
     st.dataframe(df4.style.format("${:,.0f}"))
-    # Compute QoQ changes
-    changes = df4.pct_change().iloc[1:] * 100
-    insight_lines = []
+    # Insights
+    changes = df4.pct_change().iloc[1:]*100
+    insights = []
     for metric in df4.columns:
-        pct = changes.iloc[0].get(metric, None)
-        if pct is None or np.isnan(pct):
-            continue
-        direction = 'increase' if pct > 0 else 'decrease'
-        insight_lines.append(f"• {metric}: {direction} of {pct:.1f}% vs prior quarter.")
-    insight_text = '<br>'.join(insight_lines)
-    st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{insight_text}</div>", unsafe_allow_html=True)
+        pct = changes.iloc[0].get(metric, np.nan)
+        if not np.isnan(pct):
+            dir = 'increased' if pct>0 else 'decreased'
+            insights.append(f"{metric} {dir} by {pct:.1f}% vs prior quarter.")
+    st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>", unsafe_allow_html=True)
 
-# --- RENDER QUARTERLY EARNINGS ---
 render_fundamental_analysis(ticker)
 
-# --- FETCH PRICES & INDICATORS ---
-
-# --- FETCH PRICES & INDICATORS ---
+# --- FETCH DATA & INDICATORS ---
 data = yf.Ticker(ticker)
 info = data.info
 hist = data.history(period="6mo")
-hist['MA20'] = hist['Close'].rolling(window=20).mean()
-hist['MA50'] = hist['Close'].rolling(window=50).mean()
-support = np.percentile(hist['Low'], 10)
-resistance = np.percentile(hist['High'], 90)
-
-# --- TECHNICAL ANALYSIS MODULE ---
-# Compute indicators: RSI, MACD, Bollinger Bands, ADX
+hist['MA20'] = hist['Close'].rolling(20).mean()
+hist['MA50'] = hist['Close'].rolling(50).mean()
+# Technical indicators
 # RSI
 delta = hist['Close'].diff()
-gain = delta.where(delta > 0, 0).rolling(14).mean()
-loss = -delta.where(delta < 0, 0).rolling(14).mean()
-rs = gain / loss
-hist['RSI'] = 100 - (100 / (1 + rs))
+gain = delta.where(delta>0,0).rolling(14).mean()
+loss = -delta.where(delta<0,0).rolling(14).mean()
+rs = gain/loss
+hist['RSI'] = 100 - (100/(1+rs))
 # MACD
-hist['EMA12'] = hist['Close'].ewm(span=12, adjust=False).mean()
-hist['EMA26'] = hist['Close'].ewm(span=26, adjust=False).mean()
+hist['EMA12'] = hist['Close'].ewm(span=12).mean()
+hist['EMA26'] = hist['Close'].ewm(span=26).mean()
 hist['MACD'] = hist['EMA12'] - hist['EMA26']
 # Bollinger Bands
 hist['BB_mid'] = hist['Close'].rolling(20).mean()
 hist['BB_std'] = hist['Close'].rolling(20).std()
-hist['BB_upper'] = hist['BB_mid'] + (2 * hist['BB_std'])
-hist['BB_lower'] = hist['BB_mid'] - (2 * hist['BB_std'])
-# ADX (approximate using TA-Lib style formulas)
-# Since no TA-Lib, compute basic ADX manually
-high = hist['High']
-low = hist['Low']
-close = hist['Close']
-# True Range
-tr1 = high - low
-tr2 = (high - close.shift()).abs()
-tr3 = (low - close.shift()).abs()
-hist['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-hist['ATR'] = hist['TR'].rolling(14).mean()
-# +DM, -DM
-up_move = high - high.shift()
-down_move = low.shift() - low
-plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
-minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
-hist['+DI'] = 100 * (pd.Series(plus_dm).rolling(14).mean() / hist['ATR'])
-hist['-DI'] = 100 * (pd.Series(minus_dm).rolling(14).mean() / hist['ATR'])
-hist['DX'] = (abs(hist['+DI'] - hist['-DI']) / (hist['+DI'] + hist['-DI'])) * 100
-hist['ADX'] = hist['DX'].rolling(14).mean()
+hist['BB_upper'] = hist['BB_mid'] + 2*hist['BB_std']
+hist['BB_lower'] = hist['BB_mid'] - 2*hist['BB_std']
+# ADX
+high, low, close = hist['High'], hist['Low'], hist['Close']
+tr = pd.concat([high-low, (high-close.shift()).abs(), (low-close.shift()).abs()],axis=1).max(axis=1)
+hist['ATR'] = tr.rolling(14).mean()
+up = high.diff()
+dn = -low.diff()
+hist['+DI'] = 100*(up.where((up>dn)&(up>0),0).rolling(14).mean()/hist['ATR'])
+hist['-DI'] = 100*(dn.where((dn>up)&(dn>0),0).rolling(14).mean()/hist['ATR'])
+hist['ADX'] = (abs(hist['+DI']-hist['-DI'])/(hist['+DI']+hist['-DI'])*100).rolling(14).mean()
 
-# Display indicators card
-st.markdown("<div class='card'> <h2>📈 Technical Analysis</h2>", unsafe_allow_html=True)
-# RSI & MACD charts
+# --- TECHNICAL ANALYSIS CARD ---
+st.markdown("<div class='card'><h2>📈 Technical Analysis</h2></div>", unsafe_allow_html=True)
+# RSI & MACD chart
+fig1 = go.Figure()
+fig1.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI'))
+fig1.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD'))
+fig1.update_layout(template='plotly_white',height=300)
+st.plotly_chart(fig1, use_container_width=True)
+# Bollinger & Price chart
 fig2 = go.Figure()
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], mode='lines', name='RSI'))
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], mode='lines', name='MACD'))
-fig2.update_layout(template='plotly_white', height=300)
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name='Price'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='Upper Band'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='Mid Band'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
+fig2.update_layout(template='plotly_white',height=300)
 st.plotly_chart(fig2, use_container_width=True)
-# Bollinger and price
-fig3 = go.Figure()
-fig3.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
-fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='BB Upper'))
-fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='BB Mid'))
-fig3.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='BB Lower'))
-fig3.update_layout(template='plotly_white', height=300)
-st.plotly_chart(fig3, use_container_width=True)
-# ADX summary
-adx_latest = hist['ADX'].iloc[-1]
-adx_comment = 'Strong trend' if adx_latest > 25 else 'Weak trend'
-st.markdown(f"<div class='card-dark'>🧠 ADX ({adx_latest:.1f}): {adx_comment}</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
-
-# Continue with Market Overview and subsequent modules
-# rest of the code...
+# Summary for non-finance users
+rsi_val = hist['RSI'].iloc[-1]
+ma_trend = 'upward' if hist['Close'].iloc[-1]>hist['MA50'].iloc[-1] else 'downward'
+macd_val = hist['MACD'].iloc[-1]
+bb_touch = 'near upper' if hist['Close'].iloc[-1]>hist['BB_upper'].iloc[-1] else 'near lower' if hist['Close'].iloc[-1]<hist['BB_lower'].iloc[-1] else 'within'
+adx_val = hist['ADX'].iloc[-1]
+adx_text = f"{adx_val:.1f}" if not np.isnan(adx_val) else 'N/A'
+insights = []
+insights.append(f"• RSI at {rsi_val:.1f} indicates {'overbought' if rsi_val>70 else 'oversold' if rsi_val<30 else 'neutral'} conditions.")
+insights.append(f"• Price trending {ma_trend} relative to the 50-day MA.")
+insights.append(f"• MACD value {macd_val:.2f} suggests {'bullish' if macd_val>0 else 'bearish'} momentum.")
+insights.append(f"• Price is {bb_touch} Bollinger Bands, indicating volatility.")
+insights.append(f"• ADX at {adx_text} suggests {'strong trend' if adx_val and adx_val>25 else 'weak trend'}." )
+st.markdown(f"<div class='card-dark'><b>🧠 Technical Insight:</b><br>{'<br>'.join(insights)}</div>", unsafe_allow_html=True)
 
 # --- FOOTER ---
 st.markdown("""
