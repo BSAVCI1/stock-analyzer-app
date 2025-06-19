@@ -120,9 +120,19 @@ metrics = [
     ('Institutional Ownership', 'heldPercentInstitutions', '>70% = backed')
 ]
 for name, key, tooltip in metrics:
-    val = info.get(key, 'N/A')
-    display = f"{val:.2f}" if isinstance(val, (int, float)) else val
-    st.markdown(f"**{name}:** {display} <abbr title='{tooltip}'>ℹ️</abbr>", unsafe_allow_html=True)
+    raw = info.get(key, None)
+    if isinstance(raw, (int, float)):
+        # Format number
+        if 'Ratio' in name or 'Margin' in name or 'Return' in name:
+            display = f"{raw*100:.2f}%" if 'Margin' in name or 'Return' in name else f"{raw:.2f}"
+        else:
+            display = f"${raw:,.2f}"
+        # Color coding
+        color = 'green' if raw >= 0 else 'red'
+        display_html = f"<span style='color:{color}; font-weight:bold;'>{display}</span>"
+    else:
+        display_html = 'N/A'
+    st.markdown(f"**{name}:** {display_html} <abbr title='{tooltip}'>ℹ️</abbr>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --- COMPETITOR COMPARISON CARD ---
