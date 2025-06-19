@@ -126,12 +126,23 @@ fundamental_metrics = {
 for i, (name, key) in enumerate(fundamental_metrics.items()):
     current = info.get(key, "N/A")
     display_value = f"${current:,.2f}" if "Value" in name or "Flow" in name else f"{current:.2f}" if isinstance(current, (int, float)) else current
+    comment = ""
+    if isinstance(current, (int, float)):
+        if name in ["P/E Ratio", "PEG Ratio"]:
+            comment = " (Lower = Better for value investors)"
+        elif name in ["Debt to Equity"]:
+            comment = " (Too high may mean riskier leverage)"
+        elif name in ["Return on Equity"]:
+            comment = " (Higher = Better profitability use)"
+        elif name in ["Insider Ownership", "Institutional Ownership"]:
+            comment = " (Shows insider/institutional confidence)"
     if i % 3 == 0:
-        col1.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
+        col1.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
     elif i % 3 == 1:
-        col2.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
+        col2.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
     else:
-        col3.markdown(f"**{name}:** {display_value}", unsafe_allow_html=True)
+        col3.markdown(f"**{name}:** {display_value}{comment}", unsafe_allow_html=True)
+
 
 
 # --- SUPPORT & RESISTANCE DISPLAY ---
