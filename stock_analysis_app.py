@@ -146,6 +146,7 @@ for sec, items in sections.items():
             f"(Peers: <span style='color:#555;'>{peer_str}</span>) "
             f"<abbr title='{tip}'>ℹ️</abbr>",
             unsafe_allow_html=True
+        )
 
 # AI Insight
 disp_pe = info.get('trailingPE',np.nan)
