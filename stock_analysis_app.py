@@ -72,6 +72,7 @@ hist['MA50'] = hist['Close'].rolling(50).mean()
 st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
 
 # --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
+st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
 st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
 vol = info.get('volume', 0)
 avg_vol = info.get('averageVolume', 0)
@@ -83,18 +84,31 @@ beta = info.get('beta', 0)
 cols = st.columns(3)
 cols[0].markdown(f"**Volume:** {vol:,} {'<span class=\"arrow-up\">▲</span>' if vol>avg_vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='Shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols[1].markdown(f"**Avg Volume:** {avg_vol:,} {'<span class=\"arrow-up\">▲</span>' if avg_vol>vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols[2].markdown(f"**Market Cap:** ${mc:,} {'<span class=\"arrow-up\">▲</span>' if mc>mc else '<span class=\"arrow-down\">▼</span>'} <abbr title='Total market value.'>ℹ️</abbr>", unsafe_allow_html=True)
+# Compare current market cap against previous session's implied market cap
+prev_mc = hist['Close'].iloc[-2] * info.get('sharesOutstanding', 1)
+cols[2].markdown(
+    f"**Market Cap:** ${mc:,} {'<span class=\"arrow-up\">▲</span>' if mc>prev_mc else '<span class=\"arrow-down\">▼</span>'} <abbr title='Total market value.'>ℹ️</abbr>",
+    unsafe_allow_html=True
+)
 cols2 = st.columns(3)
-cols2[0].markdown(f"**Revenue (TTM):** ${rev:,} {'<span class=\"arrow-up\">▲</span>' if rev>rev else '<span class=\"arrow-down\">▼</span>'} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols2[1].markdown(f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>dy else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols2[2].markdown(f"**Beta:** {beta:.2f} {'<span class=\"arrow-up\">▲</span>' if beta>1 else '<span class=\"arrow-down\">▼</span>'} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[0].markdown(
+    f"**Revenue (TTM):** ${rev:,} {'<span class=\"arrow-up\">▲</span>' if rev>hist['Close'].iloc[-2]*info.get('sharesOutstanding',1) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>",
+    unsafe_allow_html=True
+)
+cols2[1].markdown(
+    f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>np.nanmean([yf.Ticker(p).info.get('dividendYield',0)*100 for p in peer_list]) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>",
+    unsafe_allow_html=True
+)
+cols2[2].markdown(
+    f"**Beta:** {beta:.2f} {'<span class=\"arrow-up\">▲</span>' if beta>1 else '<span class=\"arrow-down\">▼</span>'} <abbr title='Volatility vs market.'>ℹ️</abbr>",
+    unsafe_allow_html=True
+)
 ins = (
     f"Over the last session, trading volume was {'higher' if vol>avg_vol else 'lower'} than the 30‑day average, suggesting {'strong buying interest' if vol>avg_vol else 'potential lack of market enthusiasm'}. "
-    f"Current market cap stands at ${mc:,}, which makes this a {'smaller' if mc<1e9 else 'mid to large'}-cap company—" 
-    f"smaller companies can be more volatile, while larger caps offer more stability. "
-    f"Revenue (TTM) of ${rev:,} shows how much the company sold in the past year. "
-    f"A dividend yield of {dy:.2f}% {'rewards investors with regular payouts' if dy>0 else 'means the company does not currently pay dividends'}. "
-    f"A beta of {beta:.2f} indicates {'higher' if beta>1 else 'lower'} volatility relative to the overall market."
+    f"Current market cap stands at ${mc:,}, which makes this a {'smaller' if mc<1e9 else 'mid to large'}-cap company—smaller firms can see bigger swings, while larger ones tend to be steadier. "
+    f"Total revenue of ${rev:,} in the past year shows how much the company sold. "
+    f"Dividend yield of {dy:.2f}% {'provides regular passive income' if dy>0 else 'means no dividends currently'}. "
+    f"Beta of {beta:.2f} implies {'higher' if beta>1 else 'lower'} volatility compared to the market."
 )
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
@@ -149,7 +163,6 @@ fund_insight = (
     "Valuation is at or above peer average; deeper dive recommended."
 )
 st.markdown(f"<div class='card-dark'>🧠 {fund_insight}</div>", unsafe_allow_html=True)
-
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
