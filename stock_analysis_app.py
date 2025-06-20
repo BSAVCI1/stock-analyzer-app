@@ -32,48 +32,35 @@ st.markdown("""
 
 # --- USER INPUT ---
 st.sidebar.header("Select Stock & Peers")
-
-# Popular tickers
-popular = ["BBAI","ARCC","VUSA.AS","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
-
-# 1) Select from dropdown…
-ticker_select = st.sidebar.selectbox(
-    "Choose from popular tickers", 
-    options=popular, 
-    index=popular.index("SPCE")
-)
-
-# 2) …or free-text any other symbol
-ticker_input = st.sidebar.text_input(
-    "Or enter any ticker symbol", 
-    value=""
-).upper().strip()
-
-# Final ticker to use
+popular = ["BBAI","AARC","VUSA.AS","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
+# Free-text ticker override
+ticker_select = st.sidebar.selectbox("Choose from popular tickers", options=popular, index=popular.index("SPCE"))
+ticker_input = st.sidebar.text_input("Or enter any ticker symbol", "").upper().strip()
 ticker = ticker_input if ticker_input else ticker_select
 
-# Dynamically fetch default peers based on sector if no manual override
-if st.sidebar.checkbox("Auto-select peers based on sector", value=True):
+# --- Dynamic Peer Selection based on Industry & Sector ---
+if st.sidebar.checkbox("Auto-select peers based on industry/sector", value=True):
     try:
-        sector = yf.Ticker(ticker).info.get("sector")
-        sector_map = {
-            "Technology": ["AAPL","MSFT","GOOGL"],
-            "Consumer Cyclical": ["AMZN","TSLA","BBWI"],
-            "Communication Services": ["META","NFLX","DIS"],
-            "AI Services": ["BBAI","SOUN","NVDA"],
-            "Space": ["SPCE","BKSY","LHX"],
-            # …extend as needed
+        sector = info.get('sector')
+        industry = info.get('industry')
+        industry_map = {
+            'Information Technology Services': ['SOUN','CRNC','AI','NVDA','PLTR'],
+            'Computer Hardware': ['DELL','HPQ','AAPL','MSFT','NVDA'],
+            'Software—Infrastructure': ['NOW','CRM','ORCL','ADBE','SNOW'],
+            # add more industry mappings
         }
-        peer_list = sector_map.get(sector, popular)
+        sector_map = {
+            'Technology': ['AAPL','MSFT','GOOGL','AMZN','TSLA'],
+            'Consumer Cyclical': ['AMZN','TSLA','BBWI'],
+            'Communication Services': ['META','NFLX','DIS'],
+            # extend as needed
+        }
+        peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
     except Exception:
         peer_list = popular
 else:
-    peers_input = st.sidebar.text_input(
-        "Or enter peers (comma separated)", 
-        "AAPL,MSFT,GOOGL"
-    ).upper()
-    peer_list = [p.strip() for p in peers_input.split(",") if p.strip()]
-
+    peers_input = st.sidebar.text_input("Or enter peers (comma separated)", ",".join(popular)).upper()
+    peer_list = [p.strip() for p in peers_input.split(',') if p.strip()]
 
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
