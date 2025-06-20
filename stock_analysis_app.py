@@ -65,8 +65,8 @@ def render_fundamental_analysis(ticker: str):
     for metric in df4.columns:
         pct = changes.iloc[0].get(metric, np.nan)
         if not np.isnan(pct):
-            dir = 'increased' if pct > 0 else 'decreased'
-            insights.append(f"• {metric} {dir} by {pct:.1f}% vs prior quarter.")
+            direction = 'increased' if pct > 0 else 'decreased'
+            insights.append(f"• {metric} {direction} by {pct:.1f}% vs prior quarter.")
     st.markdown(
         f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>",
         unsafe_allow_html=True
@@ -144,7 +144,7 @@ fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash
 fig2.update_layout(template='plotly_white', height=300)
 st.plotly_chart(fig2, use_container_width=True)
 
-# --- MARKET OVERVIEW CARD ---
+# --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
 st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
 vol = info.get('volume', 0)
 avg_vol = info.get('averageVolume', 0)
@@ -170,4 +170,3 @@ st.markdown("""
     <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
-
