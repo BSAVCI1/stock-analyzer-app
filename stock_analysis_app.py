@@ -182,65 +182,58 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
-    import streamlit as st
-    import yfinance as yf
-    import pandas as pd
-
-    # Header
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
-
-    # 1) Pull last 4 quarters of key metrics
     data = yf.Ticker(ticker)
     df_income = data.quarterly_financials.T
+    # Select metrics and last 4 quarters
     metrics = [
-        'Total Revenue', 'Revenue', 'Gross Profit',
-        'Operating Income', 'EBIT', 'Net Income', 'Operating Cash Flow'
+        'Total Revenue','Revenue','Gross Profit',
+        'Operating Income','EBIT','Net Income','Operating Cash Flow'
     ]
     avail = [m for m in metrics if m in df_income.columns]
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) Calculate QoQ % changes
-    df_pct = df_q.pct_change().iloc[1:] * 100
-    df_pct = df_pct.add_suffix(' % Change')
+    # Convert to millions
+    df_q_m = df_q / 1e6
+    df_q_m.columns = [f"{col} (M)" for col in df_q_m.columns]
 
-    # 3) Merge USD & % into one table
-    df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
+    # QoQ % changes
+    df_pct = df_q_m.pct_change().iloc[1:] * 100
+    df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # 4) Style: millions + percentage + gradient
+    # Combine
+    df_show = pd.concat([df_q_m.iloc[1:], df_pct], axis=1)
+
+    # Style
     styled = (
         df_show.style
-               # Convert all USD columns to millions with “M”
-               .format({c: lambda x: f"${x/1e6:.1f}M" for c in avail}, na_rep='-')
-               # Percent columns at one decimal
+               .format({c: "${:.1f}M" for c in df_q_m.columns}, na_rep='-')
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
-               # Heatmap for % changes
-               .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
-               .set_caption("Values in millions (M) & QoQ % changes")
+               .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
+               .set_caption('Values in millions (M) & QoQ % changes')
     )
-    st.write(styled, use_container_width=True)
+    # Render styled table
+    st.write(styled)
 
-    # 5) Generate human-friendly insights
+    # Insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
         for col, change in last.items():
-            name = col.replace(" % Change", "")
+            name = col.replace(' % Change','')
             if change > 5:
                 insights.append(f"✅ {name} up {change:.1f}% vs prior quarter")
             elif change < -5:
                 insights.append(f"⚠️ {name} down {abs(change):.1f}% vs prior quarter")
             else:
                 insights.append(f"🔄 {name} change {change:.1f}% vs prior quarter")
-
-    summary = "<br>".join(insights) if insights else "No significant quarter-over-quarter moves."
+    summary = '<br>'.join(insights) if insights else 'No significant quarter-over-quarter moves.'
     st.markdown(
         f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
         unsafe_allow_html=True
     )
 
-# Finally, call it
-render_fundamental_analysis(ticker)
+# Call it
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
