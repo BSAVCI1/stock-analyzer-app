@@ -58,6 +58,8 @@ hist = data.history(period="6mo")
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
+st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
+
 # --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
 st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
 vol = info.get('volume', 0)
