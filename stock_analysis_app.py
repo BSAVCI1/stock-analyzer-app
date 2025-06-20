@@ -75,7 +75,7 @@ def render_fundamental_analysis(ticker: str):
 
 render_fundamental_analysis(ticker)
 
-# --- TECHNICAL INDICATORS ---
+# --- TECHNICAL ANALYSIS MODULE ---
 # RSI
 delta = hist['Close'].diff()
 gain = delta.where(delta > 0, 0).rolling(14).mean()
