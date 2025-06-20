@@ -139,7 +139,7 @@ for sec, items in sections.items():
     for name, key, tip in items:
         val = info.get(key)
         peer_avg = avg_vals.get(key, np.nan)
-        if val is None or np.isnan(peer_avg):
+        if val is None or dp.isna(peer_avg):
             display = 'N/A'
             color = 'gray'
         else:
@@ -153,7 +153,18 @@ for sec, items in sections.items():
                 display = f"{val:.2f}"
         st.markdown(
             f"- {name}: <span style='color:{color}; font-weight:bold;'>{display}</span> "
-            f"(Peer avg: {peer_avg:.2f if not np.isnan(peer_avg) else 'N/A'}) "
+            f"(Peer avg: {if pd.isna(peer_avg):
+    peer_avg_str = "N/A"
+else:
+    # if it’s a percentage metric:
+    if name in ["Net Margin", "ROE"]:
+        peer_avg_str = f"{peer_avg * 100:.2f}%"
+    # if it’s a dollar metric:
+    elif key == "enterpriseValue":
+        peer_avg_str = f"${peer_avg:,.2f}"
+    # otherwise:
+    else:
+        peer_avg_str = f"{peer_avg:.2f}"}) "
             f"<abbr title='{tip}'>ℹ️</abbr>",
             unsafe_allow_html=True
         )
