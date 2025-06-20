@@ -181,16 +181,57 @@ summary = ' '.join(insights) if insights else 'No sufficient data for peer compa
 st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
-def render_fundamental_analysis(ticker:str):
-    data=yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>",unsafe_allow_html=True)
-    df_income=data.quarterly_financials.T
-    df4=df_income.loc[:,df_income.columns.intersection(['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow'])].iloc[:4]
-    df4.index=pd.to_datetime(df4.index).to_period('Q')
-    changes=df4.pct_change().iloc[1:]*100
-    insights=[f"• {m} {'up' if changes.iloc[0][m]>0 else 'down'} {abs(changes.iloc[0][m]):.1f}% vs prior quarter" for m in df4.columns if not np.isnan(changes.iloc[0][m])]
-    st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>",unsafe_allow_html=True)
-    st.dataframe(df4.style.format("${:,.0f}"))
+def render_fundamental_analysis(ticker: str):
+    data = yf.Ticker(ticker)
+    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+
+    # 1) Grab the last 4 quarters of key metrics
+    df_income = data.quarterly_financials.T
+    metrics = [
+        'Total Revenue','Revenue','Gross Profit',
+        'Operating Income','EBIT','Net Income','Operating Cash Flow'
+    ]
+    avail = [m for m in metrics if m in df_income.columns]
+    df_q = df_income[avail].iloc[:4]
+    df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
+
+    # 2) QoQ % changes
+    df_pct = df_q.pct_change().iloc[1:] * 100
+    df_pct = df_pct.add_suffix(' % Change')
+
+    # 3) Combine USD & % tables
+    df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
+
+    # 4) Style for currency + percent + gradient
+    styled = (
+        df_show.style
+             .format({c: '${:,.0f}' for c in avail}, na_rep='-')
+             .format({c: '{:.1f}%' for c in df_pct.columns}, na_rep='-')
+             .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
+             .set_caption('USD values and QoQ % changes')
+    )
+    st.dataframe(styled, use_container_width=True)
+
+    # 5) Generate insights
+    insights = []
+    if not df_pct.empty:
+        last = df_pct.iloc[-1]
+        for col, change in last.items():
+            base = col.replace(' % Change','')
+            if change > 5:
+                insights.append(f"✅ {base} up {change:.1f}% vs prior quarter.")
+            elif change < -5:
+                insights.append(f"⚠️ {base} down {abs(change):.1f}% vs prior quarter.")
+            else:
+                insights.append(f"🔄 {base} change {change:.1f}% vs prior quarter.")
+
+    summary = '<br>'.join(insights) if insights else 'No significant quarter-over-quarter moves.'
+    st.markdown(
+        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
+        unsafe_allow_html=True
+    )
+
+# actually call it
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
