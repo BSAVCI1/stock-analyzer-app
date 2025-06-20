@@ -70,12 +70,12 @@ dy = info.get('dividendYield', 0) * 100
 beta = info.get('beta', 0)
 cols = st.columns(3)
 cols[0].markdown(f"**Volume:** {vol:,} {'<span class=\"arrow-up\">▲</span>' if vol>avg_vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='Shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols[1].markdown(f"**Avg Volume:** {avg_vol:,} {'<span class=\"arrow-up\">▲</span>' if avg_vol>vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)(f"**Avg Volume:** {avg_vol:,} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols[2].markdown(f"**Market Cap:** ${mc:,} {'<span class=\"arrow-up\">▲</span>' if mc>hist['Close'].iloc[-2]*info.get('sharesOutstanding',1) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Total market value.'>ℹ️</abbr>", unsafe_allow_html=True)(f"**Market Cap:** ${mc:,} <abbr title='Total market value.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols[1].markdown(f"**Avg Volume:** {avg_vol:,} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols[2].markdown(f"**Market Cap:** ${mc:,} <abbr title='Total market value.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2 = st.columns(3)
-cols2[0].markdown(f"**Revenue (TTM):** ${rev:,} {'<span class=\"arrow-up\">▲</span>' if rev>hist['Close'].iloc[-2]*info.get('sharesOutstanding',1) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>", unsafe_allow_html=True)(f"**Revenue (TTM):** ${rev:,} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols2[1].markdown(f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>np.nanmean([yf.Ticker(p).info.get('dividendYield',0)*100 for p in peer_list]) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>", unsafe_allow_html=True)(f"**Dividend Yield:** {dy:.2f}% <abbr title='Annual dividend %.'>ℹ️</abbr>", unsafe_allow_html=True)
-cols2[2].markdown(f"**Beta:** {beta:.2f} {'<span class=\"arrow-up\">▲</span>' if beta>1 else '<span class=\"arrow-down\">▼</span>'} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[0].markdown(f"**Revenue (TTM):** ${rev:,} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[1].markdown(f"**Dividend Yield:** {dy:.2f}% <abbr title='Annual dividend %.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)
 ins = f"Volume {'above' if vol>avg_vol else 'below'} average; Market cap {'small' if mc<1e9 else 'mid/large'} cap."
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
