@@ -138,9 +138,9 @@ fig1.update_layout(template='plotly_white', height=300)
 st.plotly_chart(fig1, use_container_width=True)
 fig2 = go.Figure()
 fig2.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name='Price'))
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='Upper Band'))
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='Mid Band'))
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
+fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='Upper Band'))
+fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='Mid Band'))
+fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
 fig2.update_layout(template='plotly_white', height=300)
 st.plotly_chart(fig2, use_container_width=True)
 
@@ -150,10 +150,10 @@ vol = info.get('volume', 0)
 avg_vol = info.get('averageVolume', 0)
 mc = info.get('marketCap', 0)
 rev = info.get('totalRevenue', 0)
-dy = info.get('dividendYield', 0) * 100
+dy = info.get('dividendYield', 0)*100
 beta = info.get('beta', 0)
 cols = st.columns(3)
-cols[0].markdown(f"**Volume:** {vol:,} {'<span class=\"arrow-up\">▲</span>' if vol>avg_vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='Shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
+cols[0].markdown(f"**Volume:** {vol:,} {'<span class=\\"arrow-up\\">▲</span>' if vol>avg_vol else '<span class=\\"arrow-down\\">▼</span>'} <abbr title='Shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols[1].markdown(f"**Avg Volume:** {avg_vol:,} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols[2].markdown(f"**Market Cap:** ${mc:,} <abbr title='Total market value.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2 = st.columns(3)
@@ -162,6 +162,29 @@ cols2[1].markdown(f"**Div Yield:** {dy:.2f}% <abbr title='Annual dividend %.'>�
 cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)
 ins = f"Volume {'above' if vol>avg_vol else 'below'} average; Market cap {'small' if mc<1e9 else 'mid/large'} cap."
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
+
+# --- EXTENDED FUNDAMENTALS ---
+st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown</h2></div>", unsafe_allow_html=True)
+sections = {
+    'Valuation': [('P/E', 'trailingPE', '15-25 = fair'), ('PEG', 'pegRatio', '~1 = fair')],
+    'Profitability': [('Net Margin', 'profitMargins', '>5% = profitable'), ('ROE', 'returnOnEquity', '>15% = strong')],
+    'Leverage': [('Debt/Eq', 'debtToEquity', '<1 = comfortable'), ('EV', 'enterpriseValue', '<1.5×MC typical')]
+}
+for sec, items in sections.items():
+    st.markdown(f"**{sec}**")
+    for name, key, tip in items:
+        raw = info.get(key)
+        if isinstance(raw, (int, float)):
+            disp = f"{raw*100:.2f}%" if '%' in tip else f"${raw:,.2f}" if 'EV' in name else f"{raw:.2f}"
+            color = 'green' if raw >= 0 else 'red'
+            st.markdown(
+                f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>",
+                unsafe_allow_html=True
+            )
+st.markdown(
+    f"<div class='card-dark'>🧠 Fundamentals Insight: {'Valuation attractive' if info.get('trailingPE',0)<np.mean([yf.Ticker(p).info.get('trailingPE',0) for p in peer_list]) else 'Valuation above peers'}.</div>",
+    unsafe_allow_html=True
+)
 
 # --- FOOTER ---
 st.markdown("""
