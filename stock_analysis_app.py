@@ -32,11 +32,24 @@ st.markdown("""
 
 # --- USER INPUT ---
 st.sidebar.header("Select Stock & Peers")
-popular = ["AAPL","MSFT","GOOGL","AMZN","SPCE","TSLA"]
+popular = ["SPCE","BBAI","AARC","VUSA.AS","SOUN","NVDA","AAPL","MSFT","GOOGL","AMZN","SPCE","TSLA"]
 ticker = st.sidebar.selectbox("Choose Ticker", options=popular, index=popular.index("SPCE"))
-peers_input = st.sidebar.text_input("Or enter peers (comma separated)", "AAPL,MSFT,GOOGL").upper()
-peer_list = [p.strip() for p in peers_input.split(",") if p.strip()]
-
+# dynamically fetch default peers based on sector if no input
+if st.sidebar.checkbox("Auto-select peers based on sector", value=True):
+    try:
+        sector = yf.Ticker(ticker).info.get('sector')
+        # fetch tickers in same sector (mocked list for now)
+        sector_map = {
+            'Technology': ['AAPL','MSFT','GOOGL'],
+            'Consumer Cyclical': ['AMZN','TSLA','BBWI'],
+            'Communication Services': ['META','NFLX','DIS']
+        }
+        peer_list = sector_map.get(sector, popular)
+    except:
+        peer_list = popular
+else:
+    peers_input = st.sidebar.text_input("Or enter peers (comma separated)", "AAPL,MSFT,GOOGL").upper()
+    peer_list = [p.strip() for p in peers_input.split(',') if p.strip()]
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
 info = data.info
