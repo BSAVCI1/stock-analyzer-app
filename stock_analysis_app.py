@@ -123,7 +123,7 @@ for sec, items in sections.items():
         elif name in ['Net Margin','ROE']:
             peer_str = f"{peer_avg*100:.2f}%"
         elif key=='enterpriseValue':
-            peer_str = f"${peer_avg:,.2f}"
+            peer_str = f"${peer_avg:,.0f}"
         else:
             peer_str = f"{peer_avg:.2f}"
 
