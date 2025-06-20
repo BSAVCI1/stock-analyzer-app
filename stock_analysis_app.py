@@ -32,24 +32,48 @@ st.markdown("""
 
 # --- USER INPUT ---
 st.sidebar.header("Select Stock & Peers")
-popular = ["AAPL","MSFT","GOOGL","AMZN","SPCE","TSLA"]
-ticker = st.sidebar.selectbox("Choose Ticker", options=popular, index=popular.index("SPCE"))
-# dynamically fetch default peers based on sector if no input
+
+# Popular tickers
+popular = ["BBAI","AARC","VUSA.AS","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
+
+# 1) Select from dropdown…
+ticker_select = st.sidebar.selectbox(
+    "Choose from popular tickers", 
+    options=popular, 
+    index=popular.index("SPCE")
+)
+
+# 2) …or free-text any other symbol
+ticker_input = st.sidebar.text_input(
+    "Or enter any ticker symbol", 
+    value=""
+).upper().strip()
+
+# Final ticker to use
+ticker = ticker_input if ticker_input else ticker_select
+
+# Dynamically fetch default peers based on sector if no manual override
 if st.sidebar.checkbox("Auto-select peers based on sector", value=True):
     try:
-        sector = yf.Ticker(ticker).info.get('sector')
-        # fetch tickers in same sector (mocked list for now)
+        sector = yf.Ticker(ticker).info.get("sector")
         sector_map = {
-            'Technology': ['AAPL','MSFT','GOOGL'],
-            'Consumer Cyclical': ['AMZN','TSLA','BBWI'],
-            'Communication Services': ['META','NFLX','DIS']
+            "Technology": ["AAPL","MSFT","GOOGL"],
+            "Consumer Cyclical": ["AMZN","TSLA","BBWI"],
+            "Communication Services": ["META","NFLX","DIS"],
+            "AI Services": ["BBAI","SOUN","NVDA"],
+            "Space": ["SPCE","BKSY","LHX"],
+            # …extend as needed
         }
         peer_list = sector_map.get(sector, popular)
-    except:
+    except Exception:
         peer_list = popular
 else:
-    peers_input = st.sidebar.text_input("Or enter peers (comma separated)", "AAPL,MSFT,GOOGL").upper()
-    peer_list = [p.strip() for p in peers_input.split(',') if p.strip()]
+    peers_input = st.sidebar.text_input(
+        "Or enter peers (comma separated)", 
+        "AAPL,MSFT,GOOGL"
+    ).upper()
+    peer_list = [p.strip() for p in peers_input.split(",") if p.strip()]
+
 
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
