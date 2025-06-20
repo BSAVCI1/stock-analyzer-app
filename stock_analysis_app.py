@@ -34,7 +34,7 @@ st.markdown("""
 st.sidebar.header("Select Stock & Peers")
 
 # Popular tickers
-popular = ["BBAI","AARC","VUSA.AS","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
+popular = ["BBAI","ARCC","VUSA.AS","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
 
 # 1) Select from dropdown…
 ticker_select = st.sidebar.selectbox(
@@ -115,40 +115,47 @@ st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 # --- EXTENDED FUNDAMENTALS ---
 st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown</h2></div>", unsafe_allow_html=True)
 sections = {
-    'Valuation': [('P/E Ratio', 'trailingPE', '15–25 fair'), ('PEG Ratio', 'pegRatio', '~1 fair')],
-    'Profitability': [('Net Margin', 'profitMargins', '>5% profitable'), ('ROE', 'returnOnEquity', '>15% strong')],
-    'Leverage': [('Debt/Equity', 'debtToEquity', '<1 comfortable'), ('Enterprise Value', 'enterpriseValue', '<1.5×MC typical')]
+    'Valuation': [('P/E Ratio', 'trailingPE', '15–25 = fair valuation range'), ('PEG Ratio', 'pegRatio', '~1 = growth adjusted')],
+    'Profitability': [('Net Margin', 'profitMargins', '>5% = profitable'), ('ROE', 'returnOnEquity', '>15% = strong returns')],
+    'Leverage': [('Debt/Equity', 'debtToEquity', '<1 = manageable debt'), ('Enterprise Value', 'enterpriseValue', 'ratio vs MC = leverage context')]
+}
+peer_info = [yf.Ticker(p).info for p in peer_list]
+avg_vals = { 
+    'trailingPE': np.nanmean([pi.get('trailingPE', np.nan) for pi in peer_info]),
+    'profitMargins': np.nanmean([pi.get('profitMargins', np.nan) for pi in peer_info]),
+    'returnOnEquity': np.nanmean([pi.get('returnOnEquity', np.nan) for pi in peer_info]),
+    'debtToEquity': np.nanmean([pi.get('debtToEquity', np.nan) for pi in peer_info])
 }
 for sec, items in sections.items():
-    st.markdown(f"**{sec}**")
+    st.markdown(f"**{sec} Metrics vs Peers**")
     for name, key, tip in items:
-        raw = info.get(key)
-        if isinstance(raw, (int, float)):
-            disp = f"{raw*100:.2f}%" if '%' in tip else f"${raw:,.2f}"
-            color = 'green' if raw >= 0 else 'red'
-            st.markdown(f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
-avg_peers = np.nanmean([yf.Ticker(p).info.get('trailingPE', np.nan) for p in peer_list])
-fund_insight = 'Attractive valuation compared to peers.' if info.get('trailingPE', np.nan) < avg_peers else 'Valuation above peer median.'
-st.markdown(f"<div class='card-dark'>🧠 {fund_insight}</div>", unsafe_allow_html=True)
+        val = info.get(key)
+        if val is None:
+            continue
+        peer_avg = avg_vals.get(key, np.nan)
+        better = val >= peer_avg if key!='debtToEquity' else val <= peer_avg
+        color = 'green' if better else 'red'
+        disp = f"{val*100:.2f}%" if 'Margin' in name or 'ROE' in name else f"{val:.2f}"
+        st.markdown(f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> (<abbr title='{tip}'>ℹ️</abbr>) vs peer avg {peer_avg:.2f}", unsafe_allow_html=True)
+prod_insight = (
+    "Valuation is attractive vs peers." if info.get('trailingPE', np.nan) < avg_vals['trailingPE'] else 
+    "Valuation is at or above peer average; investigate further."
+)
+st.markdown(f"<div class='card-dark'>🧠 {prod_insight}</div>", unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
-    try:
-        df_income = data.quarterly_financials.T
-    except Exception:
-        st.error("Unable to fetch quarterly financials.")
-        return
-    desired = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
-    avail = [c for c in desired if c in df_income.columns]
-    if not avail:
-        st.error("No standard fields in quarterly data.")
-        return
-    df4 = df_income[avail].iloc[:4]
+    df_income = data.quarterly_financials.T
+    df4 = df_income.loc[:, df_income.columns.intersection(['Total Revenue','Revenue','Gross Profit',
+                                                           'Operating Income','EBIT','Net Income','Operating Cash Flow'])].iloc[:4]
     df4.index = pd.to_datetime(df4.index).to_period('Q')
     changes = df4.pct_change().iloc[1:] * 100
-    insights = [f"• {m} {'increased' if changes.iloc[0][m]>0 else 'decreased'} by {changes.iloc[0][m]:.1f}% vs prior quarter." for m in df4.columns if not np.isnan(changes.iloc[0][m])]
+    insights = [
+        f"• {m} {'up' if changes.iloc[0][m]>0 else 'down'} {abs(changes.iloc[0][m]):.1f}% vs prior quarter"
+        for m in df4.columns if not np.isnan(changes.iloc[0][m])
+    ]
     st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>", unsafe_allow_html=True)
     st.dataframe(df4.style.format("${:,.0f}"))
 render_fundamental_analysis(ticker)
