@@ -139,11 +139,13 @@ for sec, items in sections.items():
                 disp = f"${val:,.2f}"
             else:
                 disp = f"{val:.2f}"
-
+    
         st.markdown(
-            f"- {name}: <span style='color:{color};font-weight:bold;'>{disp}</span> vs <span style='color:#555;'>{peer_str}</span> " 
-            f"<abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True
-        )
+            f"- {name}: "
+            f"<span style='color:{color}; font-weight:bold;'>{disp}</span> "
+            f"(Peers: <span style='color:#555;'>{peer_str}</span>) "
+            f"<abbr title='{tip}'>ℹ️</abbr>",
+            unsafe_allow_html=True
 
 # AI Insight
 disp_pe = info.get('trailingPE',np.nan)
