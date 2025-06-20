@@ -218,7 +218,7 @@ def render_fundamental_analysis(ticker: str):
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
                .set_caption("Values in millions (M) & QoQ % changes")
     )
-    st.dataframe(styled, use_container_width=True)
+    st.write(styled), use_container_width=True)
 
     # 5) Generate human-friendly insights
     insights = []
