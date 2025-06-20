@@ -38,38 +38,12 @@ ticker_select = st.sidebar.selectbox("Choose from popular tickers", options=popu
 ticker_input = st.sidebar.text_input("Or enter any ticker symbol", "").upper().strip()
 ticker = ticker_input if ticker_input else ticker_select
 
-# --- Dynamic Peer Selection based on Industry & Sector ---
-if st.sidebar.checkbox("Auto-select peers based on industry/sector", value=True):
-    try:
-        sector = info.get('sector')
-        industry = info.get('industry')
-        industry_map = {
-            'Information Technology Services': ['SOUN','CRNC','AI','NVDA','PLTR'],
-            'Computer Hardware': ['DELL','HPQ','AAPL','MSFT','NVDA'],
-            'Software—Infrastructure': ['NOW','CRM','ORCL','ADBE','SNOW'],
-            # add more industry mappings
-        }
-        sector_map = {
-            'Technology': ['AAPL','MSFT','GOOGL','AMZN','TSLA'],
-            'Consumer Cyclical': ['AMZN','TSLA','BBWI'],
-            'Communication Services': ['META','NFLX','DIS'],
-            # extend as needed
-        }
-        peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
-    except Exception:
-        peer_list = popular
-else:
-    peers_input = st.sidebar.text_input("Or enter peers (comma separated)", ",".join(popular)).upper()
-    peer_list = [p.strip() for p in peers_input.split(',') if p.strip()]
-
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
 info = data.info
 hist = data.history(period="6mo")
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
-
-st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
 
 # --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
 st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
@@ -80,11 +54,9 @@ mc = info.get('marketCap', 0)
 rev = info.get('totalRevenue', 0)
 dy = info.get('dividendYield', 0) * 100
 beta = info.get('beta', 0)
-# Columns with trend arrows
 cols = st.columns(3)
 cols[0].markdown(f"**Volume:** {vol:,} {'<span class=\"arrow-up\">▲</span>' if vol>avg_vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='Shares traded in last session.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols[1].markdown(f"**Avg Volume:** {avg_vol:,} {'<span class=\"arrow-up\">▲</span>' if avg_vol>vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='30-day avg volume.'>ℹ️</abbr>", unsafe_allow_html=True)
-# Compare current market cap against previous session's implied market cap
 prev_mc = hist['Close'].iloc[-2] * info.get('sharesOutstanding', 1)
 cols[2].markdown(
     f"**Market Cap:** ${mc:,} {'<span class=\"arrow-up\">▲</span>' if mc>prev_mc else '<span class=\"arrow-down\">▼</span>'} <abbr title='Total market value.'>ℹ️</abbr>",
@@ -96,7 +68,7 @@ cols2[0].markdown(
     unsafe_allow_html=True
 )
 cols2[1].markdown(
-    f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>np.nanmean([yf.Ticker(p).info.get('dividendYield',0)*100 for p in peer_list]) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>",
+    f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>np.nanmean([yf.Ticker(p).info.get('dividendYield',0)*100 for p in popular]) else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>",
     unsafe_allow_html=True
 )
 cols2[2].markdown(
@@ -104,104 +76,41 @@ cols2[2].markdown(
     unsafe_allow_html=True
 )
 ins = (
-    f"Over the last session, trading volume was {'higher' if vol>avg_vol else 'lower'} than the 30‑day average, suggesting {'strong buying interest' if vol>avg_vol else 'potential lack of market enthusiasm'}. "
-    f"Current market cap stands at ${mc:,}, which makes this a {'smaller' if mc<1e9 else 'mid to large'}-cap company—smaller firms can see bigger swings, while larger ones tend to be steadier. "
-    f"Total revenue of ${rev:,} in the past year shows how much the company sold. "
-    f"Dividend yield of {dy:.2f}% {'provides regular passive income' if dy>0 else 'means no dividends currently'}. "
-    f"Beta of {beta:.2f} implies {'higher' if beta>1 else 'lower'} volatility compared to the market."
+    f"Last session volume was {'higher' if vol>avg_vol else 'lower'} than the 30-day avg, suggesting {'strong buying interest.' if vol>avg_vol else 'potential lack of enthusiasm.'} "
+    f"Market cap ${mc:,} indicates {'small' if mc<1e9 else 'mid/large'}-cap. "
+    f"TTM revenue ${rev:,}. "
+    f"Dividend {dy:.2f}% {'paid' if dy>0 else 'none'}. "
+    f"Beta {beta:.2f} {'higher' if beta>1 else 'lower'} vol."
 )
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
-# Assuming peer_list and info are already defined above
-peer_info = []
-for p in peer_list:
-    try:
-        pi = yf.Ticker(p).info
-        peer_info.append(pi)
-    except Exception:
-        continue
-
-# Compute peer info and averages
-peer_info = []
-for p in peer_list:
-    try:
-        pi = yf.Ticker(p).info
-        peer_info.append(pi)
-    except:
-        continue
-
-avg_vals = {}
-for key in ['trailingPE', 'pegRatio', 'profitMargins', 'returnOnEquity', 'debtToEquity', 'enterpriseValue']:
-    vals = [pi.get(key) for pi in peer_info if pi.get(key) is not None]
-    avg_vals[key] = np.nanmean(vals) if vals else np.nan
-
-# Extended Fundamentals Display
+# --- EXTENDED FUNDAMENTALS ---
 st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
-
-sections = {
-    'Valuation': [('P/E Ratio', 'trailingPE', '15–25 = fair'), ('PEG Ratio', 'pegRatio', '~1 = fair')],
-    'Profitability': [('Net Margin', 'profitMargins', '>5% = profitable'), ('ROE', 'returnOnEquity', '>15% = strong')],
-    'Leverage': [('Debt/Equity', 'debtToEquity', '<1 = manageable'), ('Enterprise Value', 'enterpriseValue', '<1.5×MC typical')]
-}
-
-for sec, items in sections.items():
-    st.markdown(f"**{sec}**")
-    for name, key, tip in items:
-        val = info.get(key)
-        peer_avg = avg_vals.get(key, np.nan)
-
-        # Prepare peer_avg_str
-        if pd.isna(peer_avg):
-            peer_avg_str = "N/A"
-        else:
-            if name in ["Net Margin", "ROE"]:
-                peer_avg_str = f"{peer_avg*100:.2f}%"
-            elif key == 'enterpriseValue':
-                peer_avg_str = f"${peer_avg:,.2f}"
-            else:
-                peer_avg_str = f"{peer_avg:.2f}"
-
-        # Determine display and color
-        if val is None or pd.isna(peer_avg):
-            display, color = 'N/A', 'gray'
-        else:
-            better = val >= peer_avg if key != 'debtToEquity' else val <= peer_avg
-            color = 'green' if better else 'red'
-            if name in ["Net Margin", "ROE"]:
-                display = f"{val*100:.2f}%"
-            elif key == 'enterpriseValue':
-                display = f"${val:,.2f}"
-            else:
-                display = f"{val:.2f}"
-
-        st.markdown(
-            f"- {name}: <span style='color:{color}; font-weight:bold;'>{display}</span> "
-            f"(Peer avg: {peer_avg_str}) "
-            f"<abbr title='{tip}'>ℹ️</abbr>",
-            unsafe_allow_html=True
-        )
-
-# AI insight
-fund_insight = (
-    "Valuation seems attractive versus peers." if info.get('trailingPE', np.nan) < avg_vals['trailingPE'] else
-    "Valuation is at or above peer average; deeper dive recommended."
-)
-st.markdown(f"<div class='card-dark'>🧠 {fund_insight}</div>", unsafe_allow_html=True)
+peer_info = [yf.Ticker(p).info for p in popular]
+avg_vals = {k: np.nanmean([pi.get(k, np.nan) for pi in peer_info if pi.get(k) is not None]) for k in ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']}
+sections = {'Valuation':[('P/E Ratio','trailingPE','15–25 fair'),('PEG Ratio','pegRatio','~1 fair')],'Profitability':[('Net Margin','profitMargins','>5% profitable'),('ROE','returnOnEquity','>15% strong')],'Leverage':[('Debt/Equity','debtToEquity','<1 manageable'),('Enterprise Value','enterpriseValue','ratio vs MC')]}  
+for sec,items in sections.items(): st.markdown(f"**{sec} vs Peers**");
+for name,key,tip in sections['Valuation']:
+    val=info.get(key);
+    peer_avg=avg_vals.get(key,np.nan);
+    better=(val>=peer_avg if key!='debtToEquity' else val<=peer_avg) if val is not None else False;
+    color='green' if better else 'red';
+    disp=f"{val*100:.2f}%" if name in ['Net Margin','ROE'] else f"${val:,.2f}";
+    peer_str=f"{peer_avg*100:.2f}%" if name in ['Net Margin','ROE'] else f"${peer_avg:,.2f}";
+    st.markdown(f"- {name}: <span style='color:{color};font-weight:bold;'>{disp}</span> vs {peer_str} <abbr title='{tip}'>ℹ️</abbr>",unsafe_allow_html=True)
+fund_insight=("Valuation attractive vs peers." if info.get('trailingPE',np.nan)<avg_vals['trailingPE'] else "Valuation at/above peer avg.")
+st.markdown(f"<div class='card-dark'>🧠 {fund_insight}</div>",unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
-def render_fundamental_analysis(ticker: str):
-    data = yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
-    df_income = data.quarterly_financials.T
-    df4 = df_income.loc[:, df_income.columns.intersection(['Total Revenue','Revenue','Gross Profit',
-                                                           'Operating Income','EBIT','Net Income','Operating Cash Flow'])].iloc[:4]
-    df4.index = pd.to_datetime(df4.index).to_period('Q')
-    changes = df4.pct_change().iloc[1:] * 100
-    insights = [
-        f"• {m} {'up' if changes.iloc[0][m]>0 else 'down'} {abs(changes.iloc[0][m]):.1f}% vs prior quarter"
-        for m in df4.columns if not np.isnan(changes.iloc[0][m])
-    ]
-    st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>", unsafe_allow_html=True)
+def render_fundamental_analysis(ticker:str):
+    data=yf.Ticker(ticker)
+    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>",unsafe_allow_html=True)
+    df_income=data.quarterly_financials.T
+    df4=df_income.loc[:,df_income.columns.intersection(['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow'])].iloc[:4]
+    df4.index=pd.to_datetime(df4.index).to_period('Q')
+    changes=df4.pct_change().iloc[1:]*100
+    insights=[f"• {m} {'up' if changes.iloc[0][m]>0 else 'down'} {abs(changes.iloc[0][m]):.1f}% vs prior quarter" for m in df4.columns if not np.isnan(changes.iloc[0][m])]
+    st.markdown(f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>",unsafe_allow_html=True)
     st.dataframe(df4.style.format("${:,.0f}"))
 render_fundamental_analysis(ticker)
 
