@@ -37,6 +37,13 @@ ticker = st.sidebar.selectbox("Choose Ticker", options=popular, index=popular.in
 peers_input = st.sidebar.text_input("Or enter peers (comma separated)", "AAPL,MSFT,GOOGL").upper()
 peer_list = [p.strip() for p in peers_input.split(",") if p.strip()]
 
+# --- FETCH DATA ---
+data = yf.Ticker(ticker)
+info = data.info
+hist = data.history(period="6mo")
+hist['MA20'] = hist['Close'].rolling(20).mean()
+hist['MA50'] = hist['Close'].rolling(50).mean()
+
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
@@ -58,8 +65,8 @@ def render_fundamental_analysis(ticker: str):
     for metric in df4.columns:
         pct = changes.iloc[0].get(metric, np.nan)
         if not np.isnan(pct):
-            direction = 'increased' if pct > 0 else 'decreased'
-            insights.append(f"• {metric} {direction} by {pct:.1f}% vs prior quarter.")
+            dir = 'increased' if pct > 0 else 'decreased'
+            insights.append(f"• {metric} {dir} by {pct:.1f}% vs prior quarter.")
     st.markdown(
         f"<div class='card-dark'><b>🧠 Earnings Insight:</b><br>{'<br>'.join(insights)}</div>",
         unsafe_allow_html=True
@@ -68,12 +75,7 @@ def render_fundamental_analysis(ticker: str):
 
 render_fundamental_analysis(ticker)
 
-# --- FETCH DATA & INDICATORS ---
-data = yf.Ticker(ticker)
-info = data.info
-hist = data.history(period="6mo")
-hist['MA20'] = hist['Close'].rolling(20).mean()
-hist['MA50'] = hist['Close'].rolling(50).mean()
+# --- TECHNICAL INDICATORS ---
 # RSI
 delta = hist['Close'].diff()
 gain = delta.where(delta > 0, 0).rolling(14).mean()
@@ -99,6 +101,11 @@ hist['+DI'] = 100 * (up.where((up>dn)&(up>0), 0).rolling(14).mean() / hist['ATR'
 hist['-DI'] = 100 * (dn.where((dn>up)&(dn>0), 0).rolling(14).mean() / hist['ATR'])
 hist['ADX'] = (abs(hist['+DI'] - hist['-DI']) / (hist['+DI'] + hist['-DI']) * 100).rolling(14).mean()
 
+# --- COMPUTE 6M CHANGE ---
+current_price = info.get('currentPrice', None)
+price_6m = hist['Close'].iloc[0] if len(hist) > 0 else None
+pct6m = ((current_price - price_6m) / price_6m * 100) if price_6m else None
+
 # --- TECHNICAL ANALYSIS CARD ---
 st.markdown("<div class='card'><h2>📈 Technical Analysis</h2></div>", unsafe_allow_html=True)
 # Insights
@@ -113,11 +120,11 @@ bb_pos = (
 adx_val = hist['ADX'].iloc[-1] if 'ADX' in hist.columns else np.nan
 adx_text = f"{adx_val:.1f}" if not np.isnan(adx_val) else 'N/A'
 tech_insights = [
-    f"• RSI at {rsi_val:.1f} indicates {('overbought' if rsi_val>70 else 'oversold' if rsi_val<30 else 'neutral')} conditions.",
+    f"• RSI at {rsi_val:.1f} indicates {'overbought' if rsi_val>70 else 'oversold' if rsi_val<30 else 'neutral'} conditions.",
     f"• Price {ma_trend} vs 50-day MA.",
-    f"• MACD at {macd_val:.2f} suggests {('bullish' if macd_val>0 else 'bearish')} momentum.",
+    f"• MACD at {macd_val:.2f} suggests {'bullish' if macd_val>0 else 'bearish'} momentum.",
     f"• Price is {bb_pos}, indicating volatility.",
-    f"• ADX at {adx_text} means {('strong trend' if adx_val>25 else 'weak trend')}.",
+    f"• ADX at {adx_text} means {'strong trend' if adx_val>25 else 'weak trend'}.",
 ]
 st.markdown(
     f"<div class='card-dark'><b>🧠 Technical Insight:</b><br>{'<br>'.join(tech_insights)}</div>",
@@ -137,7 +144,7 @@ fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash
 fig2.update_layout(template='plotly_white', height=300)
 st.plotly_chart(fig2, use_container_width=True)
 
-# --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
+# --- MARKET OVERVIEW CARD ---
 st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
 vol = info.get('volume', 0)
 avg_vol = info.get('averageVolume', 0)
@@ -156,52 +163,6 @@ cols2[2].markdown(f"**Beta:** {beta:.2f} <abbr title='Volatility vs market.'>ℹ
 ins = f"Volume {'above' if vol>avg_vol else 'below'} average; Market cap {'small' if mc<1e9 else 'mid/large'} cap."
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
-# --- EXTENDED FUNDAMENTALS ---
-st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown</h2></div>", unsafe_allow_html=True)
-sections = {
-    'Valuation': [('P/E', 'trailingPE', '15-25 fair'), ('PEG', 'pegRatio', '~1 fair')],
-    'Profitability': [('Net Margin', 'profitMargins', '>5% profitable'), ('ROE', 'returnOnEquity', '>15% strong')],
-    'Leverage': [('Debt/Eq', 'debtToEquity', '<1 comfortable'), ('EV', 'enterpriseValue', '<1.5x MC typical')]
-}
-for sec, items in sections.items():
-    st.markdown(f"**{sec}**")
-    for name, key, tip in items:
-        raw = info.get(key)
-        if isinstance(raw, (int, float)):
-            disp = f"{raw*100:.2f}%" if '%' in tip else f"{raw:.2f}"
-            color = 'green' if raw >= 0 else 'red'
-            st.markdown(f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
-st.markdown(f"<div class='card-dark'>🧠 Valuation is {'attractive' if info.get('trailingPE',0)<np.mean([yf.Ticker(p).info.get('trailingPE',0) for p in peer_list]) else 'above peers'}</div>", unsafe_allow_html=True)
-
-# --- COMPETITOR COMPARISON ---
-st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
-peer_data = []
-for p in peer_list:
-    pi = yf.Ticker(p).info
-    peer_data.append({'Ticker': p, 'Price': pi.get('currentPrice'), 'P/E': pi.get('trailingPE')})
-peer_df = pd.DataFrame(peer_data).set_index('Ticker')
-st.bar_chart(peer_df['P/E'])
-st.dataframe(peer_df)
-
-# --- NEWS & SENTIMENT ---
-st.markdown("<div class='card'><h2>📰 News & Sentiment</h2></div>", unsafe_allow_html=True)
-news_url = f"https://finance.yahoo.com/quote/{ticker}"
-try:
-    page = requests.get(news_url, timeout=5)
-    soup = BeautifulSoup(page.content, 'html.parser')
-    for h in soup.find_all('h3')[:5]:
-        text = h.get_text(strip=True)
-        badge = '🟢' if 'beat' in text.lower() else '🔴' if 'miss' in text.lower() else '⚪'
-        st.markdown(f"- {badge} {text}", unsafe_allow_html=True)
-    st.markdown("<div style='padding:5px;'><b>Sentiment:</b> Overall neutral to positive based on recent headlines.</div>", unsafe_allow_html=True)
-except:
-    st.warning("News unavailable")
-
-# --- ACTION RECOMMENDATION ---
-st.markdown("<div class='card-dark'><h2 style='color:#4CAF50;'>🎯 Action Recommendation</h2></div>", unsafe_allow_html=True)
-rec = 'Buy' if pct6m and pct6m>0 and info.get('trailingPE',999)<np.mean([yf.Ticker(p).info.get('trailingPE',999) for p in peer_list]) else 'Hold'
-st.markdown(f"<b>Recommendation:</b> {rec} <br><b>Confidence:</b> ⭐️⭐️⭐️", unsafe_allow_html=True)
-
 # --- FOOTER ---
 st.markdown("""
 <hr style="margin-top: 2em;">
@@ -209,3 +170,4 @@ st.markdown("""
     <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
 </div>
 """, unsafe_allow_html=True)
+
