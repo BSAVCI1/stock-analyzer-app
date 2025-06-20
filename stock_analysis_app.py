@@ -185,7 +185,7 @@ def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
-    # 1) Grab the last 4 quarters of key metrics
+    # 1) Last 4 quarters of key metrics
     df_income = data.quarterly_financials.T
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
@@ -199,31 +199,32 @@ def render_fundamental_analysis(ticker: str):
     df_pct = df_q.pct_change().iloc[1:] * 100
     df_pct = df_pct.add_suffix(' % Change')
 
-    # 3) Combine USD & % tables
+    # 3) Merge USD & % tables
     df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
 
-    # 4) Style for currency + percent + gradient
+    # 4) Style: values in M + percent + gradient
     styled = (
         df_show.style
-             .format({c: '${:,.0f}' for c in avail}, na_rep='-')
-             .format({c: '{:.1f}%' for c in df_pct.columns}, na_rep='-')
-             .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
-             .set_caption('USD values and QoQ % changes')
+              # show USD in millions, e.g. 1.2M
+              .format({c: lambda x: f"{x/1e6:.1f}M" for c in avail}, na_rep='-')
+              .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
+              .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
+              .set_caption('Values in millions (M) & QoQ % changes')
     )
     st.dataframe(styled, use_container_width=True)
 
-    # 5) Generate insights
+    # 5) Generate human‐friendly insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
         for col, change in last.items():
-            base = col.replace(' % Change','')
+            base = col.replace(' % Change', '')
             if change > 5:
-                insights.append(f"✅ {base} up {change:.1f}% vs prior quarter.")
+                insights.append(f"✅ {base} up {change:.1f}% vs prior quarter")
             elif change < -5:
-                insights.append(f"⚠️ {base} down {abs(change):.1f}% vs prior quarter.")
+                insights.append(f"⚠️ {base} down {abs(change):.1f}% vs prior quarter")
             else:
-                insights.append(f"🔄 {base} change {change:.1f}% vs prior quarter.")
+                insights.append(f"🔄 {base} change {change:.1f}% vs prior quarter")
 
     summary = '<br>'.join(insights) if insights else 'No significant quarter-over-quarter moves.'
     st.markdown(
