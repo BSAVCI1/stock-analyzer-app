@@ -86,20 +86,63 @@ st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
 # --- EXTENDED FUNDAMENTALS ---
 st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
-peer_info = [yf.Ticker(p).info for p in popular]
-avg_vals = {k: np.nanmean([pi.get(k, np.nan) for pi in peer_info if pi.get(k) is not None]) for k in ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']}
-sections = {'Valuation':[('P/E Ratio','trailingPE','15–25 fair'),('PEG Ratio','pegRatio','~1 fair')],'Profitability':[('Net Margin','profitMargins','>5% profitable'),('ROE','returnOnEquity','>15% strong')],'Leverage':[('Debt/Equity','debtToEquity','<1 manageable'),('Enterprise Value','enterpriseValue','ratio vs MC')]}  
-for sec,items in sections.items(): st.markdown(f"**{sec} vs Peers**");
-for name,key,tip in sections['Valuation']:
-    val=info.get(key);
-    peer_avg=avg_vals.get(key,np.nan);
-    better=(val>=peer_avg if key!='debtToEquity' else val<=peer_avg) if val is not None else False;
-    color='green' if better else 'red';
-    disp=f"{val*100:.2f}%" if name in ['Net Margin','ROE'] else f"${val:,.2f}";
-    peer_str=f"{peer_avg*100:.2f}%" if name in ['Net Margin','ROE'] else f"${peer_avg:,.2f}";
-    st.markdown(f"- {name}: <span style='color:{color};font-weight:bold;'>{disp}</span> vs {peer_str} <abbr title='{tip}'>ℹ️</abbr>",unsafe_allow_html=True)
-fund_insight=("Valuation attractive vs peers." if info.get('trailingPE',np.nan)<avg_vals['trailingPE'] else "Valuation at/above peer avg.")
-st.markdown(f"<div class='card-dark'>🧠 {fund_insight}</div>",unsafe_allow_html=True)
+
+# Recompute peer metrics
+peer_info = []
+for p in peer_list:
+    try:
+        peer_info.append(yf.Ticker(p).info)
+    except:
+        continue
+avg_vals = {}
+for k in ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']:
+    vals = [pi.get(k) for pi in peer_info if pi.get(k) is not None]
+    avg_vals[k] = np.nanmean(vals) if vals else np.nan
+
+sections = {
+    'Valuation': [('P/E Ratio','trailingPE','15–25 = fair valuation'),('PEG Ratio','pegRatio','~1 = balanced')],
+    'Profitability': [('Net Margin','profitMargins','>5% profitable'),('ROE','returnOnEquity','>15% strong')],
+    'Leverage': [('Debt/Equity','debtToEquity','<1 manageable'),('Enterprise Value','enterpriseValue','incl. debt & cash')]
+}
+
+for sec, items in sections.items():
+    st.markdown(f"**{sec}** vs peers")
+    for name,key,tip in items:
+        val = info.get(key)
+        peer_avg = avg_vals.get(key, np.nan)
+
+        # Format peer_avg
+        if pd.isna(peer_avg):
+            peer_str = "N/A"
+        elif name in ['Net Margin','ROE']:
+            peer_str = f"{peer_avg*100:.2f}%"
+        elif key=='enterpriseValue':
+            peer_str = f"${peer_avg:,.2f}"
+        else:
+            peer_str = f"{peer_avg:.2f}"
+
+        # Determine display
+        if val is None or pd.isna(peer_avg):
+            disp, color = 'N/A','gray'
+        else:
+            better = (val>=peer_avg) if key!='debtToEquity' else (val<=peer_avg)
+            color = 'green' if better else 'red'
+            if name in ['Net Margin','ROE']:
+                disp = f"{val*100:.2f}%"
+            elif key=='enterpriseValue':
+                disp = f"${val:,.2f}"
+            else:
+                disp = f"{val:.2f}"
+
+        st.markdown(
+            f"- {name}: <span style='color:{color};font-weight:bold;'>{disp}</span> vs <span style='color:#555;'>{peer_str}</span> " 
+            f"<abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True
+        )
+
+# AI Insight
+disp_pe = info.get('trailingPE',np.nan)
+val_note = "attractive vs peers" if disp_pe<avg_vals['trailingPE'] else "above peer avg"
+st.markdown(f"<div class='card-dark'>🧠 Valuation is {val_note}.</div>", unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker:str):
