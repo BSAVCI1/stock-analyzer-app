@@ -87,6 +87,12 @@ st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 # --- EXTENDED FUNDAMENTALS ---
 st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
 
+# Ensure peer_list exists (fallback to default popular list if missing)
+try:
+    peer_list
+except NameError:
+    peer_list = popular
+
 # Recompute peer metrics
 peer_info = []
 for p in peer_list:
