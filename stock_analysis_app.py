@@ -145,7 +145,7 @@ for idx, (sec, items) in enumerate(sections.items()):
                 else:
                     disp = f"{val:.2f}" if isinstance(val,(int,float)) else 'N/A'
             st.markdown(
-                f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> vs <span style='color:#555;'>{peer_str}</span> "
+                f"- {name}: <span style='color:{color}; font-weight:bold;'>{disp}</span> vs <span style='color:#555; "
                 f"<abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True
             )
 
