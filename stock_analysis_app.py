@@ -85,7 +85,7 @@ ins = (
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
 # --- EXTENDED FUNDAMENTALS ---
-st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
+st.markdown("<div class='card'><h2>📑 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
 
 # Ensure peer_list exists
 try:
@@ -178,7 +178,7 @@ if not pd.isna(leverage_diff):
         insights.append('⚠️ Higher leverage than peers; watch debt levels.')
 
 summary = ' '.join(insights) if insights else 'No sufficient data for peer comparison.'
-st.markdown(f"<div class='card-dark'>🧠 {summary}</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker:str):
