@@ -96,8 +96,22 @@ tech_insights.append(f"• MACD {macd_val:.2f} suggests {'bullish' if macd_val>0
 tech_insights.append(f"• Price is {bb_touch}, indicating volatility levels.")
 tech_insights.append(f"• ADX at {adx_text} signifies {'strong' if adx_val>25 else 'weak'} trend.")
 st.markdown(f"<div class='card-dark'><b>🧠 Technical Insight:</b><br>{'<br>'.join(tech_insights)}</div>", unsafe_allow_html=True)
+
 # RSI & MACD chart
-g... # charts code continues
+fig1 = go.Figure()
+fig1.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI'))
+fig1.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD'))
+fig1.update_layout(template='plotly_white', height=300)
+st.plotly_chart(fig1, use_container_width=True)
+
+# Bollinger & Price chart
+fig2 = go.Figure()
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name='Price'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='Upper Band'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='Mid Band'))
+fig2.add_trace(go.Scatter(x=hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
+fig2.update_layout(template='plotly_white', height=300)
+st.plotly_chart(fig2, use_container_width=True)
 
 # --- FOOTER ---
 st.markdown("""
