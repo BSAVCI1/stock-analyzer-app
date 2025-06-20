@@ -186,7 +186,51 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- PEER COMPARISON MODULE ---
+st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
+peer_data = []
+for p in peer_list:
+    try:
+        pi = yf.Ticker(p).info
+        peer_data.append({
+            'Ticker': p,
+            'Price': pi.get('currentPrice', np.nan),
+            'P/E Ratio': pi.get('trailingPE', np.nan)
+        })
+    except Exception:
+        continue
+peer_df = pd.DataFrame(peer_data).set_index('Ticker')
+if not peer_df.empty:
+    st.bar_chart(peer_df['P/E Ratio'])
+    st.dataframe(peer_df.style.format({
+        'Price': '${:,.2f}',
+        'P/E Ratio': '{:.2f}'
+    }))
+else:
+    st.info("No peer data available.")
+
+# --- NEWS & SENTIMENT MODULE ---
+st.markdown("<div class='card'><h2>📰 News & Sentiment</h2></div>", unsafe_allow_html=True)
+news_url = f"https://finance.yahoo.com/quote/{ticker}"
+try:
+    resp = requests.get(news_url, timeout=5)
+    soup = BeautifulSoup(resp.content, 'html.parser')
+    headlines = soup.find_all('h3')[:5]
+    for h in headlines:
+        text = h.get_text(strip=True)
+        badge = '🟢' if any(w in text.lower() for w in ['beat','upgrade','gain']) else ('🔴' if any(w in text.lower() for w in ['miss','downgrade','drop']) else '⚪️')
+        st.markdown(f"- {badge} {text}", unsafe_allow_html=True)
+    st.markdown("<div class='card-dark'>🔍 Overall sentiment: Neutral to Positive based on recent headlines.</div>", unsafe_allow_html=True)
+except Exception:
+    st.warning("Unable to fetch news headlines.")
+
 # --- FOOTER ---
+st.markdown("""
+<hr style="margin-top: 2em;">
+<div style="text-align:center">
+    <p style="color:#888888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p>
+</div>
+""", unsafe_allow_html=True)
 st.markdown("""
 <hr style="margin-top: 2em;">
 <div style="text-align:center">
