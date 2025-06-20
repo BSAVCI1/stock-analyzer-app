@@ -77,8 +77,16 @@ cols2 = st.columns(3)
 cols2[0].markdown(f"**Revenue (TTM):** ${rev:,} {'<span class=\"arrow-up\">▲</span>' if rev>rev else '<span class=\"arrow-down\">▼</span>'} <abbr title='Trailing 12m revenue.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2[1].markdown(f"**Dividend Yield:** {dy:.2f}% {'<span class=\"arrow-up\">▲</span>' if dy>dy else '<span class=\"arrow-down\">▼</span>'} <abbr title='Annual dividend %.'>ℹ️</abbr>", unsafe_allow_html=True)
 cols2[2].markdown(f"**Beta:** {beta:.2f} {'<span class=\"arrow-up\">▲</span>' if beta>1 else '<span class=\"arrow-down\">▼</span>'} <abbr title='Volatility vs market.'>ℹ️</abbr>", unsafe_allow_html=True)
-ins = f"Volume {'above' if vol>avg_vol else 'below'} average; Market cap {'small' if mc<1e9 else 'mid/large'} cap."
+ins = (
+    f"Over the last session, trading volume was {'higher' if vol>avg_vol else 'lower'} than the 30‑day average, suggesting {'strong buying interest' if vol>avg_vol else 'potential lack of market enthusiasm'}. "
+    f"Current market cap stands at ${mc:,}, which makes this a {'smaller' if mc<1e9 else 'mid to large'}-cap company—" 
+    f"smaller companies can be more volatile, while larger caps offer more stability. "
+    f"Revenue (TTM) of ${rev:,} shows how much the company sold in the past year. "
+    f"A dividend yield of {dy:.2f}% {'rewards investors with regular payouts' if dy>0 else 'means the company does not currently pay dividends'}. "
+    f"A beta of {beta:.2f} indicates {'higher' if beta>1 else 'lower'} volatility relative to the overall market."
+)
 st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
+
 
 # --- EXTENDED FUNDAMENTALS ---
 st.markdown("<div class='card'><h2>🧲 Fundamental Breakdown</h2></div>", unsafe_allow_html=True)
