@@ -181,11 +181,16 @@ summary = ' '.join(insights) if insights else 'No sufficient data for peer compa
 st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
+
 def render_fundamental_analysis(ticker: str):
+    import streamlit as st
+    import yfinance as yf
+    import pandas as pd
+    # 1) Fetch data
     data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
-    # 1) Last 4 quarters of key metrics
+    # 2) Last 4 quarters
     df_income = data.quarterly_financials.T
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
@@ -195,25 +200,24 @@ def render_fundamental_analysis(ticker: str):
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) QoQ % changes
+    # 3) QoQ % changes
     df_pct = df_q.pct_change().iloc[1:] * 100
     df_pct = df_pct.add_suffix(' % Change')
 
-    # 3) Merge USD & % tables
+    # 4) Merge USD & %
     df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
 
-    # 4) Style: values in M + percent + gradient
+    # 5) Style with million-scale
     styled = (
         df_show.style
-              # show USD in millions, e.g. 1.2M
-              .format({c: lambda x: f"{x/1e6:.1f}M" for c in avail}, na_rep='-')
-              .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
-              .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
-              .set_caption('Values in millions (M) & QoQ % changes')
+            .format({c: lambda x: f"{x/1e6:.1f}M" for c in avail}, na_rep='-')
+            .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
+            .background_gradient(subset=df_pct.columns, cmap='RdYlGn', low=0, high=0)
+            .set_caption('Values in millions (M) & QoQ % changes')
     )
     st.dataframe(styled, use_container_width=True)
 
-    # 5) Generate human‐friendly insights
+    # 6) Insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
@@ -232,8 +236,9 @@ def render_fundamental_analysis(ticker: str):
         unsafe_allow_html=True
     )
 
-# actually call it
-render_fundamental_analysis(ticker)
+# Call function
+def show_render(ticker):
+    render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
