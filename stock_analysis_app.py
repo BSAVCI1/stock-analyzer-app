@@ -412,30 +412,105 @@ ins.append(f"ATR at {latest['ATR']:.2f} reflects recent volatility.")
 ins.append(f"Recent OBV trend is {'up' if hist['OBV'].iloc[-1]>hist['OBV'].iloc[-10] else 'down'}–confirming money flow direction.")
 
 st.markdown(
-    f"<div class='card-dark'><b>🧠 Technical Insights:</b><br>{'<br>'.join(ins)}</div>",
+    f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.join(ins)}</div>",
     unsafe_allow_html=True
 )
 
-# 4) Candlestick + Volume Chart for last month
+# --- 3️⃣ Trade-Signal Visualization & 4️⃣ Pattern Detection ---
+
+# 1) Identify signal dates
+ma50 = hist['MA50']
+ma200 = hist['MA200']
+macd = hist['MACD']
+macd_sig = hist['MACD_sig']
+
+# Golden / Death Cross
+gcross = (ma50.shift(1) < ma200.shift(1)) & (ma50 > ma200)
+dcross = (ma50.shift(1) > ma200.shift(1)) & (ma50 < ma200)
+gc_dates = hist.index[gcross]
+dc_dates = hist.index[dcross]
+
+# MACD crossovers
+macd_buy  = (macd.shift(1) < macd_sig.shift(1)) & (macd > macd_sig)
+macd_sell = (macd.shift(1) > macd_sig.shift(1)) & (macd < macd_sig)
+mb_dates  = hist.index[macd_buy]
+ms_dates  = hist.index[macd_sell]
+
+# Doji detection: |Open–Close| ≤ 10% of (High–Low)
+doji = (hist['Close'] - hist['Open']).abs() <= 0.1 * (hist['High'] - hist['Low'])
+doji_dates = hist.index[doji]
+
+# 2) Annotate on your last-30-day candlestick chart
 last30 = hist.last('30D')
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                     row_heights=[0.7,0.3], vertical_spacing=0.05)
 
+# Main candlesticks
 fig.add_trace(go.Candlestick(
     x=last30.index, open=last30['Open'], high=last30['High'],
     low=last30['Low'], close=last30['Close'], name="Price"
 ), row=1, col=1)
 
+# Volume bars
 fig.add_trace(go.Bar(
-    x=last30.index, y=last30['Volume'], name="Volume",
-    marker_color='grey'
+    x=last30.index, y=last30['Volume'], name="Volume", marker_color='grey'
 ), row=2, col=1)
 
+# Overlay markers for signals (only include those within last30)
+for d in gc_dates:
+    if d in last30.index:
+        fig.add_trace(go.Scatter(
+            x=[d], y=[last30.loc[d, 'Close']],
+            mode='markers', marker=dict(symbol='triangle-up', size=12, color='green'),
+            name='Golden Cross'
+        ), row=1, col=1)
+for d in dc_dates:
+    if d in last30.index:
+        fig.add_trace(go.Scatter(
+            x=[d], y=[last30.loc[d, 'Close']],
+            mode='markers', marker=dict(symbol='triangle-down', size=12, color='red'),
+            name='Death Cross'
+        ), row=1, col=1)
+for d in mb_dates:
+    if d in last30.index:
+        fig.add_trace(go.Scatter(
+            x=[d], y=[last30.loc[d, 'Low']*0.995],
+            mode='markers', marker=dict(symbol='circle', size=8, color='blue'),
+            name='MACD Buy'
+        ), row=1, col=1)
+for d in ms_dates:
+    if d in last30.index:
+        fig.add_trace(go.Scatter(
+            x=[d], y=[last30.loc[d, 'High']*1.005],
+            mode='markers', marker=dict(symbol='circle', size=8, color='orange'),
+            name='MACD Sell'
+        ), row=1, col=1)
+for d in doji_dates:
+    if d in last30.index:
+        fig.add_trace(go.Scatter(
+            x=[d], y=[last30.loc[d, 'Close']],
+            mode='markers', marker=dict(symbol='x', size=10, color='purple'),
+            name='Doji'
+        ), row=1, col=1)
+
+# Finalize layout
 fig.update_layout(
-    template="plotly_dark", height=600, showlegend=False,
-    title=f"{ticker} — Last 30 Days Candlestick & Volume"
+    template="plotly_dark", height=650, showlegend=True,
+    title=f"{ticker} — Last 30 Days with Signals & Patterns"
 )
 st.plotly_chart(fig, use_container_width=True)
+
+# 3) Summary of last signals/patterns
+sig_summary = {
+    "Golden Cross":  gc_dates[-1].strftime("%Y-%m-%d") if len(gcross)>0 else "None in 30d",
+    "Death Cross":   dc_dates[-1].strftime("%Y-%m-%d") if len(dcross)>0 else "None in 30d",
+    "MACD Buy":      mb_dates[-1].strftime("%Y-%m-%d") if len(mb_dates)>0 else "None in 30d",
+    "MACD Sell":     ms_dates[-1].strftime("%Y-%m-%d") if len(ms_dates)>0 else "None in 30d",
+    "Doji":          ", ".join([d.strftime("%m-%d") for d in doji_dates[-3:]]) if len(doji_dates)>0 else "None"
+}
+st.markdown("<div class='card'><h3>🔔 Recent Signals & Patterns</h3></div>", unsafe_allow_html=True)
+for name, when in sig_summary.items():
+    st.markdown(f"- **{name}:** {when}")
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
