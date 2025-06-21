@@ -196,7 +196,7 @@ def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
-    # 1) Pull last 4 quarters of raw metrics
+    # 1) Pull last 4 quarters of key metrics
     df_income = data.quarterly_financials.T
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
@@ -206,47 +206,34 @@ def render_fundamental_analysis(ticker: str):
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) Calculate QoQ % changes
+    # 2) QoQ % changes
     df_pct = (df_q.pct_change().iloc[1:] * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # 3) Merge raw USD & % tables (skip dividing here)
+    # 3) Merge raw USD & % tables
     df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
 
-    # 4) Formatter that divides ONCE by 1e6
-    def fmt_m(x):
-        if pd.isna(x):
-            return "-"
-        m = x / 1e6
-        # drop .0 if whole
-        if m == int(m):
-            return f"${int(m)}M"
-        return f"${m:.1f}M"
-
-    # 5) Style & render
+    # 4) Style for full dollar formatting + percent + gradient
     styled = (
         df_show.style
-               # apply fmt_m to raw-USD columns
-               .format({c: fmt_m for c in avail}, na_rep='-')
-               # percent columns
+               .format({c: "${:,.0f}" for c in avail}, na_rep='-')
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
-               .set_caption("Values in millions (M) & QoQ % changes")
+               .set_caption('USD values and QoQ % changes')
     )
-    st.markdown(styled.to_html(), unsafe_allow_html=True)
 
-    # 6) Human-friendly insights
+    # 5) Render styled table
+    html = styled.to_html()
+    st.markdown(html, unsafe_allow_html=True)
+
+    # 6) Generate human-friendly insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
         for col, change in last.items():
             name = col.replace(" % Change", "")
-            if change > 5:
-                insights.append(f"✅ {name} up {change:.1f}% vs prior quarter")
-            elif change < -5:
-                insights.append(f"⚠️ {name} down {abs(change):.1f}% vs prior quarter")
-            else:
-                insights.append(f"🔄 {name} change {change:.1f}% vs prior quarter")
+            symbol = "✅" if change > 5 else "⚠️" if change < -5 else "🔄"
+            insights.append(f"{symbol} {name} {change:+.1f}% vs prior quarter")
 
     summary = "<br>".join(insights) if insights else "No significant quarter-over-quarter moves."
     st.markdown(
@@ -254,7 +241,7 @@ def render_fundamental_analysis(ticker: str):
         unsafe_allow_html=True
     )
 
-# finally, call the function
+# Call it
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
