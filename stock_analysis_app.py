@@ -355,66 +355,64 @@ def render_fundamental_analysis(ticker: str):
     st.dataframe(df_fmt, use_container_width=True)
 
     # --- ENHANCED EARNINGS INSIGHTS ---
+    # Identify quarter labels
+    latest_q = df_q.index[-1]           # e.g. “2025Q1”
+    prev_q   = df_q.index[-2] if len(df_q.index) > 1 else None
+
     human_insights = []
-    # Map numeric change to plain-English sentiment
+
+    # Sentiment helper
     def sentiment(change):
         if change > 5:
             return "strong growth"
-        elif change > 0:
+        if change > 0:
             return "modest increase"
-        elif abs(change) < 0.1:
-            return "stable performance"
-        elif change > -5:
+        if change > -5:
             return "slight decline"
-        else:
-            return "notable decrease"
+        return "notable decrease"
 
-    # Build a sentence for each available metric
+    # For each metric, compare latest vs prior
     for metric in avail:
-        col_name = f"{metric} % Change"
-        if col_name in df_pct.columns:
-            change = df_pct[col_name].iloc[-1]
+        pct_col = f"{metric} % Change"
+        if prev_q and pct_col in df_pct.columns:
+            change = df_pct.loc[latest_q, pct_col]
             sent = sentiment(change)
+            # raw values
+            val_latest = df_q.loc[latest_q, metric]
+            val_prev   = df_q.loc[prev_q, metric]
+            # format in short‐scale
+            def fs(x): 
+                try: x=float(x)
+                except: return "-"
+                if abs(x)>=1e6: return f"{x/1e6:.1f}M"
+                if abs(x)>=1e3: return f"{x/1e3:.1f}K"
+                return f"{x:.0f}"
             human_insights.append(
-                f"• {metric} showed {sent} of {abs(change):.1f}% this quarter."
+                f"• {metric} moved from {fs(val_prev)} in {prev_q} to {fs(val_latest)} in {latest_q} "
+                f"({sent} of {abs(change):.1f}%)."
             )
 
-    # Analyst-style summary
-    rev_change = df_pct[f"Revenue % Change"].iloc[-1] if "Revenue % Change" in df_pct else None
-    net_change = df_pct[f"Net Income % Change"].iloc[-1] if "Net Income % Change" in df_pct else None
-    ocf_change = df_pct[f"Operating Cash Flow % Change"].iloc[-1] if "Operating Cash Flow % Change" in df_pct else None
-
+    # Analyst‐style summary
     analyst_notes = []
-    if rev_change is not None:
-        if rev_change > 0:
-            analyst_notes.append("Analysts view the top-line expansion positively, expecting continued demand.")
-        else:
-            analyst_notes.append("Analysts caution on revenue pressures, recommending closer monitoring.")
+    rev_col = "Revenue % Change"
+    if prev_q and rev_col in df_pct.columns:
+        c = df_pct.loc[latest_q, rev_col]
+        analyst_notes.append(
+            "🧐 Analysts are " +
+            ("bullish" if c>0 else "cautious")
+            + f" on revenue after a {abs(c):.1f}% {'rise' if c>0 else 'drop'}."
+        )
 
-    if net_change is not None:
-        if net_change > 0:
-            analyst_notes.append("Profitability is improving, which may support higher valuations.")
-        else:
-            analyst_notes.append("Profit contraction has raised concerns about margin sustainability.")
-
-    if ocf_change is not None:
-        if ocf_change > 0:
-            analyst_notes.append("Cash flow remains healthy, underpinning operational strength.")
-        else:
-            analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
-
-    # Combine everything
-    full_summary = "<br>".join(human_insights + analyst_notes)
-    if not full_summary:
-        full_summary = "No significant changes detected this quarter."
+    full = human_insights + analyst_notes
+    summary = "<br>".join(full) if full else f"No quarter-over-quarter data for {latest_q}."
 
     st.markdown(
-        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{full_summary}</div>",
+        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
         unsafe_allow_html=True
     )
 
-# Call it
-render_fundamental_analysis(ticker)
+    # Call it
+    render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
