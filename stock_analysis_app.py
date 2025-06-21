@@ -305,28 +305,35 @@ render_fundamental_analysis(ticker)
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
-    data = yf.Ticker(ticker)
+    import streamlit as st
+    import yfinance as yf
+    import pandas as pd
+    import numpy as np
+
+    # Header
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
     # 1) Pull last 4 quarters of raw metrics
+    data = yf.Ticker(ticker)
     df_income = data.quarterly_financials.T
+
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
         'Operating Income','EBIT','Net Income','Operating Cash Flow'
     ]
     avail = [m for m in metrics if m in df_income.columns]
     df_q = df_income[avail].iloc[:4]
-    # index is like ['2025-03-31', '2024-12-31', ...]; convert & keep original order
+    # Convert index to e.g. '2025Q1'
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) Compute QoQ % changes (keep first row as NaN)
-    df_pct = (df_q.pct_change() * 100).round(1)
+    # 2) Compute QoQ % changes
+    df_pct = (df_q.pct_change().iloc[1:] * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
     # 3) Merge USD & % tables
-    df_show = pd.concat([df_q, df_pct], axis=1)
+    df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
 
-    # 4) Format USD -> M/B/K & % -> one decimal
+    # 4) Short-scale formatter for USD
     def format_short(x):
         try:
             x = float(x)
@@ -341,42 +348,38 @@ def render_fundamental_analysis(ticker: str):
         else:
             return f"{x:.2f}"
 
+    # 5) Build formatted DataFrame of strings
     df_fmt = df_show.copy()
     for col in avail:
         df_fmt[col] = df_fmt[col].apply(format_short)
     for col in df_pct.columns:
         df_fmt[col] = df_fmt[col].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
-    # 5) Reorder so oldest quarter on top, latest (2025Q1) at bottom
-    df_fmt = df_fmt.iloc[::-1]
-
-    # 6) Display
+    # 6) Display the table
     st.dataframe(df_fmt, use_container_width=True)
 
-    # 7) Enhanced AI Insight for the LATEST quarter (bottom row)
-    latest_q = df_fmt.index[-1]  # e.g. '2025Q1'
+    # 7) AI insight for the LATEST quarter (the last row of df_show)
+    # Determine the label of the latest quarter
+    latest_q = df_show.index[-1]
     insights = []
 
     for metric in avail:
         pct_col = f"{metric} % Change"
-        # only proceed if that column exists
         if pct_col in df_pct.columns:
-            pct = df_pct.loc[latest_q, pct_col]
-            # map to plain-English sentiment
-            if pd.notna(pct):
-                if pct > 5:
+            pct_val = df_pct.loc[latest_q, pct_col]
+            if pd.notna(pct_val):
+                if pct_val > 5:
                     sentiment = "strong growth"
-                elif pct > 0:
+                elif pct_val > 0:
                     sentiment = "modest increase"
-                elif pct > -5:
+                elif pct_val > -5:
                     sentiment = "slight decline"
                 else:
                     sentiment = "notable decrease"
-                insights.append(f"• {metric} saw {sentiment} of {pct:.1f}% in {latest_q}.")
+                insights.append(f"• {metric} saw {sentiment} of {pct_val:.1f}% in {latest_q}.")
 
-    # analyst-style wrap-up
     if insights:
-        analyst_notes = "Analysts note that in " + latest_q + ", " + " ".join(insights)
+        analyst_notes = f"Analysts note that, in {latest_q}, " + " ".join(insights)
     else:
         analyst_notes = f"No significant quarter-over-quarter moves detected in {latest_q}."
 
@@ -384,6 +387,9 @@ def render_fundamental_analysis(ticker: str):
         f"<div class='card-dark'><b>💡 Earnings Insights ({latest_q}):</b><br>{analyst_notes}</div>",
         unsafe_allow_html=True
     )
+
+# Actually call the function
+render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
