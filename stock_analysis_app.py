@@ -184,6 +184,7 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
     df_income = data.quarterly_financials.T
+
     # Select metrics and last 4 quarters
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
@@ -212,8 +213,10 @@ def render_fundamental_analysis(ticker: str):
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
                .set_caption('Values in millions (M) & QoQ % changes')
     )
-    # Render styled table
-    st.write(styled)
+
+    # Render styled HTML table
+    html = styled.render()
+    st.markdown(html, unsafe_allow_html=True)
 
     # Insights
     insights = []
@@ -234,6 +237,7 @@ def render_fundamental_analysis(ticker: str):
     )
 
 # Call it
+render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
