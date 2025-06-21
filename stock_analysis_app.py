@@ -267,6 +267,7 @@ def render_fundamental_analysis(ticker: str):
 
 # ✅ Call the function (outside the definition!)
 render_fundamental_analysis(ticker)
+
 # --- TECHNICAL PARAMETER CONTROLS ---
 st.sidebar.header("🔧 Technical Settings")
 rsi_period   = st.sidebar.slider("RSI Period",            min_value=5,  max_value=30, value=14, step=1)
@@ -369,75 +370,6 @@ fig.add_trace(go.Bar(
 fig.update_layout(template="plotly_dark", height=600, showlegend=False,
                   title=f"{ticker} — Last 30 Days")
 st.plotly_chart(fig, use_container_width=True)
-
-# --- TECHNICAL ANALYSIS MODULE ---
-# RSI
-delta = hist['Close'].diff()
-gain = delta.where(delta > 0, 0).rolling(14).mean()
-loss = -delta.where(delta < 0, 0).rolling(14).mean()
-rs = gain / loss
-hist['RSI'] = 100 - (100 / (1 + rs))
-# MACD
-hist['EMA12'] = hist['Close'].ewm(span=12).mean()
-hist['EMA26'] = hist['Close'].ewm(span=26).mean()
-hist['MACD'] = hist['EMA12'] - hist['EMA26']
-# Bollinger Bands
-hist['BB_mid'] = hist['Close'].rolling(20).mean()
-hist['BB_std'] = hist['Close'].rolling(20).std()
-hist['BB_upper'] = hist['BB_mid'] + 2 * hist['BB_std']
-hist['BB_lower'] = hist['BB_mid'] - 2 * hist['BB_std']
-# ADX
-high, low, close = hist['High'], hist['Low'], hist['Close']
-tr = pd.concat([high-low, (high-close.shift()).abs(), (low-close.shift()).abs()], axis=1).max(axis=1)
-hist['ATR'] = tr.rolling(14).mean()
-up = high.diff()
-dn = -low.diff()
-hist['+DI'] = 100 * (up.where((up>dn)&(up>0), 0).rolling(14).mean() / hist['ATR'])
-hist['-DI'] = 100 * (dn.where((dn>up)&(dn>0), 0).rolling(14).mean() / hist['ATR'])
-hist['ADX'] = (abs(hist['+DI'] - hist['-DI']) / (hist['+DI'] + hist['-DI']) * 100).rolling(14).mean()
-
-# --- COMPUTE 6M CHANGE ---
-current_price = info.get('currentPrice', None)
-price_6m = hist['Close'].iloc[0] if len(hist) > 0 else None
-pct6m = ((current_price - price_6m) / price_6m * 100) if price_6m else None
-
-# --- TECHNICAL ANALYSIS CARD ---
-st.markdown("<div class='card'><h2>📈 Technical Analysis</h2></div>", unsafe_allow_html=True)
-# Insights
-rsi_val = hist['RSI'].iloc[-1] if 'RSI' in hist.columns else np.nan
-ma_trend = 'upward' if hist['Close'].iloc[-1] > hist['MA50'].iloc[-1] else 'downward'
-macd_val = hist['MACD'].iloc[-1] if 'MACD' in hist.columns else np.nan
-bb_pos = (
-    'above upper band' if hist['Close'].iloc[-1] > hist['BB_upper'].iloc[-1]
-    else 'below lower band' if hist['Close'].iloc[-1] < hist['BB_lower'].iloc[-1]
-    else 'within bands'
-)
-adx_val = hist['ADX'].iloc[-1] if 'ADX' in hist.columns else np.nan
-adx_text = f"{adx_val:.1f}" if not np.isnan(adx_val) else 'N/A'
-tech_insights = [
-    f"• RSI at {rsi_val:.1f} indicates {'overbought' if rsi_val>70 else 'oversold' if rsi_val<30 else 'neutral'} conditions.",
-    f"• Price {ma_trend} vs 50-day MA.",
-    f"• MACD at {macd_val:.2f} suggests {'bullish' if macd_val>0 else 'bearish'} momentum.",
-    f"• Price is {bb_pos}, indicating volatility.",
-    f"• ADX at {adx_text} means {'strong trend' if adx_val>25 else 'weak trend'}.",
-]
-st.markdown(
-    f"<div class='card-dark'><b>🧠 Technical Insight:</b><br>{'<br>'.join(tech_insights)}</div>",
-    unsafe_allow_html=True
-)
-# Charts
-fig1 = go.Figure()
-fig1.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI'))
-fig1.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD'))
-fig1.update_layout(template='plotly_white', height=300)
-st.plotly_chart(fig1, use_container_width=True)
-fig2 = go.Figure()
-fig2.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name='Price'))
-fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_upper'], line=dict(dash='dash'), name='Upper Band'))
-fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_mid'], line=dict(dash='dot'), name='Mid Band'))
-fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
-fig2.update_layout(template='plotly_white', height=300)
-st.plotly_chart(fig2, use_container_width=True)
 
 # --- TECHNICAL ANALYSIS MODULE (Enhanced) ---
 import plotly.graph_objs as go
