@@ -183,9 +183,12 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
-    df_income = data.quarterly_financials.T
 
-    # Select metrics and last 4 quarters
+    # Header card
+    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+
+    # 1) Load last 4 quarters of key metrics
+    df_income = data.quarterly_financials.T
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
         'Operating Income','EBIT','Net Income','Operating Cash Flow'
@@ -194,49 +197,50 @@ def render_fundamental_analysis(ticker: str):
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # Convert to millions
-    df_q_m = df_q / 1e6
+    # 2) Convert USD to millions and round
+    df_q_m = (df_q / 1e6).round(1)
     df_q_m.columns = [f"{col} (M)" for col in df_q_m.columns]
 
-    # QoQ % changes
-    df_pct = df_q_m.pct_change().iloc[1:] * 100
+    # 3) QoQ % changes and round
+    df_pct = (df_q_m.pct_change().iloc[1:] * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # Combine
+    # 4) Combine for display
     df_show = pd.concat([df_q_m.iloc[1:], df_pct], axis=1)
 
-    # Style
+    # 5) Style via Pandas Styler
     styled = (
         df_show.style
                .format({c: "${:.1f}M" for c in df_q_m.columns}, na_rep='-')
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
-               .set_caption('Values in millions (M) & QoQ % changes')
+               .set_caption("Values in millions (M) & QoQ % changes")
     )
 
-    # Render styled HTML table
+    # 6) Render the HTML table (ensures styling is applied)
     html = styled.to_html()
     st.markdown(html, unsafe_allow_html=True)
 
-    # Insights
+    # 7) Generate human-friendly insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
-        for col, change in last.items():
-            name = col.replace(' % Change','')
+        for full_col, change in last.items():
+            name = full_col.replace(" % Change", "")
             if change > 5:
                 insights.append(f"✅ {name} up {change:.1f}% vs prior quarter")
             elif change < -5:
                 insights.append(f"⚠️ {name} down {abs(change):.1f}% vs prior quarter")
             else:
                 insights.append(f"🔄 {name} change {change:.1f}% vs prior quarter")
-    summary = '<br>'.join(insights) if insights else 'No significant quarter-over-quarter moves.'
+
+    summary = "<br>".join(insights) if insights else "No significant quarter-over-quarter moves."
     st.markdown(
         f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
         unsafe_allow_html=True
     )
 
-# Call it
+# Actually call the function
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
