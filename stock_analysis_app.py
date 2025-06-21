@@ -180,37 +180,6 @@ if not pd.isna(leverage_diff):
 summary = ' '.join(insights) if insights else 'No sufficient data for peer comparison.'
 st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
-    # --- FORMAT & RENDER TABLE IN SHORT SCALE ---
-    # Helper to convert numbers to K/M/B format
-    def format_short(x):
-        try:
-            x = float(x)
-        except:
-            return "-"
-        if abs(x) >= 1e9:
-            return f"{x/1e9:.2f}B"
-        elif abs(x) >= 1e6:
-            return f"{x/1e6:.2f}M"
-        elif abs(x) >= 1e3:
-            return f"{x/1e3:.2f}K"
-        else:
-            return f"{x:.2f}"
-
-    # Build a copy for formatting
-    df_fmt = df_show.copy()
-
-    # Apply short-scale formatter to all USD columns
-    for col in avail:  
-        df_fmt[col] = df_fmt[col].apply(format_short)
-
-    # Apply percentage formatting to the % Change columns
-    for col in df_pct.columns:
-        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}%"
-                                        if pd.notna(x) else "-")
-
-    # Finally, display the formatted DataFrame
-    st.dataframe(df_fmt, use_container_width=True)
-
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
@@ -242,9 +211,35 @@ def render_fundamental_analysis(ticker: str):
                .set_caption('USD values and QoQ % changes')
     )
 
-    # 5) Render styled table
-    html = styled.to_html()
-    st.markdown(html, unsafe_allow_html=True)
+    # Helper to convert numbers to K/M/B format
+    def format_short(x):
+        try:
+            x = float(x)
+        except:
+            return "-"
+        if abs(x) >= 1e9:
+            return f"{x/1e9:.2f}B"
+        elif abs(x) >= 1e6:
+            return f"{x/1e6:.2f}M"
+        elif abs(x) >= 1e3:
+            return f"{x/1e3:.2f}K"
+        else:
+            return f"{x:.2f}"
+
+    # Build a copy for formatting
+    df_fmt = df_show.copy()
+
+    # Apply short-scale formatter to all USD columns
+    for col in avail:  
+        df_fmt[col] = df_fmt[col].apply(format_short)
+
+    # Apply percentage formatting to the % Change columns
+    for col in df_pct.columns:
+        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}%"
+                                        if pd.notna(x) else "-")
+
+    # Finally, display the formatted DataFrame
+    st.dataframe(df_fmt, use_container_width=True)
 
     # 6) Generate human-friendly insights
     insights = []
