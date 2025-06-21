@@ -180,38 +180,23 @@ if not pd.isna(leverage_diff):
 summary = ' '.join(insights) if insights else 'No sufficient data for peer comparison.'
 st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
-# --- FUNDAMENTAL ANALYSIS MODULE ---
-def render_fundamental_analysis(ticker: str):
-    data = yf.Ticker(ticker)
-
-    # Helper to format in millions, dropping “.0” when possible
+# Helper to format in millions, dropping “.0” when possible
 def fmt_m(x):
     if pd.isna(x):
         return "-"
     m = x / 1e6
-    
-    # If within rounding error of an integer, show no decimals
+    # If m is essentially an integer, show no decimals
     if abs(m - round(m)) < 1e-6:
         return f"${int(round(m))}M"
     else:
         return f"${m:.1f}M"
 
-# … inside render_fundamental_analysis, replace the styled = ( … ) block with:
-
-styled = (
-    df_show.style
-           # Use our helper for all USD columns
-           .format({c: fmt_m for c in df_q_m.columns}, na_rep='-')
-           # Keep % columns at one decimal
-           .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
-           .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
-           .set_caption("Values in millions (M) & QoQ % changes")
-)
-    # Header card
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
-
-    # 1) Load last 4 quarters of key metrics
+# --- FUNDAMENTAL ANALYSIS MODULE ---
+def render_fundamental_analysis(ticker: str):
+    # 1) Pull last 4 quarters of key metrics
+    data = yf.Ticker(ticker)
     df_income = data.quarterly_financials.T
+
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
         'Operating Income','EBIT','Net Income','Operating Cash Flow'
@@ -220,7 +205,7 @@ styled = (
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) Convert USD to millions and round
+    # 2) Convert to millions and round
     df_q_m = (df_q / 1e6).round(1)
     df_q_m.columns = [f"{col} (M)" for col in df_q_m.columns]
 
@@ -228,19 +213,19 @@ styled = (
     df_pct = (df_q_m.pct_change().iloc[1:] * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # 4) Combine for display
+    # 4) Merge for display
     df_show = pd.concat([df_q_m.iloc[1:], df_pct], axis=1)
 
-    # 5) Style via Pandas Styler
+    # 5) Style via Pandas Styler, using fmt_m for USD columns
     styled = (
         df_show.style
-               .format({c: "${:.1f}M" for c in df_q_m.columns}, na_rep='-')
+               .format({c: fmt_m for c in df_q_m.columns}, na_rep='-')
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
                .set_caption("Values in millions (M) & QoQ % changes")
     )
 
-    # 6) Render the HTML table (ensures styling is applied)
+    # 6) Render the HTML table so styles take effect
     html = styled.to_html()
     st.markdown(html, unsafe_allow_html=True)
 
@@ -248,8 +233,8 @@ styled = (
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
-        for full_col, change in last.items():
-            name = full_col.replace(" % Change", "")
+        for col, change in last.items():
+            name = col.replace(" % Change", "")
             if change > 5:
                 insights.append(f"✅ {name} up {change:.1f}% vs prior quarter")
             elif change < -5:
@@ -263,7 +248,7 @@ styled = (
         unsafe_allow_html=True
     )
 
-# Actually call the function
+# Actually call it
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
