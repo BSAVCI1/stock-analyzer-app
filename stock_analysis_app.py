@@ -437,7 +437,7 @@ fig.add_trace(go.Bar(
     x=last30.index, y=last30['Volume'], name="Volume", marker_color='grey'
 ), row=2, col=1)
 
-――― EVENT & NEWS OVERLAY (debuggable) ―――
+# --- EVENT & NEWS OVERLAY (debuggable) ---
 
 # Prepare last 30 days index as plain dates
 last30 = hist.last('30D')
