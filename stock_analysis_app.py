@@ -183,7 +183,7 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'><h2>📊 Earnings Review</h2></div>", unsafe_allow_html=True)
 
     # 1) Pull last 4 quarters of key metrics
     df_income = data.quarterly_financials.T
@@ -241,18 +241,62 @@ def render_fundamental_analysis(ticker: str):
     # Finally, display the formatted DataFrame
     st.dataframe(df_fmt, use_container_width=True)
 
-    # 6) Generate human-friendly insights
-    insights = []
-    if not df_pct.empty:
-        last = df_pct.iloc[-1]
-        for col, change in last.items():
-            name = col.replace(" % Change", "")
-            symbol = "✅" if change > 5 else "⚠️" if change < -5 else "🔄"
-            insights.append(f"{symbol} {name} {change:+.1f}% vs prior quarter")
+    # --- ENHANCED EARNINGS INSIGHTS ---
+    human_insights = []
+    # Map numeric change to plain-English sentiment
+    def sentiment(change):
+        if change > 5:
+            return "strong growth"
+        elif change > 0:
+            return "modest increase"
+        elif abs(change) < 0.1:
+            return "stable performance"
+        elif change > -5:
+            return "slight decline"
+        else:
+            return "notable decrease"
 
-    summary = "<br>".join(insights) if insights else "No significant quarter-over-quarter moves."
+    # Build a sentence for each available metric
+    for metric in avail:
+        col_name = f"{metric} % Change"
+        if col_name in df_pct.columns:
+            change = df_pct[col_name].iloc[-1]
+            sent = sentiment(change)
+            human_insights.append(
+                f"• {metric} showed {sent} of {abs(change):.1f}% this quarter."
+            )
+
+    # Analyst-style summary
+    rev_change = df_pct[f"Revenue % Change"].iloc[-1] if "Revenue % Change" in df_pct else None
+    net_change = df_pct[f"Net Income % Change"].iloc[-1] if "Net Income % Change" in df_pct else None
+    ocf_change = df_pct[f"Operating Cash Flow % Change"].iloc[-1] if "Operating Cash Flow % Change" in df_pct else None
+
+    analyst_notes = []
+    if rev_change is not None:
+        if rev_change > 0:
+            analyst_notes.append("Analysts view the top-line expansion positively, expecting continued demand.")
+        else:
+            analyst_notes.append("Analysts caution on revenue pressures, recommending closer monitoring.")
+
+    if net_change is not None:
+        if net_change > 0:
+            analyst_notes.append("Profitability is improving, which may support higher valuations.")
+        else:
+            analyst_notes.append("Profit contraction has raised concerns about margin sustainability.")
+
+    if ocf_change is not None:
+        if ocf_change > 0:
+            analyst_notes.append("Cash flow remains healthy, underpinning operational strength.")
+        else:
+            analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
+
+    # Combine everything
+    full_summary = "<br>".join(human_insights + analyst_notes)
+    if not full_summary:
+        full_summary = "No significant changes detected this quarter."
+
     st.markdown(
-        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
+        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{full_summary}</div>",
         unsafe_allow_html=True
     )
 
