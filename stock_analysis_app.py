@@ -398,7 +398,8 @@ def render_fundamental_analysis(ticker: str):
             analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
 
     # Combine everything
-    full_summary = "<br>".join(human_insights + analyst_notes)
+    full_summary = "<br>".join(insights + analyst_notes)
+
     if not full_summary:
         full_summary = "No significant changes detected this quarter."
 
