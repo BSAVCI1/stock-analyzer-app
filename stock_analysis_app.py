@@ -184,6 +184,29 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
 
+    # Helper to format in millions, dropping “.0” when possible
+def fmt_m(x):
+    if pd.isna(x):
+        return "-"
+    m = x / 1e6
+    
+    # If within rounding error of an integer, show no decimals
+    if abs(m - round(m)) < 1e-6:
+        return f"${int(round(m))}M"
+    else:
+        return f"${m:.1f}M"
+
+# … inside render_fundamental_analysis, replace the styled = ( … ) block with:
+
+styled = (
+    df_show.style
+           # Use our helper for all USD columns
+           .format({c: fmt_m for c in df_q_m.columns}, na_rep='-')
+           # Keep % columns at one decimal
+           .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
+           .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
+           .set_caption("Values in millions (M) & QoQ % changes")
+)
     # Header card
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
