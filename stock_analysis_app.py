@@ -279,29 +279,30 @@ bb_std_mult  = st.sidebar.slider("Bollinger Std Mult",   min_value=1.0, max_valu
 atr_period   = st.sidebar.slider("ATR Period",           min_value=5,  max_value=30, value=14, step=1)
 
 # --- RECOMPUTE INDICATORS WITH USER SETTINGS ---
-hist['MA20']   = hist['Close'].rolling(rsi_period).mean()
-hist['MA50']   = hist['Close'].rolling(50).mean()
-hist['MA200']  = hist['Close'].rolling(200).mean()
+# Moving averages (we’ll still draw 50 & 200 for cross analysis)
+hist['MA20']  = hist['Close'].rolling(rsi_period).mean()
+hist['MA50']  = hist['Close'].rolling(50).mean()
+hist['MA200'] = hist['Close'].rolling(200).mean()
 
 # RSI
 delta = hist['Close'].diff()
 gain  = delta.clip(lower=0).rolling(rsi_period).mean()
-loss  = -delta.clip(upper=0).rolling(rsi_period).mean()
+loss  = -delta.clip( upper=0).rolling(rsi_period).mean()
 hist['RSI'] = 100 - (100 / (1 + gain/loss))
 
 # MACD
-hist['EMA_fast']   = hist['Close'].ewm(span=macd_fast, adjust=False).mean()
-hist['EMA_slow']   = hist['Close'].ewm(span=macd_slow, adjust=False).mean()
-hist['MACD']       = hist['EMA_fast'] - hist['EMA_slow']
-hist['MACD_sig']   = hist['MACD'].ewm(span=macd_signal, adjust=False).mean()
-hist['MACD_hist']  = hist['MACD'] - hist['MACD_sig']
+hist['EMA_fast']  = hist['Close'].ewm(span=macd_fast, adjust=False).mean()
+hist['EMA_slow']  = hist['Close'].ewm(span=macd_slow, adjust=False).mean()
+hist['MACD']      = hist['EMA_fast'] - hist['EMA_slow']
+hist['MACD_sig']  = hist['MACD'].ewm(span=macd_signal, adjust=False).mean()
+hist['MACD_hist'] = hist['MACD'] - hist['MACD_sig']
 
 # Bollinger Bands
-hist['BB_mid']     = hist['Close'].rolling(bb_window).mean()
-hist['BB_std']     = hist['Close'].rolling(bb_window).std()
-hist['BB_upper']   = hist['BB_mid'] + bb_std_mult * hist['BB_std']
-hist['BB_lower']   = hist['BB_mid'] - bb_std_mult * hist['BB_std']
-hist['BB_%B']      = (hist['Close'] - hist['BB_lower']) / (hist['BB_upper'] - hist['BB_lower'])
+hist['BB_mid']   = hist['Close'].rolling(bb_window).mean()
+hist['BB_std']   = hist['Close'].rolling(bb_window).std()
+hist['BB_upper'] = hist['BB_mid'] + bb_std_mult * hist['BB_std']
+hist['BB_lower'] = hist['BB_mid'] - bb_std_mult * hist['BB_std']
+hist['BB_%B']    = (hist['Close'] - hist['BB_lower']) / (hist['BB_upper'] - hist['BB_lower'])
 
 # ATR
 tr = pd.concat([
@@ -309,7 +310,10 @@ tr = pd.concat([
     (hist['High'] - hist['Close'].shift()).abs(),
     (hist['Low']  - hist['Close'].shift()).abs()
 ], axis=1).max(axis=1)
-hist['ATR']        = tr.rolling(atr_period).mean()
+hist['ATR'] = tr.rolling(atr_period).mean()
+
+# OBV (On-Balance Volume)
+hist['OBV'] = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
 
 # --- TECHNICAL ANALYSIS MODULE (Enhanced) ---
 import plotly.graph_objs as go
@@ -356,37 +360,47 @@ recent = hist.last('90D')
 support = np.percentile(recent['Low'], 10)
 resistance = np.percentile(recent['High'], 90)
 
-# 2) Build a summary table
+# --- TECHNICAL OVERVIEW & NARRATIVE ---
 latest = hist.iloc[-1]
-cross = (
+cross  = (
     "Golden Cross ✅" if latest['MA50'] > latest['MA200']
-    else "Death  Cross ⚠️" if latest['MA50'] < latest['MA200']
+    else "Death Cross ⚠️" if latest['MA50'] < latest['MA200']
     else "No Cross"
 )
 
-summary = pd.DataFrame([
-    ["RSI",          f"{latest['RSI']:.1f}", 
-                   "Overbought 🔴"      if latest['RSI']>70 
-                   else "Oversold 🟢"     if latest['RSI']<30 
-                   else "Neutral ⚪️"],
-    ["MACD",         f"{latest['MACD']:.2f}", 
-                   "Bullish 🟢"         if latest['MACD']>0 
-                   else "Bearish 🔴"],
-    ["MACD Hist",    f"{latest['MACD_hist']:.2f}", "Momentum"],
-    ["MA20/50/200",  f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
-    ["Bollinger %B", f"{latest['BB_pctB']:.2f}", 
-                   "Above Upper 🔴"     if latest['BB_pctB']>1 
-                   else "Below Lower 🔵"  if latest['BB_pctB']<0 
-                   else "Within Bands 🟡"],
-    ["ATR",          f"{latest['ATR']:.2f}",    "Volatility"],
-    ["OBV",          f"{latest['OBV']:.0f}",    "Money Flow"],
-    ["Support",      f"{support:.2f}",          "Demand Zone"],
-    ["Resistance",   f"{resistance:.2f}",       "Supply Zone"]
-], columns=["Indicator","Value","Interpretation"])
+tech_df = pd.DataFrame([
+    ["RSI",         f"{latest['RSI']:.1f}",      ""],
+    ["MACD",        f"{latest['MACD']:.2f}",     ""],
+    ["MACD Signal", f"{latest['MACD_sig']:.2f}", ""],
+    ["MACD Hist",   f"{latest['MACD_hist']:.2f}", ""],
+    ["MA20/50/200", f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
+    ["%B (BB)",     f"{latest['BB_%B']:.2f}",     ""],
+    ["ATR",         f"{latest['ATR']:.2f}",      ""],
+    ["OBV",         f"{latest['OBV']:.0f}",      ""]
+], columns=["Indicator","Value","Signal"])
 
-# Display summary
 st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
-st.dataframe(summary, use_container_width=True)
+st.dataframe(tech_df, use_container_width=True)
+
+# Narrative summary
+rsi_desc   = "overbought" if latest['RSI']>70 else "oversold" if latest['RSI']<30 else "neutral"
+macd_desc  = "bullish"   if latest['MACD']>latest['MACD_sig'] else "bearish"
+bb_desc    = "above upper band" if latest['BB_%B']>1 else "below lower band" if latest['BB_%B']<0 else "within bands"
+vol_desc   = "strong"    if hist['OBV'][-1] > hist['OBV'][-10] else "weak"
+
+narrative = (
+    f"RSI is {latest['RSI']:.1f} ({rsi_desc}). "
+    f"MACD is {macd_desc} with a histogram of {latest['MACD_hist']:.2f}. "
+    f"A {cross} just occurred. "
+    f"Price is {bb_desc} of its Bollinger Bands. "
+    f"ATR is {latest['ATR']:.2f}, showing {('high' if latest['ATR']>hist['ATR'].mean() else 'low')} volatility. "
+    f"OBV flow is {vol_desc}, confirming money movement."
+)
+
+st.markdown(
+    f"<div class='card-dark'><b>🧠 Technical Summary:</b><br>{narrative}</div>",
+    unsafe_allow_html=True
+)
 
 # 3) AI Insight
 ins = []
