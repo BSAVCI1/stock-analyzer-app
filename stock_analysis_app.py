@@ -436,6 +436,70 @@ fig.add_trace(go.Bar(
     x=last30.index, y=last30['Volume'], name="Volume", marker_color='grey'
 ), row=2, col=1)
 
+# --- EVENT & NEWS OVERLAY SETUP ---
+# 1) Pull earnings and dividends dates
+earnings = data.calendar.get('Earnings Date', [])
+dividends = data.dividends
+
+# 2) Scrape top headlines
+news_url = f"https://finance.yahoo.com/quote/{ticker}/news"
+resp = requests.get(news_url, timeout=5)
+soup = BeautifulSoup(resp.content, 'html.parser')
+items = soup.select("h3 a")[:5]
+headlines = []
+for a in items:
+    date_tag = a.find_previous("span", {"class":"C(#959595)"})
+    date_str = date_tag.text if date_tag else ""
+    try:
+        dt = pd.to_datetime(date_str).date()
+    except:
+        dt = None
+    headlines.append((dt, a.get_text(strip=True)))
+
+# 3) Build & annotate the last-30-day candlestick+volume chart
+last30 = hist.last('30D')
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                    row_heights=[0.7,0.3], vertical_spacing=0.05)
+
+fig.add_trace(go.Candlestick(
+    x=last30.index, open=last30['Open'], high=last30['High'],
+    low=last30['Low'], close=last30['Close'], name="Price"
+), row=1, col=1)
+
+fig.add_trace(go.Bar(
+    x=last30.index, y=last30['Volume'], name="Volume",
+    marker_color='grey'
+), row=2, col=1)
+
+# annotate earnings, dividends & news
+for dt in earnings:
+    if isinstance(dt, (list, tuple)): dt = dt[0]
+    if dt in last30.index.date:
+        fig.add_vline(x=dt, line=dict(color="gold", dash="dash"),
+                      annotation_text="💰 Earnings", row=1)
+
+for dt in dividends.index.date:
+    if dt in last30.index.date:
+        fig.add_vline(x=dt, line=dict(color="green", dash="dot"),
+                      annotation_text="💵 Dividend", row=1)
+
+for dt, text in headlines:
+    if dt and dt in last30.index.date:
+        fig.add_vline(x=dt, line=dict(color="cyan", dash="longdash"),
+                      annotation_text="📰 News", row=1)
+
+fig.update_layout(
+    template="plotly_dark", height=600, showlegend=False,
+    title=f"{ticker} — Last 30 Days with Events"
+)
+st.plotly_chart(fig, use_container_width=True)
+
+# 4) List the scraped headlines below
+st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
+for dt, text in headlines:
+    dt_str = dt.strftime("%Y-%m-%d") if dt else ""
+    st.markdown(f"- **{dt_str}** {text}")
+
 # Overlay markers for signals (only include those within last30)
 for d in gc_dates:
     if d in last30.index:
@@ -479,6 +543,11 @@ fig.update_layout(
     title=f"{ticker} — Last 30 Days with Signals & Patterns"
 )
 st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
+for dt, txt in headlines:
+    dt_str = dt.strftime("%Y-%m-%d") if dt else ""
+    st.markdown(f"- **{dt_str}** {txt}")
 
 # 3) Summary of last signals/patterns with definitions
 sig_summary = {
