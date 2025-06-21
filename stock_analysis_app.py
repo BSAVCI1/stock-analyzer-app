@@ -215,7 +215,7 @@ def render_fundamental_analysis(ticker: str):
     )
 
     # Render styled HTML table
-    html = styled.render()
+    html = styled.to_html()
     st.markdown(html, unsafe_allow_html=True)
 
     # Insights
