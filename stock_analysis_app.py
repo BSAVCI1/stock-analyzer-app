@@ -180,14 +180,14 @@ if not pd.isna(leverage_diff):
 summary = ' '.join(insights) if insights else 'No sufficient data for peer comparison.'
 st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=True)
 
-# Helper to format in millions, dropping “.0” when possible
+# Helper to format in millions without trailing “.0” when whole
 def fmt_m(x):
     if pd.isna(x):
         return "-"
     m = x / 1e6
-    # If m is essentially an integer, show no decimals
-    if abs(m - round(m)) < 1e-6:
-        return f"${int(round(m))}M"
+    # If it’s exactly an integer number of millions, drop the decimal
+    if m == int(m):
+        return f"${int(m)}M"
     else:
         return f"${m:.1f}M"
 
@@ -219,6 +219,7 @@ def render_fundamental_analysis(ticker: str):
     # 5) Style via Pandas Styler, using fmt_m for USD columns
     styled = (
         df_show.style
+               # Apply our updated fmt_m to all USD-in-millions columns
                .format({c: fmt_m for c in df_q_m.columns}, na_rep='-')
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
