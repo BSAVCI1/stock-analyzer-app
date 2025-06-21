@@ -373,18 +373,41 @@ def render_fundamental_analysis(ticker: str):
                     f"• {metric} showed {sentiment} of {change:.1f}% in {latest_q}."
                 )
 
-    # Analyst‐style wrap-up
-    if insights:
-        summary = f"Analysts note for {latest_q}:<br>" + "<br>".join(insights)
-    else:
-        summary = f"No significant quarter-over-quarter changes detected in {latest_q}."
+    # Analyst-style summary
+    rev_change = df_pct[f"Revenue % Change"].iloc[-1] if "Revenue % Change" in df_pct else None
+    net_change = df_pct[f"Net Income % Change"].iloc[-1] if "Net Income % Change" in df_pct else None
+    ocf_change = df_pct[f"Operating Cash Flow % Change"].iloc[-1] if "Operating Cash Flow % Change" in df_pct else None
+
+    analyst_notes = []
+    if rev_change is not None:
+        if rev_change > 0:
+            analyst_notes.append("Analysts view the top-line expansion positively, expecting continued demand.")
+        else:
+            analyst_notes.append("Analysts caution on revenue pressures, recommending closer monitoring.")
+
+    if net_change is not None:
+        if net_change > 0:
+            analyst_notes.append("Profitability is improving, which may support higher valuations.")
+        else:
+            analyst_notes.append("Profit contraction has raised concerns about margin sustainability.")
+
+    if ocf_change is not None:
+        if ocf_change > 0:
+            analyst_notes.append("Cash flow remains healthy, underpinning operational strength.")
+        else:
+            analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
+
+    # Combine everything
+    full_summary = "<br>".join(human_insights + analyst_notes)
+    if not full_summary:
+        full_summary = "No significant changes detected this quarter."
 
     st.markdown(
-        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
+        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{full_summary}</div>",
         unsafe_allow_html=True
     )
 
-# Call the function
+# Call it
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
