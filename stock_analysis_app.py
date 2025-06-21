@@ -354,16 +354,15 @@ def render_fundamental_analysis(ticker: str):
     st.dataframe(df_fmt, use_container_width=True)
 
     # 7) Enhanced AI Insight for the LATEST quarter (bottom row)
-    latest_q = df_fmt.index[-1]            # e.g. '2025Q1'
+    latest_q = df_fmt.index[-1]  # e.g. '2025Q1'
     insights = []
-    # for each metric, pick its % Change at that quarter
+
     for metric in avail:
         pct_col = f"{metric} % Change"
-        if pct_col in df_fmt.columns:
-            raw_val = df_show.loc[latest_q, metric]        # original numeric
-            change = df_show.loc[latest_q, metric] / 1e6   # not used here
-            pct = df_pct.loc[latest_q, metric]
-            # Map to sentiment
+        # only proceed if that column exists
+        if pct_col in df_pct.columns:
+            pct = df_pct.loc[latest_q, pct_col]
+            # map to plain-English sentiment
             if pd.notna(pct):
                 if pct > 5:
                     sentiment = "strong growth"
@@ -375,9 +374,9 @@ def render_fundamental_analysis(ticker: str):
                     sentiment = "notable decrease"
                 insights.append(f"• {metric} saw {sentiment} of {pct:.1f}% in {latest_q}.")
 
-    # Analyst-style wrap-up
+    # analyst-style wrap-up
     if insights:
-        analyst_notes = f"Analysts note that in {latest_q}, " + "; ".join(insights)
+        analyst_notes = "Analysts note that in " + latest_q + ", " + " ".join(insights)
     else:
         analyst_notes = f"No significant quarter-over-quarter moves detected in {latest_q}."
 
@@ -385,9 +384,6 @@ def render_fundamental_analysis(ticker: str):
         f"<div class='card-dark'><b>💡 Earnings Insights ({latest_q}):</b><br>{analyst_notes}</div>",
         unsafe_allow_html=True
     )
-
-# Call it
-render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
