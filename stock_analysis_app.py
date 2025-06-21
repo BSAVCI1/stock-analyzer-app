@@ -183,129 +183,6 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Earnings Review</h2></div>", unsafe_allow_html=True)
-
-    # 1) Pull last 4 quarters of key metrics
-    df_income = data.quarterly_financials.T
-    metrics = [
-        'Total Revenue','Revenue','Gross Profit',
-        'Operating Income','EBIT','Net Income','Operating Cash Flow'
-    ]
-    avail = [m for m in metrics if m in df_income.columns]
-    df_q = df_income[avail].iloc[:4]
-    df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
-
-    # 2) QoQ % changes
-    df_pct = (df_q.pct_change().iloc[1:] * 100).round(1)
-    df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
-
-    # 3) Merge raw USD & % tables
-    df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
-
-    # 4) Style for full dollar formatting + percent + gradient
-    styled = (
-        df_show.style
-               .format({c: "${:,.0f}" for c in avail}, na_rep='-')
-               .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
-               .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
-               .set_caption('USD values and QoQ % changes')
-    )
-
-    # Helper to convert numbers to K/M/B format
-    def format_short(x):
-        try:
-            x = float(x)
-        except:
-            return "-"
-        if abs(x) >= 1e9:
-            return f"{x/1e9:.2f}B"
-        elif abs(x) >= 1e6:
-            return f"{x/1e6:.2f}M"
-        elif abs(x) >= 1e3:
-            return f"{x/1e3:.2f}K"
-        else:
-            return f"{x:.2f}"
-
-    # Build a copy for formatting
-    df_fmt = df_show.copy()
-
-    # Apply short-scale formatter to all USD columns
-    for col in avail:  
-        df_fmt[col] = df_fmt[col].apply(format_short)
-
-    # Apply percentage formatting to the % Change columns
-    for col in df_pct.columns:
-        df_fmt[col] = df_fmt[col].apply(lambda x: f"{x:.1f}%"
-                                        if pd.notna(x) else "-")
-
-    # Finally, display the formatted DataFrame
-    st.dataframe(df_fmt, use_container_width=True)
-
-    # --- ENHANCED EARNINGS INSIGHTS ---
-    human_insights = []
-    # Map numeric change to plain-English sentiment
-    def sentiment(change):
-        if change > 5:
-            return "strong growth"
-        elif change > 0:
-            return "modest increase"
-        elif abs(change) < 0.1:
-            return "stable performance"
-        elif change > -5:
-            return "slight decline"
-        else:
-            return "notable decrease"
-
-    # Build a sentence for each available metric
-    for metric in avail:
-        col_name = f"{metric} % Change"
-        if col_name in df_pct.columns:
-            change = df_pct[col_name].iloc[-1]
-            sent = sentiment(change)
-            human_insights.append(
-                f"• {metric} showed {sent} of {abs(change):.1f}% this quarter."
-            )
-
-    # Analyst-style summary
-    rev_change = df_pct[f"Revenue % Change"].iloc[-1] if "Revenue % Change" in df_pct else None
-    net_change = df_pct[f"Net Income % Change"].iloc[-1] if "Net Income % Change" in df_pct else None
-    ocf_change = df_pct[f"Operating Cash Flow % Change"].iloc[-1] if "Operating Cash Flow % Change" in df_pct else None
-
-    analyst_notes = []
-    if rev_change is not None:
-        if rev_change > 0:
-            analyst_notes.append("Analysts view the top-line expansion positively, expecting continued demand.")
-        else:
-            analyst_notes.append("Analysts caution on revenue pressures, recommending closer monitoring.")
-
-    if net_change is not None:
-        if net_change > 0:
-            analyst_notes.append("Profitability is improving, which may support higher valuations.")
-        else:
-            analyst_notes.append("Profit contraction has raised concerns about margin sustainability.")
-
-    if ocf_change is not None:
-        if ocf_change > 0:
-            analyst_notes.append("Cash flow remains healthy, underpinning operational strength.")
-        else:
-            analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
-
-    # Combine everything
-    full_summary = "<br>".join(human_insights + analyst_notes)
-    if not full_summary:
-        full_summary = "No significant changes detected this quarter."
-
-    st.markdown(
-        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{full_summary}</div>",
-        unsafe_allow_html=True
-    )
-
-# Call it
-render_fundamental_analysis(ticker)
-
-# --- FUNDAMENTAL ANALYSIS MODULE ---
-def render_fundamental_analysis(ticker: str):
-    data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
     # 1) Pull last 4 quarters of key metrics
@@ -459,6 +336,118 @@ fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_mid'], line=dict(dash='dot')
 fig2.add_trace(go.Scatter(x= hist.index, y=hist['BB_lower'], line=dict(dash='dash'), name='Lower Band'))
 fig2.update_layout(template='plotly_white', height=300)
 st.plotly_chart(fig2, use_container_width=True)
+
+# --- TECHNICAL ANALYSIS MODULE (Enhanced) ---
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+
+# 1) Compute Indicators
+hist['MA20'] = hist['Close'].rolling(20).mean()
+hist['MA50'] = hist['Close'].rolling(50).mean()
+hist['MA200'] = hist['Close'].rolling(200).mean()
+
+# RSI
+delta = hist['Close'].diff()
+gain = delta.clip(lower=0).rolling(14).mean()
+loss = -delta.clip(upper=0).rolling(14).mean()
+hist['RSI'] = 100 - (100 / (1 + gain/loss))
+
+# MACD
+hist['EMA12'] = hist['Close'].ewm(span=12).mean()
+hist['EMA26'] = hist['Close'].ewm(span=26).mean()
+hist['MACD'] = hist['EMA12'] - hist['EMA26']
+hist['MACD_hist'] = hist['MACD'] - hist['MACD'].ewm(span=9).mean()
+
+# Bollinger Bands and %B
+hist['BB_mid'] = hist['Close'].rolling(20).mean()
+hist['BB_std'] = hist['Close'].rolling(20).std()
+hist['BB_upper'] = hist['BB_mid'] + 2*hist['BB_std']
+hist['BB_lower'] = hist['BB_mid'] - 2*hist['BB_std']
+hist['BB_pctB'] = (hist['Close'] - hist['BB_lower']) / (hist['BB_upper'] - hist['BB_lower'])
+
+# ATR (volatility)
+tr = pd.concat([
+    hist['High'] - hist['Low'],
+    (hist['High'] - hist['Close'].shift()).abs(),
+    (hist['Low'] - hist['Close'].shift()).abs()
+], axis=1).max(axis=1)
+hist['ATR'] = tr.rolling(14).mean()
+
+# OBV (On‐Balance Volume)
+obv = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
+hist['OBV'] = obv
+
+# Support & Resistance (10th / 90th percentile of last 3 months)
+recent = hist.last('90D')
+support = np.percentile(recent['Low'], 10)
+resistance = np.percentile(recent['High'], 90)
+
+# 2) Build a summary table
+latest = hist.iloc[-1]
+cross = (
+    "Golden Cross ✅" if latest['MA50'] > latest['MA200']
+    else "Death  Cross ⚠️" if latest['MA50'] < latest['MA200']
+    else "No Cross"
+)
+
+summary = pd.DataFrame([
+    ["RSI",          f"{latest['RSI']:.1f}", 
+                   "Overbought 🔴"      if latest['RSI']>70 
+                   else "Oversold 🟢"     if latest['RSI']<30 
+                   else "Neutral ⚪️"],
+    ["MACD",         f"{latest['MACD']:.2f}", 
+                   "Bullish 🟢"         if latest['MACD']>0 
+                   else "Bearish 🔴"],
+    ["MACD Hist",    f"{latest['MACD_hist']:.2f}", "Momentum"],
+    ["MA20/50/200",  f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
+    ["Bollinger %B", f"{latest['BB_pctB']:.2f}", 
+                   "Above Upper 🔴"     if latest['BB_pctB']>1 
+                   else "Below Lower 🔵"  if latest['BB_pctB']<0 
+                   else "Within Bands 🟡"],
+    ["ATR",          f"{latest['ATR']:.2f}",    "Volatility"],
+    ["OBV",          f"{latest['OBV']:.0f}",    "Money Flow"],
+    ["Support",      f"{support:.2f}",          "Demand Zone"],
+    ["Resistance",   f"{resistance:.2f}",       "Supply Zone"]
+], columns=["Indicator","Value","Interpretation"])
+
+# Display summary
+st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
+st.dataframe(summary, use_container_width=True)
+
+# 3) AI Insight
+ins = []
+ins.append(f"RSI is at {latest['RSI']:.1f}, which is {'overbought' if latest['RSI']>70 else 'oversold' if latest['RSI']<30 else 'neutral'}.")
+ins.append(f"MACD is {'positive' if latest['MACD']>0 else 'negative'}, suggesting {'bullish' if latest['MACD']>0 else 'bearish'} momentum.")
+ins.append(f"The 50/200 MA cross: {cross}.")
+ins.append(f"Price sits at {latest['BB_pctB']:.2f} of its Bollinger range.")
+ins.append(f"ATR at {latest['ATR']:.2f} reflects recent volatility.")
+ins.append(f"Recent OBV trend is {'up' if hist['OBV'].iloc[-1]>hist['OBV'].iloc[-10] else 'down'}–confirming money flow direction.")
+
+st.markdown(
+    f"<div class='card-dark'><b>🧠 Technical Insights:</b><br>{'<br>'.join(ins)}</div>",
+    unsafe_allow_html=True
+)
+
+# 4) Candlestick + Volume Chart for last month
+last30 = hist.last('30D')
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                    row_heights=[0.7,0.3], vertical_spacing=0.05)
+
+fig.add_trace(go.Candlestick(
+    x=last30.index, open=last30['Open'], high=last30['High'],
+    low=last30['Low'], close=last30['Close'], name="Price"
+), row=1, col=1)
+
+fig.add_trace(go.Bar(
+    x=last30.index, y=last30['Volume'], name="Volume",
+    marker_color='grey'
+), row=2, col=1)
+
+fig.update_layout(
+    template="plotly_dark", height=600, showlegend=False,
+    title=f"{ticker} — Last 30 Days Candlestick & Volume"
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
