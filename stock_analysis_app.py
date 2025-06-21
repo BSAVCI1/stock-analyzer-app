@@ -501,13 +501,35 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 # 3) Summary of last signals/patterns
+# 3) Summary of last signals/patterns (fixed length checks)
 sig_summary = {
-    "Golden Cross":  gc_dates[-1].strftime("%Y-%m-%d") if len(gcross)>0 else "None in 30d",
-    "Death Cross":   dc_dates[-1].strftime("%Y-%m-%d") if len(dcross)>0 else "None in 30d",
-    "MACD Buy":      mb_dates[-1].strftime("%Y-%m-%d") if len(mb_dates)>0 else "None in 30d",
-    "MACD Sell":     ms_dates[-1].strftime("%Y-%m-%d") if len(ms_dates)>0 else "None in 30d",
-    "Doji":          ", ".join([d.strftime("%m-%d") for d in doji_dates[-3:]]) if len(doji_dates)>0 else "None"
+    "Golden Cross": (
+        gc_dates[-1].strftime("%Y-%m-%d")
+        if len(gc_dates) > 0
+        else "None in 30d"
+    ),
+    "Death Cross": (
+        dc_dates[-1].strftime("%Y-%m-%d")
+        if len(dc_dates) > 0
+        else "None in 30d"
+    ),
+    "MACD Buy": (
+        mb_dates[-1].strftime("%Y-%m-%d")
+        if len(mb_dates) > 0
+        else "None in 30d"
+    ),
+    "MACD Sell": (
+        ms_dates[-1].strftime("%Y-%m-%d")
+        if len(ms_dates) > 0
+        else "None in 30d"
+    ),
+    "Doji (last 3)": (
+        ", ".join(d.strftime("%m-%d") for d in doji_dates[-3:])
+        if len(doji_dates) > 0
+        else "None in 30d"
+    )
 }
+
 st.markdown("<div class='card'><h3>🔔 Recent Signals & Patterns</h3></div>", unsafe_allow_html=True)
 for name, when in sig_summary.items():
     st.markdown(f"- **{name}:** {when}")
