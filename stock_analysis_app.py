@@ -354,24 +354,30 @@ def render_fundamental_analysis(ticker: str):
     # 5) Display the table with latest quarter on top
     st.dataframe(df_fmt, use_container_width=True)
 
-    # --- ENHANCED EARNINGS INSIGHT for latest quarter ---
-    insights = []
+    # --- ENHANCED EARNINGS INSIGHTS ---
+    human_insights = []
+    # Map numeric change to plain-English sentiment
+    def sentiment(change):
+        if change > 5:
+            return "strong growth"
+        elif change > 0:
+            return "modest increase"
+        elif abs(change) < 0.1:
+            return "stable performance"
+        elif change > -5:
+            return "slight decline"
+        else:
+            return "notable decrease"
+
+    # Build a sentence for each available metric
     for metric in avail:
-        pct_col = f"{metric} % Change"
-        if pct_col in df_pct.columns:
-            change = df_pct.loc[latest_q, pct_col]
-            if pd.notna(change):
-                if change > 5:
-                    sentiment = "strong growth"
-                elif change > 0:
-                    sentiment = "modest increase"
-                elif change > -5:
-                    sentiment = "slight decline"
-                else:
-                    sentiment = "notable decrease"
-                insights.append(
-                    f"• {metric} showed {sentiment} of {change:.1f}% in {latest_q}."
-                )
+        col_name = f"{metric} % Change"
+        if col_name in df_pct.columns:
+            change = df_pct[col_name].iloc[-1]
+            sent = sentiment(change)
+            human_insights.append(
+                f"• {metric} showed {sent} of {abs(change):.1f}% this quarter."
+            )
 
     # Analyst-style summary
     rev_change = df_pct[f"Revenue % Change"].iloc[-1] if "Revenue % Change" in df_pct else None
@@ -398,8 +404,7 @@ def render_fundamental_analysis(ticker: str):
             analyst_notes.append("Lower cash flow suggests potential liquidity pressures ahead.")
 
     # Combine everything
-    full_summary = "<br>".join(insights + analyst_notes)
-
+    full_summary = "<br>".join(human_insights + analyst_notes)
     if not full_summary:
         full_summary = "No significant changes detected this quarter."
 
