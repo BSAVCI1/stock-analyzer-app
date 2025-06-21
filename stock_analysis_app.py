@@ -500,8 +500,7 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# 3) Summary of last signals/patterns
-# 3) Summary of last signals/patterns (fixed length checks)
+# 3) Summary of last signals/patterns with definitions
 sig_summary = {
     "Golden Cross": (
         gc_dates[-1].strftime("%Y-%m-%d")
@@ -530,9 +529,23 @@ sig_summary = {
     )
 }
 
+# Definitions for each signal
+definitions = {
+    "Golden Cross": "50-day MA crosses above 200-day MA → long-term bullish signal.",
+    "Death Cross":  "50-day MA crosses below 200-day MA → long-term bearish signal.",
+    "MACD Buy":     "MACD line crosses above its signal line → bullish momentum shift.",
+    "MACD Sell":    "MACD line crosses below its signal line → bearish momentum shift.",
+    "Doji (last 3)":"Candle where open≈close → market indecision; watch for reversal."
+}
+
 st.markdown("<div class='card'><h3>🔔 Recent Signals & Patterns</h3></div>", unsafe_allow_html=True)
 for name, when in sig_summary.items():
-    st.markdown(f"- **{name}:** {when}")
+    desc = definitions.get(name, "")
+    st.markdown(
+        f"- **{name}:** {when}  — _{desc}_",
+        unsafe_allow_html=True
+    )
+
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
