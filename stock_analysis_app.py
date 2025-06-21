@@ -183,7 +183,7 @@ st.markdown(f"<div class='card-dark'>💡 {summary}</div>", unsafe_allow_html=Tr
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
     data = yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card'><h2>📊 Earnings Review</h2></div>", unsafe_allow_html=True)
 
     # 1) Pull last 4 quarters of key metrics
     df_income = data.quarterly_financials.T
@@ -310,66 +310,6 @@ tr = pd.concat([
     (hist['Low']  - hist['Close'].shift()).abs()
 ], axis=1).max(axis=1)
 hist['ATR']        = tr.rolling(atr_period).mean()
-
-# --- TECHNICAL OVERVIEW TABLE & NARRATIVE ---
-latest = hist.iloc[-1]
-cross  = ("Golden Cross ✅" if latest['MA50'] > latest['MA200']
-          else "Death Cross ⚠️" if latest['MA50'] < latest['MA200']
-          else "No Cross")
-
-# Build a table for clarity
-tech_df = pd.DataFrame([
-    ["RSI",         f"{latest['RSI']:.1f}",       ""],
-    ["MACD",        f"{latest['MACD']:.2f}",      ""],
-    ["MACD Signal", f"{latest['MACD_sig']:.2f}",  ""],
-    ["MACD Hist",   f"{latest['MACD_hist']:.2f}", ""],
-    ["MA20/50/200", f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
-    ["%B (BB)",     f"{latest['BB_%B']:.2f}",      ""],
-    ["ATR",         f"{latest['ATR']:.2f}",       ""],
-], columns=["Indicator","Value","Signal"])
-st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
-st.dataframe(tech_df, use_container_width=True)
-
-# Narrative summary
-rsi_desc = ("overbought" if latest['RSI'] > 70 
-            else "oversold" if latest['RSI'] < 30 
-            else "neutral")
-macd_desc= "bullish" if latest['MACD'] > latest['MACD_sig'] else "bearish"
-bb_desc  = ("above upper band" if latest['BB_%B'] > 1 
-            else "below lower band" if latest['BB_%B'] < 0 
-            else "within the bands")
-atr_desc = f"at {latest['ATR']:.2f}, indicating {'higher' if latest['ATR'] > hist['ATR'].mean() else 'lower'} volatility"
-cross_desc = cross
-
-narrative = (
-    f"Over the past {rsi_period}-day RSI period, the RSI sits at {latest['RSI']:.1f} ({rsi_desc}), "
-    f"while MACD is {macd_desc} with a histogram of {latest['MACD_hist']:.2f}. "
-    f"A {cross_desc} has just occurred between the 50- and 200-day MAs. "
-    f"Price is {bb_desc} of its Bollinger Bands, and ATR is {atr_desc}. "
-    "These signals combined give you a clear view of current market momentum and volatility."
-)
-
-st.markdown(
-    f"<div class='card-dark'><b>💡 Technical Summary:</b><br>{narrative}</div>",
-    unsafe_allow_html=True
-)
-
-# Candlestick + Volume (last month)
-from plotly.subplots import make_subplots
-last30 = hist.last('30D')
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                    row_heights=[0.7,0.3], vertical_spacing=0.05)
-fig.add_trace(go.Candlestick(
-    x=last30.index, open=last30['Open'], high=last30['High'],
-    low=last30['Low'], close=last30['Close'], name="Price"
-), row=1, col=1)
-fig.add_trace(go.Bar(
-    x=last30.index, y=last30['Volume'], name="Volume",
-    marker_color='grey'
-), row=2, col=1)
-fig.update_layout(template="plotly_dark", height=600, showlegend=False,
-                  title=f"{ticker} — Last 30 Days")
-st.plotly_chart(fig, use_container_width=True)
 
 # --- TECHNICAL ANALYSIS MODULE (Enhanced) ---
 import plotly.graph_objs as go
