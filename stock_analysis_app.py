@@ -506,6 +506,11 @@ for nd, txt in headlines:
             row=1, col=1
         )
 
+st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
+for dt, txt in headlines:
+    dt_str = dt.strftime("%Y-%m-%d") if dt else ""
+    st.markdown(f"- **{dt_str}** {txt}")
+
 # 3) Summary of last signals/patterns with definitions
 sig_summary = {
     "Golden Cross": (
