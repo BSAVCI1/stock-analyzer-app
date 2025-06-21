@@ -316,20 +316,20 @@ def render_fundamental_analysis(ticker: str):
     ]
     avail = [m for m in metrics if m in df_income.columns]
     df_q = df_income[avail].iloc[:4]
-    # Convert index to periods like '2025Q1'
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # Identify the latest quarter label
-    latest_q = df_q.index[0]
+    # Identify the latest and prior quarters
+    latest_q = df_q.index[-1]      # e.g. '2025Q1'
+    prev_q   = df_q.index[-2] if len(df_q) > 1 else None
 
-    # 2) Compute QoQ % changes (kept for all quarters, first will be NaN)
+    # 2) Compute QoQ % changes
     df_pct = (df_q.pct_change() * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # 3) Merge raw USD & % tables
+    # 3) Merge USD & % tables
     df_show = pd.concat([df_q, df_pct], axis=1)
 
-    # 4) Short‐scale formatter (K/M/B) for USD, percent for QoQ
+    # 4) Short‐scale formatter
     def format_short(x):
         try:
             x = float(x)
@@ -342,77 +342,54 @@ def render_fundamental_analysis(ticker: str):
         elif abs(x) >= 1e3:
             return f"{x/1e3:.2f}K"
         else:
-            return f"{x:.2f}"
+            return f"{x:.0f}"
 
-    # Build formatted DataFrame
+    # 5) Build formatted DataFrame
     df_fmt = df_show.copy()
     for col in avail:
         df_fmt[col] = df_fmt[col].apply(format_short)
     for col in df_pct.columns:
         df_fmt[col] = df_fmt[col].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
-    # 5) Display the table with latest quarter on top
+    # 6) Display table
     st.dataframe(df_fmt, use_container_width=True)
 
-    # --- ENHANCED EARNINGS INSIGHTS ---
-    # Identify quarter labels
-    latest_q = df_q.index[-1]           # e.g. “2025Q1”
-    prev_q   = df_q.index[-2] if len(df_q.index) > 1 else None
-
+    # --- ENHANCED EARNINGS INSIGHTS for the latest quarter ---
     human_insights = []
-
-    # Sentiment helper
     def sentiment(change):
-        if change > 5:
-            return "strong growth"
-        if change > 0:
-            return "modest increase"
-        if change > -5:
-            return "slight decline"
-        return "notable decrease"
+        if change > 5:        return "strong growth"
+        elif change > 0:      return "modest increase"
+        elif change > -5:     return "slight decline"
+        else:                 return "notable decrease"
 
-    # For each metric, compare latest vs prior
-    for metric in avail:
-        pct_col = f"{metric} % Change"
-        if prev_q and pct_col in df_pct.columns:
-            change = df_pct.loc[latest_q, pct_col]
-            sent = sentiment(change)
-            # raw values
-            val_latest = df_q.loc[latest_q, metric]
-            val_prev   = df_q.loc[prev_q, metric]
-            # format in short‐scale
-            def fs(x): 
-                try: x=float(x)
-                except: return "-"
-                if abs(x)>=1e6: return f"{x/1e6:.1f}M"
-                if abs(x)>=1e3: return f"{x/1e3:.1f}K"
-                return f"{x:.0f}"
-            human_insights.append(
-                f"• {metric} moved from {fs(val_prev)} in {prev_q} to {fs(val_latest)} in {latest_q} "
-                f"({sent} of {abs(change):.1f}%)."
-            )
+    if prev_q:
+        for metric in avail:
+            pct_col = f"{metric} % Change"
+            if pct_col in df_pct.columns:
+                change = df_pct.loc[latest_q, pct_col]
+                sent   = sentiment(change)
+                val_new = df_q.loc[latest_q, metric]
+                val_old = df_q.loc[prev_q, metric]
+                human_insights.append(
+                    f"• {metric} moved from {format_short(val_old)} in {prev_q} to "
+                    f"{format_short(val_new)} in {latest_q} ({sent} of {abs(change):.1f}%)."
+                )
 
-    # Analyst‐style summary
+    # Analyst‐style wrap up on revenue
     analyst_notes = []
     rev_col = "Revenue % Change"
     if prev_q and rev_col in df_pct.columns:
-        c = df_pct.loc[latest_q, rev_col]
-        analyst_notes.append(
-            "🧐 Analysts are " +
-            ("bullish" if c>0 else "cautious")
-            + f" on revenue after a {abs(c):.1f}% {'rise' if c>0 else 'drop'}."
-        )
+        rc = df_pct.loc[latest_q, rev_col]
+        mood = "bullish" if rc > 0 else "cautious"
+        analyst_notes.append(f"🧐 Analysts are {mood} on revenue after a {abs(rc):.1f}% {'rise' if rc>0 else 'drop'} in {latest_q}.")
 
-    full = human_insights + analyst_notes
-    summary = "<br>".join(full) if full else f"No quarter-over-quarter data for {latest_q}."
+    summary = human_insights + analyst_notes
+    out = "<br>".join(summary) if summary else f"No QoQ data for {latest_q}."
+    st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{out}</div>", unsafe_allow_html=True)
 
-    st.markdown(
-        f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>",
-        unsafe_allow_html=True
-    )
 
-    # Call it
-    render_fundamental_analysis(ticker)
+# ✅ Call the function (outside the definition!)
+render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
 # RSI
