@@ -193,10 +193,11 @@ def fmt_m(x):
 
 # --- FUNDAMENTAL ANALYSIS MODULE ---
 def render_fundamental_analysis(ticker: str):
-    # 1) Pull last 4 quarters of key metrics
     data = yf.Ticker(ticker)
-    df_income = data.quarterly_financials.T
+    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
+    # 1) Pull last 4 quarters of raw metrics
+    df_income = data.quarterly_financials.T
     metrics = [
         'Total Revenue','Revenue','Gross Profit',
         'Operating Income','EBIT','Net Income','Operating Cash Flow'
@@ -205,32 +206,36 @@ def render_fundamental_analysis(ticker: str):
     df_q = df_income[avail].iloc[:4]
     df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # 2) Convert to millions and round
-    df_q_m = (df_q / 1e6).round(1)
-    df_q_m.columns = [f"{col} (M)" for col in df_q_m.columns]
-
-    # 3) QoQ % changes and round
-    df_pct = (df_q_m.pct_change().iloc[1:] * 100).round(1)
+    # 2) Calculate QoQ % changes
+    df_pct = (df_q.pct_change().iloc[1:] * 100).round(1)
     df_pct.columns = [f"{col} % Change" for col in df_pct.columns]
 
-    # 4) Merge for display
-    df_show = pd.concat([df_q_m.iloc[1:], df_pct], axis=1)
+    # 3) Merge raw USD & % tables (skip dividing here)
+    df_show = pd.concat([df_q.iloc[1:], df_pct], axis=1)
 
-    # 5) Style via Pandas Styler, using fmt_m for USD columns
+    # 4) Formatter that divides ONCE by 1e6
+    def fmt_m(x):
+        if pd.isna(x):
+            return "-"
+        m = x / 1e6
+        # drop .0 if whole
+        if m == int(m):
+            return f"${int(m)}M"
+        return f"${m:.1f}M"
+
+    # 5) Style & render
     styled = (
         df_show.style
-               # Apply our updated fmt_m to all USD-in-millions columns
-               .format({c: fmt_m for c in df_q_m.columns}, na_rep='-')
+               # apply fmt_m to raw-USD columns
+               .format({c: fmt_m for c in avail}, na_rep='-')
+               # percent columns
                .format({c: "{:.1f}%" for c in df_pct.columns}, na_rep='-')
                .background_gradient(subset=df_pct.columns, cmap='RdYlGn')
                .set_caption("Values in millions (M) & QoQ % changes")
     )
+    st.markdown(styled.to_html(), unsafe_allow_html=True)
 
-    # 6) Render the HTML table so styles take effect
-    html = styled.to_html()
-    st.markdown(html, unsafe_allow_html=True)
-
-    # 7) Generate human-friendly insights
+    # 6) Human-friendly insights
     insights = []
     if not df_pct.empty:
         last = df_pct.iloc[-1]
@@ -249,7 +254,7 @@ def render_fundamental_analysis(ticker: str):
         unsafe_allow_html=True
     )
 
-# Actually call it
+# finally, call the function
 render_fundamental_analysis(ticker)
 
 # --- TECHNICAL ANALYSIS MODULE ---
