@@ -382,26 +382,6 @@ tech_df = pd.DataFrame([
 st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
 st.dataframe(tech_df, use_container_width=True)
 
-# Narrative summary
-rsi_desc   = "overbought" if latest['RSI']>70 else "oversold" if latest['RSI']<30 else "neutral"
-macd_desc  = "bullish"   if latest['MACD']>latest['MACD_sig'] else "bearish"
-bb_desc    = "above upper band" if latest['BB_%B']>1 else "below lower band" if latest['BB_%B']<0 else "within bands"
-vol_desc   = "strong"    if hist['OBV'][-1] > hist['OBV'][-10] else "weak"
-
-narrative = (
-    f"RSI is {latest['RSI']:.1f} ({rsi_desc}). "
-    f"MACD is {macd_desc} with a histogram of {latest['MACD_hist']:.2f}. "
-    f"A {cross} just occurred. "
-    f"Price is {bb_desc} of its Bollinger Bands. "
-    f"ATR is {latest['ATR']:.2f}, showing {('high' if latest['ATR']>hist['ATR'].mean() else 'low')} volatility. "
-    f"OBV flow is {vol_desc}, confirming money movement."
-)
-
-st.markdown(
-    f"<div class='card-dark'><b>🧠 Technical Summary:</b><br>{narrative}</div>",
-    unsafe_allow_html=True
-)
-
 # 3) AI Insight
 ins = []
 ins.append(f"RSI is at {latest['RSI']:.1f}, which is {'overbought' if latest['RSI']>70 else 'oversold' if latest['RSI']<30 else 'neutral'}.")
