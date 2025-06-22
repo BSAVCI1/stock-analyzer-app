@@ -439,32 +439,36 @@ fig.add_trace(go.Bar(
 
 # --- EVENT & NEWS OVERLAY (debuggable) ---
 
-# 0) Use the last 30 rows rather than .last('30D') to avoid any date‐index subtleties
+# 0) Use the last 30 rows so we know exactly what we’re charting
 last30 = hist.tail(30).copy()
+# This should be a set of datetime.date objects, not strings
 last30_dates = set(last30.index.date)
 
-# 1) Earnings & dividends
+# 1) Pull earnings & dividend dates as date objects
+earnings_dates = []
 raw_cal = data.calendar
-earnings = []
-if hasattr(raw_cal, 'get') and raw_cal.get('Earnings Date') is not None:
-    # yfinance sometimes returns a list inside a list
-    raw = raw_cal.get('Earnings Date')
-    for x in (raw if isinstance(raw, (list,tuple)) else [raw]):
-        dt = x[0] if isinstance(x, (list,tuple)) else x
+if hasattr(raw_cal, "get") and raw_cal.get("Earnings Date"):
+    raw = raw_cal["Earnings Date"]
+    # sometimes it's nested: [[Timestamp], …]
+    entries = raw if isinstance(raw, (list, tuple)) else [raw]
+    for e in entries:
+        # unwrap lists
+        dt = e[0] if isinstance(e, (list, tuple)) else e
         try:
-            earnings.append(pd.to_datetime(dt).date())
+            earnings_dates.append(pd.to_datetime(dt).date())
         except:
             pass
 
-dividends = [d.date() for d in data.dividends.index]
+dividend_dates = [d.date() for d in data.dividends.index]
 
-# 2) Scrape top 3 headlines
-news_url = f"https://finance.yahoo.com/quote/{ticker}/news"
-resp     = requests.get(news_url, timeout=5)
-soup     = BeautifulSoup(resp.content, 'html.parser')
-items    = soup.select("h3 a")[:3]
+# 2) Scrape 3 headlines with their dates
+news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
+resp      = requests.get(news_url, timeout=5)
+soup      = BeautifulSoup(resp.content, "html.parser")
+items     = soup.select("h3 a")[:3]
 headlines = []
 for a in items:
+    # find the little gray date span
     date_tag = a.find_previous("span", {"class": "C(#959595)"})
     try:
         dt = pd.to_datetime(date_tag.text.strip()).date()
@@ -472,85 +476,44 @@ for a in items:
         dt = None
     headlines.append((dt, a.get_text(strip=True)))
 
-# 3) DEBUG: show us what dates we actually have
-st.markdown("**Debug: last30 dates vs event dates**")
-st.write("last30 rows:", last30_dates)
-st.write("earnings:", earnings)
-st.write("dividends:", dividends)
-st.write("news dates:", [d for d,_ in headlines])
+# 3) DEBUG: print them in ISO format
+st.markdown("**🛠️ Debug: which dates overlap?**")
+st.write("Last 30 days →", [d.isoformat() for d in sorted(last30_dates)])
+st.write("Earnings dates →", [d.isoformat() for d in earnings_dates])
+st.write("Dividend dates →", [d.isoformat() for d in dividend_dates])
+st.write("News dates →", [d.isoformat() if d else "None" for d,_ in headlines])
 
-# 4) Now only if they overlap do we draw lines
-for ed in earnings:
-    if ed in last30_dates:
-        fig.add_vline(x=pd.to_datetime(ed), line=dict(color="gold", dash="dash"),
-                      annotation_text="💰 Earnings", row=1, col=1)
+# 4) Only draw v-lines if the date is present in our 30-bar window
+for d in earnings_dates:
+    if d in last30_dates:
+        fig.add_vline(
+            x=pd.Timestamp(d),
+            line=dict(color="gold", dash="dash"),
+            annotation_text="💰 Earnings",
+            row=1, col=1
+        )
+for d in dividend_dates:
+    if d in last30_dates:
+        fig.add_vline(
+            x=pd.Timestamp(d),
+            line=dict(color="green", dash="dot"),
+            annotation_text="💵 Dividend",
+            row=1, col=1
+        )
+for d, txt in headlines:
+    if d in last30_dates:
+        fig.add_vline(
+            x=pd.Timestamp(d),
+            line=dict(color="cyan", dash="longdash"),
+            annotation_text="📰 News",
+            row=1, col=1
+        )
 
-for dd in dividends:
-    if dd in last30_dates:
-        fig.add_vline(x=pd.to_datetime(dd), line=dict(color="green", dash="dot"),
-                      annotation_text="💵 Dividend", row=1, col=1)
-
-for nd, txt in headlines:
-    if nd in last30_dates:
-        fig.add_vline(x=pd.to_datetime(nd), line=dict(color="cyan", dash="longdash"),
-                      annotation_text="📰 News", row=1, col=1)
-
-# 5) List the scraped headlines below
+# 5) Finally list out the headlines below the chart
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
-for dt, txt in headlines:
-    dt_str = dt.strftime("%Y-%m-%d") if dt else "Unknown date"
-    st.markdown(f"- **{dt_str}** {txt}")
-
-st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
-for dt, txt in headlines:
-    dt_str = dt.strftime("%Y-%m-%d") if dt else ""
-    st.markdown(f"- **{dt_str}** {txt}")
-
-# 3) Summary of last signals/patterns with definitions
-sig_summary = {
-    "Golden Cross": (
-        gc_dates[-1].strftime("%Y-%m-%d")
-        if len(gc_dates) > 0
-        else "None in 30d"
-    ),
-    "Death Cross": (
-        dc_dates[-1].strftime("%Y-%m-%d")
-        if len(dc_dates) > 0
-        else "None in 30d"
-    ),
-    "MACD Buy": (
-        mb_dates[-1].strftime("%Y-%m-%d")
-        if len(mb_dates) > 0
-        else "None in 30d"
-    ),
-    "MACD Sell": (
-        ms_dates[-1].strftime("%Y-%m-%d")
-        if len(ms_dates) > 0
-        else "None in 30d"
-    ),
-    "Doji (last 3)": (
-        ", ".join(d.strftime("%m-%d") for d in doji_dates[-3:])
-        if len(doji_dates) > 0
-        else "None in 30d"
-    )
-}
-
-# Definitions for each signal
-definitions = {
-    "Golden Cross": "50-day MA crosses above 200-day MA → long-term bullish signal.",
-    "Death Cross":  "50-day MA crosses below 200-day MA → long-term bearish signal.",
-    "MACD Buy":     "MACD line crosses above its signal line → bullish momentum shift.",
-    "MACD Sell":    "MACD line crosses below its signal line → bearish momentum shift.",
-    "Doji (last 3)":"Candle where open≈close → market indecision; watch for reversal."
-}
-
-st.markdown("<div class='card'><h3>🔔 Recent Signals & Patterns</h3></div>", unsafe_allow_html=True)
-for name, when in sig_summary.items():
-    desc = definitions.get(name, "")
-    st.markdown(
-        f"- **{name}:** {when}  — _{desc}_",
-        unsafe_allow_html=True
-    )
+for d, txt in headlines:
+    date_str = d.isoformat() if d else "Unknown"
+    st.markdown(f"- **{date_str}**  {txt}")
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
