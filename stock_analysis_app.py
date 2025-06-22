@@ -437,27 +437,29 @@ fig.add_trace(go.Bar(
     x=last30.index, y=last30['Volume'], name="Volume", marker_color='grey'
 ), row=2, col=1)
 
+# 4) Finalize & show your candlestick + volume chart
+fig.update_layout(
+    template="plotly_dark", height=650, showlegend=True,
+    title=f"{ticker} — Last 30 Days with Signals & Patterns"
+)
+
 # --- EVENT & NEWS OVERLAY (debuggable) ---
 
-# 0) Grab exactly the last 30 rows (bars)
-last30      = hist.tail(30).copy()
+# 0) Grab the last 30 bars
+last30       = hist.tail(30).copy()
 last30_dates = {d.date() for d in last30.index}
 
-# 1) Earnings & dividends dates as date objects
+# 1) Earnings & dividend dates
 earnings_dates = []
-cal = data.calendar or {}
-raw_e = cal.get("Earnings Date", [])
-for entry in (raw_e if isinstance(raw_e, (list,tuple)) else [raw_e]):
-    # unwrap nested lists/tuples
-    dt = entry[0] if isinstance(entry, (list,tuple)) else entry
-    try:
-        earnings_dates.append(pd.to_datetime(dt).date())
-    except:
-        pass
+raw_e = data.calendar.get("Earnings Date", []) or []
+for e in (raw_e if isinstance(raw_e, (list,tuple)) else [raw_e]):
+    d = e[0] if isinstance(e, (list,tuple)) else e
+    try: earnings_dates.append(pd.to_datetime(d).date())
+    except: pass
 
 dividend_dates = [d.date() for d in data.dividends.index]
 
-# 2) Scrape top 3 headlines & their dates
+# 2) Scrape top 3 news items
 news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
 resp      = requests.get(news_url, timeout=5)
 soup      = BeautifulSoup(resp.content, "html.parser")
@@ -465,40 +467,34 @@ links     = soup.select("h3 a")[:3]
 headlines = []
 for a in links:
     span = a.find_previous("span", {"class": "C(#959595)"})
-    try:
-        d = pd.to_datetime(span.text.strip()).date()
-    except:
-        d = None
+    try: d = pd.to_datetime(span.text.strip()).date()
+    except: d = None
     headlines.append((d, a.get_text(strip=True)))
 
-# 3) DEBUG: print ISO dates so we can actually *see* a match
-st.markdown("**🛠️ Debug: events in last30 date range**")
+# 3) Debug log in ISO format
+st.markdown("**🛠️ Debug: events in last30**")
 st.write("Last30 →", sorted(d.isoformat() for d in last30_dates))
 st.write("Earnings →", sorted(d.isoformat() for d in earnings_dates))
 st.write("Dividends →", sorted(d.isoformat() for d in dividend_dates))
 st.write("News →", [d.isoformat() if d else "None" for d,_ in headlines])
 
-# 4) Draw v-lines only when there's a real date match
+# 4) Draw v‐lines only on real matches
 for d in earnings_dates:
     if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d),
-                      line=dict(color="gold", dash="dash"),
-                      annotation_text="💰 Earnings",
-                      row=1, col=1)
+        fig.add_vline(x=pd.Timestamp(d), line=dict(color="gold", dash="dash"),
+                      annotation_text="💰 Earnings", row=1, col=1)
 for d in dividend_dates:
     if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d),
-                      line=dict(color="green", dash="dot"),
-                      annotation_text="💵 Dividend",
-                      row=1, col=1)
+        fig.add_vline(x=pd.Timestamp(d), line=dict(color="green", dash="dot"),
+                      annotation_text="💵 Dividend", row=1, col=1)
 for d, _ in headlines:
     if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d),
-                      line=dict(color="cyan", dash="longdash"),
-                      annotation_text="📰 News",
-                      row=1, col=1)
+        fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="longdash"),
+                      annotation_text="📰 News", row=1, col=1)
 
-# 5) Finally render the headlines underneath
+# 5) Finally plot & list the headlines
+st.plotly_chart(fig, use_container_width=True)
+
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
 for d, txt in headlines:
     date_str = d.isoformat() if d else "Unknown"
