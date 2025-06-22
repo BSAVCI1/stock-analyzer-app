@@ -326,12 +326,21 @@ divs = [dt.date() for dt in data.dividends.index]
 for dt,color,txt in [(earn_dates,"gold","💰 Earnings"),(divs,"green","💵 Dividend")]:
     for d in dt:
         if d in last30.index.date:
-            fig.add_vline(x=pd.Timestamp(d),line=dict(color=color,dash="dash"),annotation_text=txt,row=1,col=1)
+            fig.add_vline(
+    x=pd.Timestamp(d),
+    line=dict(color="gold", dash="dash"),
+    row=1, col=1
+)
 
 for n in event_news:
     d=datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
     if d in last30.index.date:
-        fig.add_vline(x=pd.Timestamp(d),line=dict(color="cyan",dash="longdash"),annotation_text="📰 News",row=1,col=1)
+        fig.add_vline(
+    x=pd.Timestamp(d),
+    line=dict(color="gold", dash="dash"),
+    row=1, col=1
+)
+
 
 fig.update_layout(template="plotly_dark",height=650,showlegend=True,title=f"{ticker} — Last 30d: Candles, Signals & Events")
 st.plotly_chart(fig,use_container_width=True,key="signals_events")
