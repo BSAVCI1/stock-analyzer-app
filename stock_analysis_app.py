@@ -80,7 +80,19 @@ dy      = info.get('dividendYield',0)*100
 beta    = info.get('beta',0)
 
 c1, c2, c3 = st.columns(3)
-c1.markdown(f"**Volume:** {vol:,} {'<span class='arrow-up'>▲</span>' if vol>avg_vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='Shares traded last session.'>ℹ️</abbr>", unsafe_allow_html=True)
+# decide arrow
+arrow_html = (
+    '<span class="arrow-up">▲</span>'
+    if vol > avg_vol
+    else '<span class="arrow-down">▼</span>'
+)
+
+# now it's just one clean f-string
+c1.markdown(
+    f"**Volume:** {vol:,} {arrow_html} "
+    "<abbr title='Shares traded last session.'>ℹ️</abbr>",
+    unsafe_allow_html=True
+)
 c2.markdown(f"**Avg Volume:** {avg_vol:,} {'<span class=\"arrow-up\">▲</span>' if avg_vol>vol else '<span class=\"arrow-down\">▼</span>'} <abbr title='30-day avg.'>ℹ️</abbr>", unsafe_allow_html=True)
 prev_mc = prev_close * info.get('sharesOutstanding',1)
 c3.markdown(f"**Market Cap:** ${mc:,} {'<span class=\"arrow-up\">▲</span>' if mc>prev_mc else '<span class=\"arrow-down\">▼</span>'} <abbr title='Total equity value.'>ℹ️</abbr>", unsafe_allow_html=True)
