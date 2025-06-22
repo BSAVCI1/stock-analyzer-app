@@ -416,24 +416,27 @@ doji_dates = hist.index[
     (hist['Close'] - hist['Open']).abs() <= 0.1 * (hist['High'] - hist['Low'])
 ]
 
-# 2) Pull news from last 6 months and filter around >5% moves
+# 2) Pull news from last 6 months via yfinance.news
 six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
-raw_news       = getattr(data, "news", [])  # yfinance Ticker.news
-# keep only last-6mo
-filtered_news = [
-    { 
-      "date": datetime.datetime.fromtimestamp(item["providerPublishTime"]).date(),
-      "title": item["title"]
-    }
-    for item in raw_news
-    if datetime.datetime.fromtimestamp(item["providerPublishTime"]) >= six_months_ago
-]
+raw_news = getattr(data, "news", []) or []
+
+filtered_news = []
+for item in raw_news:
+    ts = item.get("providerPublishTime")
+    if not ts:
+        continue              # skip if no timestamp
+    dt = datetime.datetime.fromtimestamp(ts)
+    if dt >= six_months_ago:
+        filtered_news.append({
+            "date": dt.date(),
+            "title": item.get("title", "No title")
+        })
 
 # find all dates where |pct_change| >5%
 sig_moves = hist['Close'].pct_change().abs() > 0.05
 signif_dates = set(hist.index[sig_moves].date)
 
-# only keep news whose date matches one of those big-move days
+# only keep headlines that coincide with big-move days
 event_news = [n for n in filtered_news if n["date"] in signif_dates]
 
 # 3) Build 30-day candlestick + volume figure
