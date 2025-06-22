@@ -397,214 +397,128 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- 3️⃣ Trade-Signal Visualization & Pattern / Event Overlay ---
+# --- 3️⃣ Signals & Events Overlay ---
 
 from plotly.subplots import make_subplots
+import datetime
 
-# 1) Compute all of our signal dates from hist
-ma50    = hist['MA50']
-ma200   = hist['MA200']
-macd    = hist['MACD']
-macd_sig= hist['MACD_sig']
+# 1) Compute signal dates from hist
+ma50     = hist['MA50']
+ma200    = hist['MA200']
+macd     = hist['MACD']
+macd_sig = hist['MACD_sig']
 
-# Golden / Death Crosses
-gcross = hist.index[(ma50.shift(1) < ma200.shift(1)) & (ma50 > ma200)]
-dcross = hist.index[(ma50.shift(1) > ma200.shift(1)) & (ma50 < ma200)]
-
-# MACD crossovers
+gcross   = hist.index[(ma50.shift(1) < ma200.shift(1)) & (ma50 > ma200)]
+dcross   = hist.index[(ma50.shift(1) > ma200.shift(1)) & (ma50 < ma200)]
 mb_dates = hist.index[(macd.shift(1) < macd_sig.shift(1)) & (macd > macd_sig)]
 ms_dates = hist.index[(macd.shift(1) > macd_sig.shift(1)) & (macd < macd_sig)]
-
-# Doji: |Close–Open| ≤ 10% of (High–Low)
 doji_dates = hist.index[
     (hist['Close'] - hist['Open']).abs() <= 0.1 * (hist['High'] - hist['Low'])
 ]
 
-# 2) Build the 30-day candlestick + volume chart
+# 2) Pull news from last 6 months and filter around >5% moves
+six_months_ago = datetime.datetime.now() - datetime.timedelta(days=180)
+raw_news       = getattr(data, "news", [])  # yfinance Ticker.news
+# keep only last-6mo
+filtered_news = [
+    { 
+      "date": datetime.datetime.fromtimestamp(item["providerPublishTime"]).date(),
+      "title": item["title"]
+    }
+    for item in raw_news
+    if datetime.datetime.fromtimestamp(item["providerPublishTime"]) >= six_months_ago
+]
+
+# find all dates where |pct_change| >5%
+sig_moves = hist['Close'].pct_change().abs() > 0.05
+signif_dates = set(hist.index[sig_moves].date)
+
+# only keep news whose date matches one of those big-move days
+event_news = [n for n in filtered_news if n["date"] in signif_dates]
+
+# 3) Build 30-day candlestick + volume figure
 last30 = hist.tail(30)
 fig = make_subplots(
     rows=2, cols=1, shared_xaxes=True,
-    row_heights=[0.7, 0.3], vertical_spacing=0.05
+    row_heights=[0.7,0.3], vertical_spacing=0.05
 )
 
-# Price candles
 fig.add_trace(go.Candlestick(
     x=last30.index, open=last30['Open'], high=last30['High'],
-    low=last30.index.map(lambda d: last30.loc[d,'Low']),
-    close=last30.index.map(lambda d: last30.loc[d,'Close']),
+    low= last30['Low'],      close=last30['Close'],
     name="Price"
 ), row=1, col=1)
 
-# Volume bars
 fig.add_trace(go.Bar(
     x=last30.index, y=last30['Volume'],
     name="Volume", marker_color='grey'
 ), row=2, col=1)
 
-# 3) Overlay our signals (only if in last30)
-for d in gcross:
-    if d in last30.index:
-        fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'Close']],
-            mode='markers',
-            marker=dict(symbol='triangle-up', size=12, color='green'),
-            name='Golden Cross'
-        ), row=1, col=1)
+# overlay technical markers if within last30
+for d,name,color,symbol in [
+    (gcross,  'Golden Cross', 'green', 'triangle-up'),
+    (dcross,  'Death Cross',  'red',   'triangle-down'),
+    (mb_dates,'MACD Buy',     'blue',  'circle'),
+    (ms_dates,'MACD Sell',    'orange','circle'),
+    (doji_dates,'Doji',       'purple','x'),
+]:
+    for dt in d:
+        if dt in last30.index:
+            fig.add_trace(go.Scatter(
+                x=[dt], y=[ last30.loc[dt,'Close'] if name!='MACD Buy' and name!='MACD Sell' 
+                             else (last30.loc[dt,'Low']*0.995 if name=='MACD Buy' else last30.loc[dt,'High']*1.005) ],
+                mode='markers',
+                name=name,
+                marker=dict(symbol=symbol, size=10, color=color)
+            ), row=1, col=1)
 
-for d in dcross:
-    if d in last30.index:
-        fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'Close']],
-            mode='markers',
-            marker=dict(symbol='triangle-down', size=12, color='red'),
-            name='Death Cross'
-        ), row=1, col=1)
-
-for d in mb_dates:
-    if d in last30.index:
-        fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'Low'] * 0.995],
-            mode='markers',
-            marker=dict(symbol='circle', size=8, color='blue'),
-            name='MACD Buy'
-        ), row=1, col=1)
-
-for d in ms_dates:
-    if d in last30.index:
-        fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'High'] * 1.005],
-            mode='markers',
-            marker=dict(symbol='circle', size=8, color='orange'),
-            name='MACD Sell'
-        ), row=1, col=1)
-
-for d in doji_dates:
-    if d in last30.index:
-        fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'Close']],
-            mode='markers',
-            marker=dict(symbol='x', size=10, color='purple'),
-            name='Doji'
-        ), row=1, col=1)
-
-# 4) Event overlay: Earnings, Dividends, News
-#    match on date().  
-last30_dates = {d.date() for d in last30.index}
-
-# Earnings dates from yfinance calendar
-earn_raw = data.calendar.get('Earnings Date', [])
-earnings = []
-for e in (earn_raw if isinstance(earn_raw,(list,tuple)) else [earn_raw]):
+# overlay event v-lines for Earnings & Dividends from yfinance calendar
+# Earnings
+earn = data.calendar.get("Earnings Date", [])
+earn_dates = []
+for e in (earn if isinstance(earn,(list,tuple)) else [earn]):
     d = e[0] if isinstance(e,(list,tuple)) else e
-    try: earnings.append(pd.to_datetime(d).date())
+    try: earn_dates.append(pd.to_datetime(d).date())
     except: pass
 
-# Dividend dates
-div_dates = [d.date() for d in data.dividends.index]
+# Dividends
+div_dates = [dt.date() for dt in data.dividends.index]
 
-# Top-3 Yahoo Finance news headlines
-news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
-resp      = requests.get(news_url, timeout=5)
-soup      = BeautifulSoup(resp.content, 'html.parser')
-links     = soup.select("h3 a")[:3]
-headlines = []
-for a in links:
-    span = a.find_previous("span", {"class":"C(#959595)"})
-    try:
-        nd = pd.to_datetime(span.text).date()
-    except:
-        nd = None
-    headlines.append((nd, a.get_text(strip=True)))
+# Draw v-lines if in last30
+for d,color,txt in [
+    (earn_dates,    "gold",     "💰 Earnings"),
+    (div_dates,     "green",    "💵 Dividend")
+]:
+    for dt in d:
+        if dt in last30.index.date:
+            fig.add_vline(
+                x=pd.Timestamp(dt), line=dict(color=color, dash="dash"),
+                annotation_text=txt, row=1, col=1
+            )
 
-# Draw v-lines for each event in-range
-for d in earnings:
-    if d in last30_dates:
+# overlay filtered news v-lines
+for n in event_news:
+    dt = n["date"]
+    if dt in last30.index.date:
         fig.add_vline(
-            x=pd.Timestamp(d), line=dict(color="gold", dash="dash"),
-            annotation_text="💰 Earnings", row=1, col=1
-        )
-for d in div_dates:
-    if d in last30_dates:
-        fig.add_vline(
-            x=pd.Timestamp(d), line=dict(color="green", dash="dot"),
-            annotation_text="💵 Dividend", row=1, col=1
-        )
-for nd, _ in headlines:
-    if nd and nd in last30_dates:
-        fig.add_vline(
-            x=pd.Timestamp(nd), line=dict(color="cyan", dash="longdash"),
+            x=pd.Timestamp(dt), line=dict(color="cyan", dash="longdash"),
             annotation_text="📰 News", row=1, col=1
         )
 
-# 5) Final layout & render
+# 4) Finalize & render with a unique key
 fig.update_layout(
     template="plotly_dark", height=650, showlegend=True,
-    title=f"{ticker} — Last 30 Days Candles, Signals & Events"
+    title=f"{ticker} — Last 30 Days: Candles, Signals & Events"
 )
-st.plotly_chart(fig, use_container_width=True, key="price_history_chart")
+st.plotly_chart(fig, use_container_width=True, key="signals_events")
 
-# 6) Below the chart, list the 3 headlines
-st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
-for dt, txt in headlines:
-    date_str = dt.isoformat() if dt else "Unknown"
-    st.markdown(f"- **{date_str}**  {txt}", unsafe_allow_html=True)
-    
-# --- EVENT & NEWS OVERLAY (debuggable) ---
-
-# 0) Grab the last 30 bars
-last30       = hist.tail(30).copy()
-last30_dates = {d.date() for d in last30.index}
-
-# 1) Earnings & dividend dates
-earnings_dates = []
-raw_e = data.calendar.get("Earnings Date", []) or []
-for e in (raw_e if isinstance(raw_e, (list,tuple)) else [raw_e]):
-    d = e[0] if isinstance(e, (list,tuple)) else e
-    try: earnings_dates.append(pd.to_datetime(d).date())
-    except: pass
-
-dividend_dates = [d.date() for d in data.dividends.index]
-
-# 2) Scrape top 3 news items
-news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
-resp      = requests.get(news_url, timeout=5)
-soup      = BeautifulSoup(resp.content, "html.parser")
-links     = soup.select("h3 a")[:3]
-headlines = []
-for a in links:
-    span = a.find_previous("span", {"class": "C(#959595)"})
-    try: d = pd.to_datetime(span.text.strip()).date()
-    except: d = None
-    headlines.append((d, a.get_text(strip=True)))
-
-# 3) Debug log in ISO format
-st.markdown("**🛠️ Debug: events in last30**")
-st.write("Last30 →", sorted(d.isoformat() for d in last30_dates))
-st.write("Earnings →", sorted(d.isoformat() for d in earnings_dates))
-st.write("Dividends →", sorted(d.isoformat() for d in dividend_dates))
-st.write("News →", [d.isoformat() if d else "None" for d,_ in headlines])
-
-# 4) Draw v‐lines only on real matches
-for d in earnings_dates:
-    if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="gold", dash="dash"),
-                      annotation_text="💰 Earnings", row=1, col=1)
-for d in dividend_dates:
-    if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="green", dash="dot"),
-                      annotation_text="💵 Dividend", row=1, col=1)
-for d, _ in headlines:
-    if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="longdash"),
-                      annotation_text="📰 News", row=1, col=1)
-
-# 5) Finally plot & list the headlines
-st.plotly_chart(fig, use_container_width=True, key="signals_events_chart")
-
-st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
-for d, txt in headlines:
-    date_str = d.isoformat() if d else "Unknown"
-    st.markdown(f"- **{date_str}**  {txt}")
+# 5) List the event headlines you actually used
+st.markdown("<div class='card'><h3>📰 Headlines on Significant Moves</h3></div>", unsafe_allow_html=True)
+if event_news:
+    for n in event_news:
+        st.markdown(f"- **{n['date'].isoformat()}**  {n['title']}", unsafe_allow_html=True)
+else:
+    st.info("No high-impact headlines found in the last 6 months.")
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
