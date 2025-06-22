@@ -541,7 +541,7 @@ fig.update_layout(
     template="plotly_dark", height=650, showlegend=True,
     title=f"{ticker} — Last 30 Days Candles, Signals & Events"
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="price_history_chart")
 
 # 6) Below the chart, list the 3 headlines
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
@@ -599,7 +599,7 @@ for d, _ in headlines:
                       annotation_text="📰 News", row=1, col=1)
 
 # 5) Finally plot & list the headlines
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="signals_events_chart")
 
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
 for d, txt in headlines:
