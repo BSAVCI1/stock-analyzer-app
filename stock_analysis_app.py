@@ -397,30 +397,51 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- 3️⃣ Trade-Signal Visualization & 4️⃣ Pattern Detection & Event Overlay ---
+# --- 3️⃣ Trade-Signal Visualization & Pattern / Event Overlay ---
 
-# 1) Build the last-30-day candlestick + volume figure
 from plotly.subplots import make_subplots
 
+# 1) Compute all of our signal dates from hist
+ma50    = hist['MA50']
+ma200   = hist['MA200']
+macd    = hist['MACD']
+macd_sig= hist['MACD_sig']
+
+# Golden / Death Crosses
+gcross = hist.index[(ma50.shift(1) < ma200.shift(1)) & (ma50 > ma200)]
+dcross = hist.index[(ma50.shift(1) > ma200.shift(1)) & (ma50 < ma200)]
+
+# MACD crossovers
+mb_dates = hist.index[(macd.shift(1) < macd_sig.shift(1)) & (macd > macd_sig)]
+ms_dates = hist.index[(macd.shift(1) > macd_sig.shift(1)) & (macd < macd_sig)]
+
+# Doji: |Close–Open| ≤ 10% of (High–Low)
+doji_dates = hist.index[
+    (hist['Close'] - hist['Open']).abs() <= 0.1 * (hist['High'] - hist['Low'])
+]
+
+# 2) Build the 30-day candlestick + volume chart
 last30 = hist.tail(30)
 fig = make_subplots(
     rows=2, cols=1, shared_xaxes=True,
-    row_heights=[0.7,0.3], vertical_spacing=0.05
+    row_heights=[0.7, 0.3], vertical_spacing=0.05
 )
 
-# price candles
+# Price candles
 fig.add_trace(go.Candlestick(
     x=last30.index, open=last30['Open'], high=last30['High'],
-    low=last30['Low'], close=last30['Close'], name="Price"
+    low=last30.index.map(lambda d: last30.loc[d,'Low']),
+    close=last30.index.map(lambda d: last30.loc[d,'Close']),
+    name="Price"
 ), row=1, col=1)
 
-# volume bars
+# Volume bars
 fig.add_trace(go.Bar(
-    x=last30.index, y=last30['Volume'], name="Volume",
-    marker_color='grey'
+    x=last30.index, y=last30['Volume'],
+    name="Volume", marker_color='grey'
 ), row=2, col=1)
 
-# 2) Overlay your technical markers (only if they fall in last30)
+# 3) Overlay our signals (only if in last30)
 for d in gcross:
     if d in last30.index:
         fig.add_trace(go.Scatter(
@@ -429,6 +450,7 @@ for d in gcross:
             marker=dict(symbol='triangle-up', size=12, color='green'),
             name='Golden Cross'
         ), row=1, col=1)
+
 for d in dcross:
     if d in last30.index:
         fig.add_trace(go.Scatter(
@@ -437,22 +459,25 @@ for d in dcross:
             marker=dict(symbol='triangle-down', size=12, color='red'),
             name='Death Cross'
         ), row=1, col=1)
+
 for d in mb_dates:
     if d in last30.index:
         fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'Low']*0.995],
+            x=[d], y=[last30.loc[d,'Low'] * 0.995],
             mode='markers',
             marker=dict(symbol='circle', size=8, color='blue'),
             name='MACD Buy'
         ), row=1, col=1)
+
 for d in ms_dates:
     if d in last30.index:
         fig.add_trace(go.Scatter(
-            x=[d], y=[last30.loc[d,'High']*1.005],
+            x=[d], y=[last30.loc[d,'High'] * 1.005],
             mode='markers',
             marker=dict(symbol='circle', size=8, color='orange'),
             name='MACD Sell'
         ), row=1, col=1)
+
 for d in doji_dates:
     if d in last30.index:
         fig.add_trace(go.Scatter(
@@ -462,63 +487,67 @@ for d in doji_dates:
             name='Doji'
         ), row=1, col=1)
 
-# 3) Now overlay Earnings, Dividends & News vertical lines
-#    — only draw if the date is within last30
-last30_dates = {dt.date() for dt in last30.index}
+# 4) Event overlay: Earnings, Dividends, News
+#    match on date().  
+last30_dates = {d.date() for d in last30.index}
 
-# earnings
-raw_e = data.calendar.get('Earnings Date', []) or []
-earnings_dates = []
-for e in (raw_e if isinstance(raw_e,(list,tuple)) else [raw_e]):
+# Earnings dates from yfinance calendar
+earn_raw = data.calendar.get('Earnings Date', [])
+earnings = []
+for e in (earn_raw if isinstance(earn_raw,(list,tuple)) else [earn_raw]):
     d = e[0] if isinstance(e,(list,tuple)) else e
-    try:
-        earnings_dates.append(pd.to_datetime(d).date())
-    except:
-        pass
+    try: earnings.append(pd.to_datetime(d).date())
+    except: pass
 
-# dividends
+# Dividend dates
 div_dates = [d.date() for d in data.dividends.index]
 
-# news headlines
-news_url = f"https://finance.yahoo.com/quote/{ticker}/news"
-resp     = requests.get(news_url, timeout=5)
-soup     = BeautifulSoup(resp.content, 'html.parser')
-links    = soup.select("h3 a")[:3]
+# Top-3 Yahoo Finance news headlines
+news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
+resp      = requests.get(news_url, timeout=5)
+soup      = BeautifulSoup(resp.content, 'html.parser')
+links     = soup.select("h3 a")[:3]
 headlines = []
 for a in links:
     span = a.find_previous("span", {"class":"C(#959595)"})
     try:
-        nd = pd.to_datetime(span.text.strip()).date()
+        nd = pd.to_datetime(span.text).date()
     except:
         nd = None
     headlines.append((nd, a.get_text(strip=True)))
 
-# draw vlines
-for d in earnings_dates:
+# Draw v-lines for each event in-range
+for d in earnings:
     if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="gold", dash="dash"),
-                      annotation_text="💰 Earnings", row=1, col=1)
+        fig.add_vline(
+            x=pd.Timestamp(d), line=dict(color="gold", dash="dash"),
+            annotation_text="💰 Earnings", row=1, col=1
+        )
 for d in div_dates:
     if d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="green", dash="dot"),
-                      annotation_text="💵 Dividend", row=1, col=1)
-for d, _ in headlines:
-    if d and d in last30_dates:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="longdash"),
-                      annotation_text="📰 News", row=1, col=1)
+        fig.add_vline(
+            x=pd.Timestamp(d), line=dict(color="green", dash="dot"),
+            annotation_text="💵 Dividend", row=1, col=1
+        )
+for nd, _ in headlines:
+    if nd and nd in last30_dates:
+        fig.add_vline(
+            x=pd.Timestamp(nd), line=dict(color="cyan", dash="longdash"),
+            annotation_text="📰 News", row=1, col=1
+        )
 
-# 4) Finalize & render the figure
+# 5) Final layout & render
 fig.update_layout(
     template="plotly_dark", height=650, showlegend=True,
-    title=f"{ticker} — Last 30 Days with Signals & Events"
+    title=f"{ticker} — Last 30 Days Candles, Signals & Events"
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# 5) List your headlines below
+# 6) Below the chart, list the 3 headlines
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
-for d, txt in headlines:
-    date_str = d.isoformat() if d else "Unknown"
-    st.markdown(f"- **{date_str}**  {txt}")
+for dt, txt in headlines:
+    date_str = dt.isoformat() if dt else "Unknown"
+    st.markdown(f"- **{date_str}**  {txt}", unsafe_allow_html=True)
     
 # --- EVENT & NEWS OVERLAY (debuggable) ---
 
