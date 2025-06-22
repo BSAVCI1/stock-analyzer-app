@@ -332,6 +332,49 @@ for dt,color,txt in [(earn_dates,"gold","💰 Earnings"),(divs,"green","💵 Div
     row=1, col=1
 )
 
+# label the earnings lines
+for d in earn_dates:
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['High'].max(),     # or whatever vertical position you like
+            xref="x", yref="y",
+            text="💰 Earnings",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="gold",
+            font=dict(color="gold")
+        )
+
+# label the dividends lines
+for d in div_dates:
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['High'].max()*0.95,  # slightly lower
+            xref="x", yref="y",
+            text="💵 Dividend",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="green",
+            font=dict(color="green")
+        )
+
+# label the news lines
+for n in event_news:
+    d = n["date"]
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['Low'].min(),      # near bottom
+            xref="x", yref="y",
+            text="📰 News",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="cyan",
+            font=dict(color="cyan")
+        )
+
 for n in event_news:
     d=datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
     if d in last30.index.date:
@@ -341,6 +384,48 @@ for n in event_news:
     row=1, col=1
 )
 
+# label the earnings lines
+for d in earn_dates:
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['High'].max(),     # or whatever vertical position you like
+            xref="x", yref="y",
+            text="💰 Earnings",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="gold",
+            font=dict(color="gold")
+        )
+
+# label the dividends lines
+for d in div_dates:
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['High'].max()*0.95,  # slightly lower
+            xref="x", yref="y",
+            text="💵 Dividend",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="green",
+            font=dict(color="green")
+        )
+
+# label the news lines
+for n in event_news:
+    d = n["date"]
+    if d in last30.index.date:
+        fig.add_annotation(
+            x=pd.Timestamp(d),
+            y=last30['Low'].min(),      # near bottom
+            xref="x", yref="y",
+            text="📰 News",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="cyan",
+            font=dict(color="cyan")
+        )
 
 fig.update_layout(template="plotly_dark",height=650,showlegend=True,title=f"{ticker} — Last 30d: Candles, Signals & Events")
 st.plotly_chart(fig,use_container_width=True,key="signals_events")
