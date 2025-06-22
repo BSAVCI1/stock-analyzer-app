@@ -439,77 +439,66 @@ fig.add_trace(go.Bar(
 
 # --- EVENT & NEWS OVERLAY (debuggable) ---
 
-# 0) Use the last 30 rows so we know exactly what we’re charting
-last30 = hist.tail(30).copy()
-# This should be a set of datetime.date objects, not strings
-last30_dates = set(last30.index.date)
+# 0) Grab exactly the last 30 rows (bars)
+last30      = hist.tail(30).copy()
+last30_dates = {d.date() for d in last30.index}
 
-# 1) Pull earnings & dividend dates as date objects
+# 1) Earnings & dividends dates as date objects
 earnings_dates = []
-raw_cal = data.calendar
-if hasattr(raw_cal, "get") and raw_cal.get("Earnings Date"):
-    raw = raw_cal["Earnings Date"]
-    # sometimes it's nested: [[Timestamp], …]
-    entries = raw if isinstance(raw, (list, tuple)) else [raw]
-    for e in entries:
-        # unwrap lists
-        dt = e[0] if isinstance(e, (list, tuple)) else e
-        try:
-            earnings_dates.append(pd.to_datetime(dt).date())
-        except:
-            pass
+cal = data.calendar or {}
+raw_e = cal.get("Earnings Date", [])
+for entry in (raw_e if isinstance(raw_e, (list,tuple)) else [raw_e]):
+    # unwrap nested lists/tuples
+    dt = entry[0] if isinstance(entry, (list,tuple)) else entry
+    try:
+        earnings_dates.append(pd.to_datetime(dt).date())
+    except:
+        pass
 
 dividend_dates = [d.date() for d in data.dividends.index]
 
-# 2) Scrape 3 headlines with their dates
+# 2) Scrape top 3 headlines & their dates
 news_url  = f"https://finance.yahoo.com/quote/{ticker}/news"
 resp      = requests.get(news_url, timeout=5)
 soup      = BeautifulSoup(resp.content, "html.parser")
-items     = soup.select("h3 a")[:3]
+links     = soup.select("h3 a")[:3]
 headlines = []
-for a in items:
-    # find the little gray date span
-    date_tag = a.find_previous("span", {"class": "C(#959595)"})
+for a in links:
+    span = a.find_previous("span", {"class": "C(#959595)"})
     try:
-        dt = pd.to_datetime(date_tag.text.strip()).date()
+        d = pd.to_datetime(span.text.strip()).date()
     except:
-        dt = None
-    headlines.append((dt, a.get_text(strip=True)))
+        d = None
+    headlines.append((d, a.get_text(strip=True)))
 
-# 3) DEBUG: print them in ISO format
-st.markdown("**🛠️ Debug: which dates overlap?**")
-st.write("Last 30 days →", [d.isoformat() for d in sorted(last30_dates)])
-st.write("Earnings dates →", [d.isoformat() for d in earnings_dates])
-st.write("Dividend dates →", [d.isoformat() for d in dividend_dates])
-st.write("News dates →", [d.isoformat() if d else "None" for d,_ in headlines])
+# 3) DEBUG: print ISO dates so we can actually *see* a match
+st.markdown("**🛠️ Debug: events in last30 date range**")
+st.write("Last30 →", sorted(d.isoformat() for d in last30_dates))
+st.write("Earnings →", sorted(d.isoformat() for d in earnings_dates))
+st.write("Dividends →", sorted(d.isoformat() for d in dividend_dates))
+st.write("News →", [d.isoformat() if d else "None" for d,_ in headlines])
 
-# 4) Only draw v-lines if the date is present in our 30-bar window
+# 4) Draw v-lines only when there's a real date match
 for d in earnings_dates:
     if d in last30_dates:
-        fig.add_vline(
-            x=pd.Timestamp(d),
-            line=dict(color="gold", dash="dash"),
-            annotation_text="💰 Earnings",
-            row=1, col=1
-        )
+        fig.add_vline(x=pd.Timestamp(d),
+                      line=dict(color="gold", dash="dash"),
+                      annotation_text="💰 Earnings",
+                      row=1, col=1)
 for d in dividend_dates:
     if d in last30_dates:
-        fig.add_vline(
-            x=pd.Timestamp(d),
-            line=dict(color="green", dash="dot"),
-            annotation_text="💵 Dividend",
-            row=1, col=1
-        )
-for d, txt in headlines:
+        fig.add_vline(x=pd.Timestamp(d),
+                      line=dict(color="green", dash="dot"),
+                      annotation_text="💵 Dividend",
+                      row=1, col=1)
+for d, _ in headlines:
     if d in last30_dates:
-        fig.add_vline(
-            x=pd.Timestamp(d),
-            line=dict(color="cyan", dash="longdash"),
-            annotation_text="📰 News",
-            row=1, col=1
-        )
+        fig.add_vline(x=pd.Timestamp(d),
+                      line=dict(color="cyan", dash="longdash"),
+                      annotation_text="📰 News",
+                      row=1, col=1)
 
-# 5) Finally list out the headlines below the chart
+# 5) Finally render the headlines underneath
 st.markdown("<div class='card'><h3>📰 Recent Headlines</h3></div>", unsafe_allow_html=True)
 for d, txt in headlines:
     date_str = d.isoformat() if d else "Unknown"
