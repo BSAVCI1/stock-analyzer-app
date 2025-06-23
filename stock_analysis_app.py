@@ -59,10 +59,15 @@ else:
     text = st.sidebar.text_input("Or enter peers (comma separated)", ",".join(popular))
     peer_list = [p.strip().upper() for p in text.split(",") if p.strip()]
 
-# --- FETCH & PREPARE HISTORICAL ---
+# --- FETCH DATA ---
+data = yf.Ticker(ticker)
+info = data.info
 hist = data.history(period="6mo")
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
+
+# --- DIVIDEND DATES FIX ---
+div_dates = [dt.date() for dt in data.dividends.index]
 
 # Safe previous-close lookup
 prev_close = hist['Close'].shift(1).iloc[-1]
@@ -359,19 +364,14 @@ for d in earn_dates:
         )
 
 # label the dividends lines
-for d in div_dates:
-    if d in last30.index.date:
-        fig.add_annotation(
-            x=pd.Timestamp(d),
-            y=last30['High'].max()*0.95,  # slightly lower
-            xref="x", yref="y",
-            text="💵 Dividend",
-            showarrow=True,
-            arrowhead=2,
-            arrowcolor="green",
-            font=dict(color="green")
+for dt in div_dates:
+    if dt in set(last30.index.date):
+        fig.add_vline(
+            x=pd.Timestamp(dt),
+            line=dict(color="green", dash="dot"),
+            annotation_text="💵 Dividend",
+            row=1, col=1
         )
-
 # label the news lines
 for n in event_news:
     d = n["date"]
