@@ -5,3 +5,4 @@ numpy
 matplotlib
 openai==0.28
 plotly
+feedparser
