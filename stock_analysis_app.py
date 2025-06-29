@@ -367,95 +367,42 @@ st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.
 # Ensure required libraries
 import datetime
 
-# --- 3️⃣ Signals & Events Overlay ---
-
-# compute signal dates
-ma50s = hist['MA50']
-ma200s = hist['MA200']
-macd = hist['MACD']
-macdsig = hist['MACDs']
-
-gcross = hist.index[(ma50s.shift(1) < ma200s.shift(1)) & (ma50s > ma200s)]
-dcross = hist.index[(ma50s.shift(1) > ma200s.shift(1)) & (ma50s < ma200s)]
-mbuy = hist.index[(macd.shift(1) < macdsig.shift(1)) & (macd > macdsig)]
-msell = hist.index[(macd.shift(1) > macdsig.shift(1)) & (macd < macdsig)]
-doji = hist.index[(hist['Close'] - hist['Open']).abs() <= 0.1 * (hist['High'] - hist['Low'])]
-
-# Filter last 30 rows
-last30 = hist.tail(30)
-
-# Create figure
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
-fig.add_trace(go.Candlestick(x=last30.index, open=last30['Open'], high=last30['High'],
-                             low=last30['Low'], close=last30['Close'], name="Price"), row=1, col=1)
-fig.add_trace(go.Bar(x=last30.index, y=last30['Volume'], marker_color='grey', name="Volume"), row=2, col=1)
-
-# Plot signal markers if in last30
-for dates, name, color, symbol in [
-    (gcross, "Golden Cross", "green", "triangle-up"),
-    (dcross, "Death Cross", "red", "triangle-down"),
-    (mbuy, "MACD Buy", "blue", "circle"),
-    (msell, "MACD Sell", "orange", "circle"),
-    (doji, "Doji", "purple", "x"),
-]:
-    for d in dates:
-        if d in last30.index:
-            y = last30.loc[d, 'Close']
-            if name == "MACD Buy":
-                y = last30.loc[d, 'Low'] * 0.995
-            if name == "MACD Sell":
-                y = last30.loc[d, 'High'] * 1.005
-            fig.add_trace(go.Scatter(x=[d], y=[y], mode='markers',
-                                     marker=dict(symbol=symbol, size=10, color=color),
-                                     name=name), row=1, col=1)
-
-# Handle earnings and dividends
-earn = data.calendar.get("Earnings Date", []) or []
-earn_dates = []
-
-earn_iterable = earn if isinstance(earn, (list, tuple)) else [earn]
-for e in earn_iterable:
-    d = e[0] if isinstance(e, (list, tuple)) else e
+# --- Fetch news from Yahoo Finance (yfinance) ---
+def get_news_yfinance(symbol):
     try:
-        earn_dates.append(pd.to_datetime(d).date())
+        ticker = yf.Ticker(symbol)
+        raw = getattr(ticker, "news", []) or []
+        return [
+            {
+                "title": n.get("title", ""),
+                "providerPublishTime": n.get("providerPublishTime")
+            }
+            for n in raw if n.get("providerPublishTime")
+        ]
     except:
-        pass
+        return []
 
-div_dates = [dt.date() for dt in data.dividends.index]
-
-for d in earn_dates:
-    if d in last30.index.date:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="gold", dash="dash"), row=1, col=1)
-        fig.add_annotation(x=pd.Timestamp(d), y=last30['High'].max(),
-                           xref="x", yref="y", text="💰 Earnings",
-                           showarrow=True, arrowhead=2, font=dict(color="gold"))
-
-for d in div_dates:
-    if d in last30.index.date:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="green", dash="dot"), row=1, col=1)
-        fig.add_annotation(x=pd.Timestamp(d), y=last30['High'].max() * 0.95,
-                           xref="x", yref="y", text="💵 Dividend",
-                           showarrow=True, arrowhead=2, font=dict(color="green"))
+# Load news
+rawnews = get_news_yfinance(ticker)
 
 # --- News Events ---
 sixmo = datetime.datetime.now() - datetime.timedelta(days=180)
-rawnews = getattr(data, "news", []) or []
-
-# fix datetime and presence
 filtered = [
     n for n in rawnews
     if n.get("providerPublishTime") and
     datetime.datetime.fromtimestamp(n["providerPublishTime"]) >= sixmo
 ]
 
-# news on big price move days
+# Detect big move days
 bigdays = set(hist.index[hist['Close'].pct_change().abs() > 0.05].date)
+
+# Filter for impactful news
 event_news = [
     n for n in filtered
     if datetime.datetime.fromtimestamp(n["providerPublishTime"]).date() in bigdays
 ]
 
-# draw news annotations
+# Overlay news on chart
 for n in event_news:
     d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
     if d in last30.index.date:
@@ -464,19 +411,14 @@ for n in event_news:
                            xref="x", yref="y", text="📰 News",
                            showarrow=True, arrowhead=2, font=dict(color="cyan"))
 
-# finalize chart
-fig.update_layout(template="plotly_dark", height=650, showlegend=True,
-                  title=f"{ticker} — Last 30d: Candles, Signals & Events")
-st.plotly_chart(fig, use_container_width=True, key="signals_events")
-
-# --- News display ---
+# --- News display below chart ---
 st.markdown("<div class='card'><h3>📰 Headlines on Big Moves</h3></div>", unsafe_allow_html=True)
 if event_news:
     for n in event_news:
         d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
         st.markdown(f"- **{d.isoformat()}**  {n['title']}", unsafe_allow_html=True)
 else:
-    st.info("No high-impact headlines in last 6 months.")
+    st.info("No high-impact headlines found in the last 6 months.")
 
 # --- PEER COMPARISON MODULE ---
 st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
