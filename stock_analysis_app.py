@@ -427,6 +427,9 @@ filtered = [
 # Detect big move days
 bigdays = set(hist.index[hist['Close'].pct_change().abs() > 0.05].date)
 
+# Prepare last 30 days of data (used for plotting)
+last30 = hist.tail(30)
+
 # Filter for impactful news
 event_news = [
     n for n in filtered
@@ -438,10 +441,7 @@ for n in event_news:
     d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
     if d in last30.index.date:
         fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="dot"), row=1, col=1)
-        fig.add_annotation(x=pd.Timestamp(d), y=last30['Low'].min(),
-                           xref="x", yref="y", text="📰 News",
-                           showarrow=True, arrowhead=2, font=dict(color="cyan"))
-
+        
 # --- 5️⃣ Display news below chart ---
 st.markdown("<div class='card'><h3>📰 Headlines on Big Moves</h3></div>", unsafe_allow_html=True)
 if event_news:
