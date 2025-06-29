@@ -9,6 +9,9 @@ from plotly.subplots import make_subplots
 from bs4 import BeautifulSoup
 import requests
 import datetime
+import feedparser
+import feedparser
+import time
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
@@ -367,25 +370,53 @@ st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.
 # Ensure required libraries
 import datetime
 
-# --- Fetch news from Yahoo Finance (yfinance) ---
+# --- 1️⃣ Try yfinance built-in news (may fail silently) ---
 def get_news_yfinance(symbol):
     try:
         ticker = yf.Ticker(symbol)
         raw = getattr(ticker, "news", []) or []
-        return [
+        news = [
             {
                 "title": n.get("title", ""),
                 "providerPublishTime": n.get("providerPublishTime")
             }
             for n in raw if n.get("providerPublishTime")
         ]
-    except:
+        if news:
+            st.success("✅ News loaded from Yahoo Finance (yfinance)")
+        return news
+    except Exception as e:
+        st.warning(f"⚠️ yfinance news error: {e}")
         return []
 
-# Load news
-rawnews = get_news_yfinance(ticker)
+# --- 2️⃣ Fallback: Yahoo RSS feed (no API key needed) ---
+def get_yahoo_rss_news(symbol):
+    try:
+        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+        feed = feedparser.parse(url)
+        news = []
+        for entry in feed.entries:
+            published_parsed = entry.get("published_parsed")
+            if published_parsed:
+                published_time = time.mktime(published_parsed)
+                news.append({
+                    "title": entry.title,
+                    "providerPublishTime": published_time
+                })
+        if news:
+            st.success("✅ News loaded from Yahoo Finance RSS Feed")
+        return news
+    except Exception as e:
+        st.warning(f"⚠️ RSS feed error: {e}")
+        return []
 
-# --- News Events ---
+# --- 3️⃣ Load from yfinance, fallback to RSS ---
+rawnews = get_news_yfinance(ticker)
+if not rawnews:
+    st.info("ℹ️ Falling back to RSS feed...")
+    rawnews = get_yahoo_rss_news(ticker)
+
+# --- News Filtering ---
 sixmo = datetime.datetime.now() - datetime.timedelta(days=180)
 filtered = [
     n for n in rawnews
@@ -402,7 +433,7 @@ event_news = [
     if datetime.datetime.fromtimestamp(n["providerPublishTime"]).date() in bigdays
 ]
 
-# Overlay news on chart
+# --- 4️⃣ Overlay news on chart ---
 for n in event_news:
     d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
     if d in last30.index.date:
@@ -411,7 +442,7 @@ for n in event_news:
                            xref="x", yref="y", text="📰 News",
                            showarrow=True, arrowhead=2, font=dict(color="cyan"))
 
-# --- News display below chart ---
+# --- 5️⃣ Display news below chart ---
 st.markdown("<div class='card'><h3>📰 Headlines on Big Moves</h3></div>", unsafe_allow_html=True)
 if event_news:
     for n in event_news:
