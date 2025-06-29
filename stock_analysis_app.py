@@ -302,7 +302,12 @@ hist['Signal'] = [""] + signals  # Add empty first signal
 
 # --- DISPLAY SIGNAL TABLE ---
 st.subheader("📊 Technical Signals Table")
-st.dataframe(hist[['Close', 'RSI', 'MACD', 'MACDs', 'BBpctB', 'MA20', 'MA50', 'Signal']].dropna().tail(50))
+st.dataframe(
+    hist[['Close', 'RSI', 'MACD', 'MACDs', 'BBpctB', 'MA20', 'MA50', 'Signal']]
+    .dropna()
+    .tail(50)
+    .iloc[::-1]  # newest data on top
+)
 
 # signals & overview
 recent = hist.last('90D')
