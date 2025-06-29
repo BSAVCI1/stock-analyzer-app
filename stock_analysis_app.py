@@ -34,7 +34,7 @@ st.markdown("""
 
 # --- USER INPUT & PEERS ---
 st.sidebar.header("Select Stock & Peers")
-popular = ["BBAI","ARRC","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
+popular = ["BBAI","ARCC","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
 ticker_select = st.sidebar.selectbox("Choose from popular tickers", popular, index=popular.index("SPCE"))
 ticker_input  = st.sidebar.text_input("Or enter any ticker symbol", "").upper().strip()
 ticker = ticker_input or ticker_select
