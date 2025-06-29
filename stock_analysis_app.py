@@ -226,40 +226,83 @@ def render_fundamental_analysis(ticker):
     st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>", unsafe_allow_html=True)
 
 render_fundamental_analysis(ticker)
-
 # --- TECHNICAL PARAMETER CONTROLS ---
 st.sidebar.header("🔧 Technical Settings")
-rsi_p   = st.sidebar.slider("RSI Period",5,30,14)
-macd_f  = st.sidebar.slider("MACD Fast EMA",5,30,12)
-macd_s  = st.sidebar.slider("MACD Slow EMA",10,60,26)
-macd_sig= st.sidebar.slider("MACD Signal EMA",5,20,9)
-bb_w    = st.sidebar.slider("BB Window",10,60,20)
-bb_m    = st.sidebar.slider("BB Std Mult",1.0,3.0,2.0)
-atr_p   = st.sidebar.slider("ATR Period",5,30,14)
+rsi_p   = st.sidebar.slider("RSI Period", 5, 30, 14)
+macd_f  = st.sidebar.slider("MACD Fast EMA", 5, 30, 12)
+macd_s  = st.sidebar.slider("MACD Slow EMA", 10, 60, 26)
+macd_sig= st.sidebar.slider("MACD Signal EMA", 5, 20, 9)
+bb_w    = st.sidebar.slider("BB Window", 10, 60, 20)
+bb_m    = st.sidebar.slider("BB Std Mult", 1.0, 3.0, 2.0)
+atr_p   = st.sidebar.slider("ATR Period", 5, 30, 14)
 
-# recompute with settings
-hist['MA20']    = hist['Close'].rolling(rsi_p).mean()
+# --- TECHNICAL INDICATORS COMPUTATION ---
+hist['MA20']    = hist['Close'].rolling(20).mean()
 hist['MA50']    = hist['Close'].rolling(50).mean()
 hist['MA200']   = hist['Close'].rolling(200).mean()
+
 delta          = hist['Close'].diff()
 gain           = delta.clip(lower=0).rolling(rsi_p).mean()
 loss           = -delta.clip(upper=0).rolling(rsi_p).mean()
-hist['RSI']    = 100 - (100/(1+gain/loss))
-hist['EMAf']   = hist['Close'].ewm(span=macd_f).mean()
-hist['EMAs']   = hist['Close'].ewm(span=macd_s).mean()
+hist['RSI']    = 100 - (100 / (1 + gain / loss))
+
+hist['EMAf']   = hist['Close'].ewm(span=macd_f, adjust=False).mean()
+hist['EMAs']   = hist['Close'].ewm(span=macd_s, adjust=False).mean()
 hist['MACD']   = hist['EMAf'] - hist['EMAs']
-hist['MACDs']  = hist['MACD'].ewm(span=macd_sig).mean()
+hist['MACDs']  = hist['MACD'].ewm(span=macd_sig, adjust=False).mean()
 hist['MACD_h'] = hist['MACD'] - hist['MACDs']
+
 hist['BBm']    = hist['Close'].rolling(bb_w).mean()
 hist['BBstd']  = hist['Close'].rolling(bb_w).std()
-hist['BBu']    = hist['BBm'] + bb_m*hist['BBstd']
-hist['BBl']    = hist['BBm'] - bb_m*hist['BBstd']
-hist['BBpctB'] = (hist['Close']-hist['BBl'])/(hist['BBu']-hist['BBl'])
-tr             = pd.concat([hist['High']-hist['Low'],
-                             (hist['High']-hist['Close'].shift()).abs(),
-                             (hist['Low'] -hist['Close'].shift()).abs()], axis=1).max(axis=1)
+hist['BBu']    = hist['BBm'] + bb_m * hist['BBstd']
+hist['BBl']    = hist['BBm'] - bb_m * hist['BBstd']
+hist['BBpctB'] = (hist['Close'] - hist['BBl']) / (hist['BBu'] - hist['BBl'])
+
+tr             = pd.concat([
+    hist['High'] - hist['Low'],
+    (hist['High'] - hist['Close'].shift()).abs(),
+    (hist['Low'] - hist['Close'].shift()).abs()
+], axis=1).max(axis=1)
 hist['ATR']    = tr.rolling(atr_p).mean()
-hist['OBV']    = (np.sign(hist['Close'].diff())*hist['Volume']).fillna(0).cumsum()
+
+hist['OBV']    = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
+
+# --- SIGNAL GENERATION ---
+signals = []
+
+for i in range(1, len(hist)):
+    signal = ""
+    # RSI Signal
+    if hist['RSI'].iloc[i] < 30:
+        signal += "RSI Buy | "
+    elif hist['RSI'].iloc[i] > 70:
+        signal += "RSI Sell | "
+
+    # MACD Crossover
+    if hist['MACD'].iloc[i] > hist['MACDs'].iloc[i] and hist['MACD'].iloc[i-1] <= hist['MACDs'].iloc[i-1]:
+        signal += "MACD Buy | "
+    elif hist['MACD'].iloc[i] < hist['MACDs'].iloc[i] and hist['MACD'].iloc[i-1] >= hist['MACDs'].iloc[i-1]:
+        signal += "MACD Sell | "
+
+    # Bollinger Band Signal
+    if hist['Close'].iloc[i] < hist['BBl'].iloc[i]:
+        signal += "BB Buy | "
+    elif hist['Close'].iloc[i] > hist['BBu'].iloc[i]:
+        signal += "BB Sell | "
+
+    # Moving Average Crossover (MA20 vs MA50)
+    if hist['MA20'].iloc[i] > hist['MA50'].iloc[i] and hist['MA20'].iloc[i-1] <= hist['MA50'].iloc[i-1]:
+        signal += "MA Bullish | "
+    elif hist['MA20'].iloc[i] < hist['MA50'].iloc[i] and hist['MA20'].iloc[i-1] >= hist['MA50'].iloc[i-1]:
+        signal += "MA Bearish | "
+
+    signals.append(signal.strip(" | ") if signal else "Hold")
+
+hist['Signal'] = [""] + signals  # Add empty first signal
+
+# --- DISPLAY SIGNAL TABLE ---
+st.subheader("📊 Technical Signals Table")
+st.dataframe(hist[['Close', 'RSI', 'MACD', 'MACDs', 'BBpctB', 'MA20', 'MA50', 'Signal']].dropna().tail(50))
 
 # signals & overview
 recent = hist.last('90D')
