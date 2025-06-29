@@ -311,35 +311,57 @@ st.dataframe(
 
 # signals & overview
 recent = hist.last('90D')
-sup = np.percentile(recent['Low'],10)
-res = np.percentile(recent['High'],90)
+sup = np.percentile(recent['Low'], 10)
+res = np.percentile(recent['High'], 90)
 latest = hist.iloc[-1]
-cross  = ("Golden Cross ✅" if latest['MA50']>latest['MA200']
-           else "Death Cross ⚠️" if latest['MA50']<latest['MA200']
-           else "No Cross")
 
+# Golden / Death Cross logic
+cross = ("Golden Cross ✅" if latest['MA50'] > latest['MA200']
+         else "Death Cross ⚠️" if latest['MA50'] < latest['MA200']
+         else "No Cross")
+
+# RSI Signal
+rsi_sig = "Overbought 🔺" if latest['RSI'] > 70 else "Oversold 🔻" if latest['RSI'] < 30 else "Neutral ⚪"
+
+# MACD Signal
+macd_sig = "Bullish 📈" if latest['MACD'] > latest['MACDs'] else "Bearish 📉" if latest['MACD'] < latest['MACDs'] else "Neutral ⚪"
+
+# MACD Histogram
+macd_hist_sig = "Increasing Momentum 🔼" if latest['MACD_h'] > 0 else "Decreasing Momentum 🔽"
+
+# %B Signal
+bb_sig = "Above Upper Band 🔺" if latest['BBpctB'] > 1 else "Below Lower Band 🔻" if latest['BBpctB'] < 0 else "Inside Bands ⚪"
+
+# OBV Signal
+obv_sig = "Rising 📊" if hist['OBV'].iloc[-1] > hist['OBV'].iloc[-10] else "Falling 📉"
+
+# Create table
 tech_df = pd.DataFrame([
-    ["RSI",       f"{latest['RSI']:.1f}",              ""],
-    ["MACD",      f"{latest['MACD']:.2f}",             ""],
-    ["MACD Hist", f"{latest['MACD_h']:.2f}",           ""],
+    ["RSI",       f"{latest['RSI']:.1f}",              rsi_sig],
+    ["MACD",      f"{latest['MACD']:.2f}",             macd_sig],
+    ["MACD Hist", f"{latest['MACD_h']:.2f}",           macd_hist_sig],
     ["MA20/50/200", f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
-    ["%B",        f"{latest['BBpctB']:.2f}",           ""],
-    ["ATR",       f"{latest['ATR']:.2f}",              ""],
-    ["OBV",       f"{int(latest['OBV'])}",             ""],
-    ["Support",   f"{sup:.2f}",                        ""],
-    ["Resistance",f"{res:.2f}",                        ""],
-], columns=["Indicator","Value","Signal"])
+    ["%B",        f"{latest['BBpctB']:.2f}",           bb_sig],
+    ["ATR",       f"{latest['ATR']:.2f}",              "Volatility"],
+    ["OBV",       f"{int(latest['OBV'])}",             obv_sig],
+    ["Support",   f"{sup:.2f}",                        "Local Support"],
+    ["Resistance",f"{res:.2f}",                        "Local Resistance"],
+], columns=["Indicator", "Value", "Signal"])
 
+# Display
 st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
 st.dataframe(tech_df, use_container_width=True)
 
-ins=[]
-ins.append(f"RSI {latest['RSI']:.1f} ({'overbought' if latest['RSI']>70 else 'oversold' if latest['RSI']<30 else 'neutral'}).")
-ins.append(f"MACD {'+ve' if latest['MACD']>0 else '-ve'} (momentum).")
+# Additional textual insights
+ins = []
+ins.append(f"RSI {latest['RSI']:.1f} ({rsi_sig}).")
+ins.append(f"MACD {macd_sig} vs Signal Line.")
+ins.append(f"MACD Histogram shows {macd_hist_sig}.")
 ins.append(f"50/200MA: {cross}.")
-ins.append(f"%B {latest['BBpctB']:.2f} of range.")
-ins.append(f"ATR {latest['ATR']:.2f} volatility.")
-ins.append(f"OBV trend {'up' if hist['OBV'][-1]>hist['OBV'][-10] else 'down'}.")
+ins.append(f"%B {latest['BBpctB']:.2f} of range ({bb_sig}).")
+ins.append(f"ATR {latest['ATR']:.2f} indicates volatility.")
+ins.append(f"OBV trend is {obv_sig.lower()}.")
+
 st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.join(ins)}</div>", unsafe_allow_html=True)
 
 # --- 3️⃣ Signals & Events Overlay ---
