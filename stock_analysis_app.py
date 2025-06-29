@@ -412,7 +412,9 @@ for dates, name, color, symbol in [
 # Handle earnings and dividends
 earn = data.calendar.get("Earnings Date", []) or []
 earn_dates = []
-for e in (earn if isinstance(e, (list, tuple)) else [earn]):
+
+earn_iterable = earn if isinstance(earn, (list, tuple)) else [earn]
+for e in earn_iterable:
     d = e[0] if isinstance(e, (list, tuple)) else e
     try:
         earn_dates.append(pd.to_datetime(d).date())
