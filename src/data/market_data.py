@@ -215,7 +215,7 @@ def load_market_snapshot(
             interval=interval,
             auto_adjust=False,
             actions=False,
-            repair=True,
+            repair=False,
             timeout=10,
             raise_errors=True,
         )
