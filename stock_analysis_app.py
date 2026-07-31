@@ -106,6 +106,33 @@ else:
         if symbol.strip()
     ]
 
+# --- EXCLUDE SELECTED INSTRUMENT FROM PEERS ---
+# Remove blank values, duplicates and the selected ticker itself.
+cleaned_peer_list = []
+seen_peer_symbols = set()
+
+for peer_symbol in peer_list:
+    candidate = str(peer_symbol or "").strip().upper()
+
+    if not candidate:
+        continue
+
+    if candidate == ticker:
+        continue
+
+    if candidate in seen_peer_symbols:
+        continue
+
+    seen_peer_symbols.add(candidate)
+    cleaned_peer_list.append(candidate)
+
+# Keep a usable fallback if automatic or manual selection returns no peers.
+peer_list = cleaned_peer_list or [
+    symbol
+    for symbol in popular
+    if symbol != ticker
+]
+
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
@@ -486,11 +513,16 @@ else:
 
     # --- QUARTERLY EARNINGS REVIEW ---
     def render_fundamental_analysis(ticker):
-        data = yf.Ticker(ticker)
-        st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+        """Render correctly ordered quarterly financial results."""
+        company = yf.Ticker(ticker)
+
+        st.markdown(
+            "<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>",
+            unsafe_allow_html=True,
+        )
 
         try:
-            df = data.quarterly_financials.T
+            financials = company.quarterly_financials.T.copy()
         except Exception as exc:
             st.warning(
                 "Quarterly financial statements could not be loaded "
@@ -498,61 +530,177 @@ else:
             )
             return
 
-        if df.empty:
-            st.warning(
-                "No quarterly financial statements are available "
-                f"for {ticker}."
-            )
+        if not isinstance(financials, pd.DataFrame) or financials.empty:
+            st.info(f"No quarterly financial statements are available for {ticker}.")
             return
-        metrics = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
-        avail   = [m for m in metrics if m in df.columns]
-        df_q     = df[avail].iloc[:4]
-        df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-        # compute QoQ %
-        df_pct = (df_q.pct_change()*100).round(1)
-        df_pct.columns = [f"{c} % Change" for c in df_pct.columns]
+        # Yahoo normally returns newest first, but enforce the ordering explicitly.
+        financials.index = pd.to_datetime(
+            financials.index,
+            errors="coerce",
+        )
+        financials = (
+            financials.loc[~financials.index.isna()]
+            .sort_index(ascending=False)
+        )
 
-        df_show = pd.concat([df_q, df_pct],axis=1)
+        metrics = [
+            "Total Revenue",
+            "Revenue",
+            "Gross Profit",
+            "Operating Income",
+            "EBIT",
+            "Net Income",
+            "Operating Cash Flow",
+        ]
 
-        def short_fmt(x):
-            try: x=float(x)
-            except (TypeError, ValueError): return "-"
-            if abs(x)>=1e9: return f"{x/1e9:.2f}B"
-            if abs(x)>=1e6: return f"{x/1e6:.2f}M"
-            if abs(x)>=1e3: return f"{x/1e3:.2f}K"
-            return f"{x:.0f}"
+        available_metrics = [
+            metric
+            for metric in metrics
+            if metric in financials.columns
+        ]
 
-        df_fmt = df_show.copy()
-        for c in avail: df_fmt[c] = df_fmt[c].apply(short_fmt)
-        for c in df_pct.columns: df_fmt[c] = df_fmt[c].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
+        # Avoid displaying Revenue twice when Total Revenue is also available.
+        if (
+            "Total Revenue" in available_metrics
+            and "Revenue" in available_metrics
+        ):
+            available_metrics.remove("Revenue")
 
-        st.dataframe(df_fmt, width="stretch")
+        if not available_metrics:
+            st.info("No supported quarterly earnings metrics are available.")
+            return
 
-        # insights
-        latest = df_pct.index[-1]
-        prev   = df_pct.index[-2] if len(df_pct)>1 else None
-        ins    = []
-        def senti(ch):
-            if ch>5: return "strong growth"
-            if ch>0: return "modest increase"
-            if ch>-5: return "slight decline"
-            return "notable decrease"
+        quarterly_values = (
+            financials.loc[:, available_metrics]
+            .head(4)
+            .apply(pd.to_numeric, errors="coerce")
+        )
 
-        if prev:
-            for m in avail:
-                key = f"{m} % Change"
-                if key in df_pct.columns:
-                    ch = df_pct.loc[latest,key]
-                    ins.append(f"• {m} {senti(ch)} of {abs(ch):.1f}% this quarter.")
-            # analyst style
-            rc = df_pct.loc[latest,"Revenue % Change"] if "Revenue % Change" in df_pct else None
-            if rc is not None:
-                mood = "bullish" if rc>0 else "cautious"
-                ins.append(f"🧐 Analysts are {mood} on rev after a {abs(rc):.1f}% {'rise' if rc>0 else 'drop'}.")
+        if quarterly_values.empty:
+            st.info("No usable quarterly earnings values are available.")
+            return
 
-        summary = "<br>".join(ins) if ins else "No significant quarter-over-quarter changes."
-        st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>", unsafe_allow_html=True)
+        # Rows are newest to oldest.
+        # shift(-1) places the immediately preceding quarter beside each row.
+        previous_quarter = quarterly_values.shift(-1)
+
+        # Absolute denominator handles negative income values correctly:
+        # becoming more negative is deterioration, becoming less negative is improvement.
+        quarterly_changes = (
+            quarterly_values
+            .subtract(previous_quarter)
+            .divide(previous_quarter.abs())
+            .multiply(100)
+            .round(1)
+        )
+
+        percentage_frame = quarterly_changes.add_suffix(" % Change")
+
+        display_frame = pd.concat(
+            [quarterly_values, percentage_frame],
+            axis=1,
+        )
+
+        def short_format(value):
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                return "-"
+
+            if pd.isna(numeric_value):
+                return "-"
+
+            absolute_value = abs(numeric_value)
+
+            if absolute_value >= 1_000_000_000:
+                return f"{numeric_value / 1_000_000_000:.2f}B"
+
+            if absolute_value >= 1_000_000:
+                return f"{numeric_value / 1_000_000:.2f}M"
+
+            if absolute_value >= 1_000:
+                return f"{numeric_value / 1_000:.2f}K"
+
+            return f"{numeric_value:.0f}"
+
+        formatted_frame = display_frame.copy()
+
+        for metric in available_metrics:
+            formatted_frame[metric] = formatted_frame[metric].map(
+                short_format
+            )
+
+        for percentage_column in percentage_frame.columns:
+            formatted_frame[percentage_column] = (
+                formatted_frame[percentage_column]
+                .map(
+                    lambda value: (
+                        f"{value:.1f}%"
+                        if pd.notna(value)
+                        else "-"
+                    )
+                )
+            )
+
+        formatted_frame.index = (
+            pd.DatetimeIndex(formatted_frame.index)
+            .to_period("Q")
+            .astype(str)
+        )
+
+        st.dataframe(
+            formatted_frame,
+            width="stretch",
+        )
+
+        # Row zero is now the latest quarter compared with the previous quarter.
+        latest_changes = quarterly_changes.iloc[0]
+        insights = []
+
+        for metric in available_metrics:
+            change = latest_changes.get(metric)
+
+            if pd.isna(change):
+                continue
+
+            change = float(change)
+            magnitude = abs(change)
+
+            if magnitude < 0.05:
+                insights.append(
+                    f"• {metric} was broadly unchanged versus "
+                    "the previous quarter."
+                )
+                continue
+
+            if magnitude >= 10:
+                strength = "significant"
+            elif magnitude >= 5:
+                strength = "notable"
+            else:
+                strength = "modest"
+
+            direction = "increase" if change > 0 else "decrease"
+
+            insights.append(
+                f"• {metric} recorded a {strength} {direction} "
+                f"of {magnitude:.1f}% versus the previous quarter."
+            )
+
+        summary = (
+            "<br>".join(insights)
+            if insights
+            else "No valid latest-quarter comparisons are available."
+        )
+
+        st.markdown(
+            "<div class='card-dark'>"
+            "<b>💡 Earnings Insights:</b><br>"
+            f"{summary}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     render_fundamental_analysis(ticker)
 
