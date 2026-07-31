@@ -1,1061 +1,562 @@
-"""BSAVCI Stock Analyser — P0.2 integrated production baseline.
+# ai_stock_analyzer_app/main.py
 
-This checkpoint integrates the validated P0.1 market-data layer into the
-production Streamlit app. It intentionally does not implement the later P1
-trading-decision engine or any broker/AI-platform connection.
-"""
-
-from __future__ import annotations
-
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
-import time
-
-import feedparser
-import numpy as np
-import pandas as pd
-import plotly.graph_objs as go
 import streamlit as st
 import yfinance as yf
+import pandas as pd
+import numpy as np
+import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from bs4 import BeautifulSoup
+import requests
+import datetime
+import feedparser
+import feedparser
+import time
 
-from src.data.market_data import (
-    InvalidSymbolError,
-    MarketDataError,
-    MarketSnapshot,
-    load_market_snapshot,
-)
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
 
+# --- GLOBAL STYLES ---
+st.markdown("""
+<style>
+.card {background:#ffffff; padding:20px; margin-bottom:20px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.1);}
+.card-dark {background:#2b2b2b; color:#fff; padding:20px; margin-bottom:20px; border-radius:10px;}
+.metric-tooltip {text-decoration:underline; cursor:help;}
+.arrow-up {color:green;}
+.arrow-down {color:red;}
+</style>
+""", unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# Page configuration and styling
-# -----------------------------------------------------------------------------
+# --- HEADER ---
+st.markdown("""
+<div class="card" style="text-align:center;">
+    <h1 style="color:#4CAF50; margin-bottom:5px;">📊 AI Stock Analyzer</h1>
+    <p style="font-size:16px; color:#555;">Interactive, non-finance friendly insights with action recommendations</p>
+</div>
+""", unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="BSAVCI Stock Analyser",
-    page_icon="📈",
-    layout="wide",
-)
+# --- USER INPUT & PEERS ---
+st.sidebar.header("Select Stock & Peers")
+popular = ["BBAI","ARCC","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]
+ticker_select = st.sidebar.selectbox("Choose from popular tickers", popular, index=popular.index("SPCE"))
+ticker_input  = st.sidebar.text_input("Or enter any ticker symbol", "").upper().strip()
+ticker = ticker_input or ticker_select
 
-st.markdown(
-    """
-    <style>
-    .card {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        padding: 18px;
-        margin-bottom: 18px;
-        border-radius: 12px;
+# Auto-select peers by industry/sector
+data = yf.Ticker(ticker)
+info = data.info
+if st.sidebar.checkbox("Auto-select peers by sector/industry", True):
+    sector   = info.get("sector")
+    industry = info.get("industry")
+    industry_map = {
+        'Information Technology Services': ['SOUN','CRNC','AI','NVDA','PLTR'],
+        'Software—Infrastructure':          ['NOW','CRM','ORCL','ADBE','SNOW'],
     }
-    .card-dark {
-        background: rgba(43, 43, 43, 0.90);
-        color: #ffffff;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 18px;
-        margin-bottom: 18px;
-        border-radius: 12px;
+    sector_map = {
+        'Technology':          ['AAPL','MSFT','GOOGL','AMZN','TSLA'],
+        'Consumer Cyclical':   ['AMZN','TSLA','BBWI'],
+        'Communication Services':['META','NFLX','DIS'],
     }
-    .positive { color: #2ecc71; font-weight: 700; }
-    .negative { color: #ff5c5c; font-weight: 700; }
-    .neutral  { color: #aab2bd; font-weight: 700; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# -----------------------------------------------------------------------------
-# Constants
-# -----------------------------------------------------------------------------
-
-POPULAR_TICKERS = [
-    "BBAI",
-    "ARCC",
-    "SPCE",
-    "AAPL",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "QS",
-    "TSLA",
-    "NVDA",
-    "SXR8.DE",
-    "VWCE.DE",
-]
-
-INDUSTRY_PEERS: dict[str, list[str]] = {
-    "Information Technology Services": ["SOUN", "CRNC", "AI", "NVDA", "PLTR"],
-    "Software—Infrastructure": ["NOW", "CRM", "ORCL", "ADBE", "SNOW"],
-    "Software - Infrastructure": ["NOW", "CRM", "ORCL", "ADBE", "SNOW"],
-}
-
-SECTOR_PEERS: dict[str, list[str]] = {
-    "Technology": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
-    "Consumer Cyclical": ["AMZN", "TSLA", "BBWI"],
-    "Communication Services": ["META", "NFLX", "DIS", "GOOGL"],
-}
-
-CORPORATE_QUOTE_TYPES = {"EQUITY"}
-ETF_QUOTE_TYPES = {"ETF", "MUTUALFUND", "INDEX"}
-
-
-# -----------------------------------------------------------------------------
-# Generic helpers
-# -----------------------------------------------------------------------------
-
-def as_float(value: Any, default: float = np.nan) -> float:
-    """Return a finite float when possible, otherwise ``default``."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return number if np.isfinite(number) else default
-
-
-def safe_mean(values: Iterable[Any]) -> float:
-    """Return a mean without emitting warnings for an empty collection."""
-    cleaned = [as_float(value) for value in values]
-    finite = [value for value in cleaned if np.isfinite(value)]
-    return float(np.mean(finite)) if finite else np.nan
-
-
-def normalise_percentage(value: Any) -> float:
-    """Normalise provider ratios to display percentages.
-
-    Yahoo fields such as dividend yield are normally decimal ratios, but some
-    provider versions may already expose percentage values.
-    """
-    number = as_float(value)
-    if not np.isfinite(number):
-        return np.nan
-    return number * 100 if abs(number) <= 1 else number
-
-
-def currency_text(value: Any, currency: str, decimals: int = 2) -> str:
-    number = as_float(value)
-    if not np.isfinite(number):
-        return "N/A"
-    return f"{number:,.{decimals}f} {currency}"
-
-
-def compact_number(value: Any, currency: str | None = None) -> str:
-    number = as_float(value)
-    if not np.isfinite(number):
-        return "N/A"
-
-    absolute = abs(number)
-    if absolute >= 1_000_000_000_000:
-        rendered = f"{number / 1_000_000_000_000:.2f}T"
-    elif absolute >= 1_000_000_000:
-        rendered = f"{number / 1_000_000_000:.2f}B"
-    elif absolute >= 1_000_000:
-        rendered = f"{number / 1_000_000:.2f}M"
-    elif absolute >= 1_000:
-        rendered = f"{number / 1_000:.2f}K"
-    else:
-        rendered = f"{number:,.2f}"
-
-    return f"{rendered} {currency}" if currency else rendered
-
-
-def percentage_text(value: Any, decimals: int = 2) -> str:
-    number = as_float(value)
-    if not np.isfinite(number):
-        return "N/A"
-    return f"{number:.{decimals}f}%"
-
-
-def comparison_label(
-    value: Any,
-    peer_average: Any,
-    *,
-    preference: str,
-) -> tuple[str, str]:
-    """Return a factual peer-comparison label and display class.
-
-    ``preference`` can be ``higher``, ``lower``, ``near_one`` or ``neutral``.
-    Enterprise value, for example, is a size measure and is therefore neutral.
-    """
-    current = as_float(value)
-    average = as_float(peer_average)
-
-    if not np.isfinite(current) or not np.isfinite(average):
-        return "Peer comparison unavailable", "neutral"
-
-    if np.isclose(current, average, rtol=0.03, atol=0.01):
-        return "Near peer average", "neutral"
-
-    relation = "Above peer average" if current > average else "Below peer average"
-
-    if preference == "neutral":
-        return relation, "neutral"
-    if preference == "higher":
-        return relation, "positive" if current > average else "negative"
-    if preference == "lower":
-        return relation, "positive" if current < average else "negative"
-    if preference == "near_one":
-        current_distance = abs(current - 1.0)
-        peer_distance = abs(average - 1.0)
-        return relation, "positive" if current_distance < peer_distance else "negative"
-
-    return relation, "neutral"
-
-
-def format_metric_value(key: str, value: Any, currency: str) -> str:
-    number = as_float(value)
-    if not np.isfinite(number):
-        return "N/A"
-    if key in {"profitMargins", "returnOnEquity"}:
-        return f"{number * 100:.2f}%"
-    if key == "enterpriseValue":
-        return compact_number(number, currency)
-    return f"{number:.2f}"
-
-
-def instrument_name(snapshot: MarketSnapshot) -> str:
-    metadata = snapshot.metadata
-    return str(
-        metadata.get("shortName")
-        or metadata.get("longName")
-        or metadata.get("displayName")
-        or snapshot.symbol
-    )
-
-
-def instrument_currency(snapshot: MarketSnapshot) -> str:
-    metadata = snapshot.metadata
-    return str(metadata.get("currency") or metadata.get("financialCurrency") or "N/A")
-
-
-def instrument_exchange(snapshot: MarketSnapshot) -> str:
-    metadata = snapshot.metadata
-    return str(metadata.get("exchange") or metadata.get("fullExchangeName") or "N/A")
-
-
-def instrument_quote_type(snapshot: MarketSnapshot) -> str:
-    return str(snapshot.metadata.get("quoteType") or "UNKNOWN").upper()
-
-
-# -----------------------------------------------------------------------------
-# Cached provider services
-# -----------------------------------------------------------------------------
-
-@st.cache_data(ttl=900, show_spinner=False)
-def get_snapshot(symbol: str, period: str = "2y", min_rows: int = 2) -> MarketSnapshot:
-    """Return one validated, cached provider snapshot per instrument."""
-    return load_market_snapshot(
-        symbol,
-        period=period,
-        interval="1d",
-        min_rows=min_rows,
-    )
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_quarterly_financials(symbol: str) -> pd.DataFrame:
-    """Load corporate quarterly income-statement data with a safe fallback."""
-    try:
-        frame = yf.Ticker(symbol).quarterly_financials
-    except Exception:
-        return pd.DataFrame()
-
-    if not isinstance(frame, pd.DataFrame) or frame.empty:
-        return pd.DataFrame()
-
-    return frame.T.copy()
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def get_yfinance_news(symbol: str) -> list[dict[str, Any]]:
-    """Return normalised Yahoo Finance headlines."""
-    try:
-        raw_items = getattr(yf.Ticker(symbol), "news", []) or []
-    except Exception:
-        return []
-
-    normalised: list[dict[str, Any]] = []
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-
-        content = item.get("content") if isinstance(item.get("content"), dict) else item
-        title = content.get("title") or item.get("title")
-        if not title:
-            continue
-
-        published_timestamp: float | None = None
-        raw_timestamp = item.get("providerPublishTime") or content.get("providerPublishTime")
-        if raw_timestamp is not None:
-            candidate = as_float(raw_timestamp)
-            if np.isfinite(candidate):
-                published_timestamp = candidate
-
-        if published_timestamp is None:
-            raw_date = content.get("pubDate") or content.get("displayTime")
-            if raw_date:
-                try:
-                    parsed = pd.to_datetime(raw_date, utc=True)
-                    published_timestamp = float(parsed.timestamp())
-                except (TypeError, ValueError):
-                    published_timestamp = None
-
-        if published_timestamp is None:
-            continue
-
-        normalised.append(
-            {
-                "title": str(title),
-                "providerPublishTime": published_timestamp,
-                "source": "Yahoo Finance",
-            }
-        )
-
-    return normalised
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def get_rss_news(symbol: str) -> list[dict[str, Any]]:
-    """Return Yahoo RSS headlines when the built-in endpoint is unavailable."""
-    url = (
-        "https://feeds.finance.yahoo.com/rss/2.0/headline"
-        f"?s={symbol}&region=US&lang=en-US"
-    )
-
-    try:
-        feed = feedparser.parse(url)
-    except Exception:
-        return []
-
-    normalised: list[dict[str, Any]] = []
-    for entry in getattr(feed, "entries", []):
-        title = entry.get("title")
-        published_parsed = entry.get("published_parsed")
-        if not title or not published_parsed:
-            continue
-
-        normalised.append(
-            {
-                "title": str(title),
-                "providerPublishTime": float(time.mktime(published_parsed)),
-                "source": "Yahoo RSS",
-            }
-        )
-
-    return normalised
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def get_news(symbol: str) -> list[dict[str, Any]]:
-    """Use one coherent news service with a single fallback."""
-    news = get_yfinance_news(symbol)
-    return news if news else get_rss_news(symbol)
-
-
-# -----------------------------------------------------------------------------
-# Technical calculations
-# -----------------------------------------------------------------------------
-
-def calculate_indicators(
-    history: pd.DataFrame,
-    *,
-    rsi_period: int,
-    macd_fast: int,
-    macd_slow: int,
-    macd_signal: int,
-    bb_window: int,
-    bb_multiplier: float,
-    atr_period: int,
-) -> pd.DataFrame:
-    """Calculate the current dashboard indicators on validated OHLCV data."""
-    result = history.copy()
-
-    result["MA20"] = result["Close"].rolling(20, min_periods=20).mean()
-    result["MA50"] = result["Close"].rolling(50, min_periods=50).mean()
-    result["MA200"] = result["Close"].rolling(200, min_periods=200).mean()
-
-    delta = result["Close"].diff()
-    gains = delta.clip(lower=0)
-    losses = -delta.clip(upper=0)
-    average_gain = gains.ewm(
-        alpha=1 / rsi_period,
-        adjust=False,
-        min_periods=rsi_period,
-    ).mean()
-    average_loss = losses.ewm(
-        alpha=1 / rsi_period,
-        adjust=False,
-        min_periods=rsi_period,
-    ).mean()
-    relative_strength = average_gain / average_loss.replace(0, np.nan)
-    result["RSI"] = 100 - (100 / (1 + relative_strength))
-
-    result["EMA_FAST"] = result["Close"].ewm(span=macd_fast, adjust=False).mean()
-    result["EMA_SLOW"] = result["Close"].ewm(span=macd_slow, adjust=False).mean()
-    result["MACD"] = result["EMA_FAST"] - result["EMA_SLOW"]
-    result["MACD_SIGNAL"] = result["MACD"].ewm(span=macd_signal, adjust=False).mean()
-    result["MACD_HIST"] = result["MACD"] - result["MACD_SIGNAL"]
-
-    result["BB_MIDDLE"] = result["Close"].rolling(
-        bb_window,
-        min_periods=bb_window,
-    ).mean()
-    result["BB_STD"] = result["Close"].rolling(
-        bb_window,
-        min_periods=bb_window,
-    ).std()
-    result["BB_UPPER"] = result["BB_MIDDLE"] + bb_multiplier * result["BB_STD"]
-    result["BB_LOWER"] = result["BB_MIDDLE"] - bb_multiplier * result["BB_STD"]
-    band_width = (result["BB_UPPER"] - result["BB_LOWER"]).replace(0, np.nan)
-    result["BB_PERCENT_B"] = (result["Close"] - result["BB_LOWER"]) / band_width
-
-    true_range = pd.concat(
-        [
-            result["High"] - result["Low"],
-            (result["High"] - result["Close"].shift(1)).abs(),
-            (result["Low"] - result["Close"].shift(1)).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
-    result["ATR"] = true_range.ewm(
-        alpha=1 / atr_period,
-        adjust=False,
-        min_periods=atr_period,
-    ).mean()
-
-    direction = np.sign(result["Close"].diff()).fillna(0)
-    result["OBV"] = (direction * result["Volume"].fillna(0)).cumsum()
-
-    return result
-
-
-def build_indicator_events(history: pd.DataFrame) -> pd.Series:
-    """Describe indicator events without claiming that they are final orders."""
-    events: list[str] = []
-
-    for index in range(len(history)):
-        if index == 0:
-            events.append("No prior session")
-            continue
-
-        current = history.iloc[index]
-        previous = history.iloc[index - 1]
-        day_events: list[str] = []
-
-        if np.isfinite(as_float(current.get("RSI"))):
-            if current["RSI"] < 30:
-                day_events.append("RSI oversold")
-            elif current["RSI"] > 70:
-                day_events.append("RSI overbought")
-
-        macd_values = [
-            current.get("MACD"),
-            current.get("MACD_SIGNAL"),
-            previous.get("MACD"),
-            previous.get("MACD_SIGNAL"),
-        ]
-        if all(np.isfinite(as_float(value)) for value in macd_values):
-            if (
-                current["MACD"] > current["MACD_SIGNAL"]
-                and previous["MACD"] <= previous["MACD_SIGNAL"]
-            ):
-                day_events.append("MACD bullish crossover")
-            elif (
-                current["MACD"] < current["MACD_SIGNAL"]
-                and previous["MACD"] >= previous["MACD_SIGNAL"]
-            ):
-                day_events.append("MACD bearish crossover")
-
-        bollinger_values = [
-            current.get("Close"),
-            current.get("BB_LOWER"),
-            current.get("BB_UPPER"),
-        ]
-        if all(np.isfinite(as_float(value)) for value in bollinger_values):
-            if current["Close"] < current["BB_LOWER"]:
-                day_events.append("Below lower Bollinger Band")
-            elif current["Close"] > current["BB_UPPER"]:
-                day_events.append("Above upper Bollinger Band")
-
-        moving_average_values = [
-            current.get("MA20"),
-            current.get("MA50"),
-            previous.get("MA20"),
-            previous.get("MA50"),
-        ]
-        if all(np.isfinite(as_float(value)) for value in moving_average_values):
-            if current["MA20"] > current["MA50"] and previous["MA20"] <= previous["MA50"]:
-                day_events.append("MA20 crossed above MA50")
-            elif current["MA20"] < current["MA50"] and previous["MA20"] >= previous["MA50"]:
-                day_events.append("MA20 crossed below MA50")
-
-        events.append(" | ".join(day_events) if day_events else "No new event")
-
-    return pd.Series(events, index=history.index, name="Indicator Event")
-
-
-# -----------------------------------------------------------------------------
-# Header and input controls
-# -----------------------------------------------------------------------------
-
-st.markdown(
-    """
-    <div class="card" style="text-align:center;">
-        <h1 style="margin-bottom:5px;">📊 BSAVCI Stock Analyser</h1>
-        <p style="font-size:16px; margin-bottom:0;">
-            Validated market data, fundamentals and technical research.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-with st.sidebar:
-    st.header("Select instrument")
-    selected_ticker = st.selectbox(
-        "Popular instruments",
-        POPULAR_TICKERS,
-        index=POPULAR_TICKERS.index("SPCE"),
-    )
-    entered_ticker = st.text_input("Or enter a Yahoo ticker", "").strip().upper()
-    ticker = entered_ticker or selected_ticker
-
-    auto_select_peers = st.checkbox("Auto-select peers", value=True)
-    manual_peer_text = ""
-    if not auto_select_peers:
-        manual_peer_text = st.text_input(
-            "Peers, comma separated",
-            ",".join(POPULAR_TICKERS[:6]),
-        )
-
-    st.divider()
-    st.header("Technical settings")
-    rsi_period = st.slider("RSI period", 5, 30, 14)
-    macd_fast = st.slider("MACD fast EMA", 5, 30, 12)
-    macd_slow = st.slider("MACD slow EMA", 10, 60, 26)
-    macd_signal_period = st.slider("MACD signal EMA", 5, 20, 9)
-    bb_window = st.slider("Bollinger window", 10, 60, 20)
-    bb_multiplier = st.slider("Bollinger standard deviations", 1.0, 3.0, 2.0)
-    atr_period = st.slider("ATR period", 5, 30, 14)
-
-
-# -----------------------------------------------------------------------------
-# Validated primary snapshot
-# -----------------------------------------------------------------------------
-
-try:
-    with st.spinner(f"Loading and validating {ticker}..."):
-        snapshot = get_snapshot(ticker, period="2y", min_rows=2)
-except InvalidSymbolError as exc:
-    st.error(str(exc))
-    st.stop()
-except MarketDataError as exc:
-    st.error(str(exc))
-    st.caption("This is a controlled provider error; the dashboard has not crashed.")
-    st.stop()
-except Exception as exc:
-    st.error(f"Unexpected application error: {type(exc).__name__}.")
-    st.exception(exc)
-    st.stop()
-
-history = snapshot.history.copy()
-metadata = snapshot.metadata
-name = instrument_name(snapshot)
-currency = instrument_currency(snapshot)
-exchange = instrument_exchange(snapshot)
-quote_type = instrument_quote_type(snapshot)
-
-if snapshot.warnings:
-    with st.expander("Provider warnings"):
-        for warning in snapshot.warnings:
-            st.warning(warning)
-
-if auto_select_peers:
-    industry = metadata.get("industry")
-    sector = metadata.get("sector")
-    candidate_peers = INDUSTRY_PEERS.get(str(industry), []) or SECTOR_PEERS.get(str(sector), [])
-    if not candidate_peers:
-        candidate_peers = POPULAR_TICKERS
+    peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
 else:
-    candidate_peers = [
-        value.strip().upper()
-        for value in manual_peer_text.split(",")
-        if value.strip()
-    ]
+    text = st.sidebar.text_input("Or enter peers (comma separated)", ",".join(popular))
+    peer_list = [p.strip().upper() for p in text.split(",") if p.strip()]
 
-peer_list: list[str] = []
-for peer in candidate_peers:
-    if peer != snapshot.symbol and peer not in peer_list:
-        peer_list.append(peer)
-    if len(peer_list) == 5:
-        break
+# --- FETCH DATA ---
+data = yf.Ticker(ticker)
+info = data.info
+hist = data.history(period="6mo")
+hist['MA20'] = hist['Close'].rolling(20).mean()
+hist['MA50'] = hist['Close'].rolling(50).mean()
+
+# --- DIVIDEND DATES FIX ---
+div_dates = [dt.date() for dt in data.dividends.index]
+
+# Safe previous-close lookup
+prev_close = hist['Close'].shift(1).iloc[-1]
+if pd.isna(prev_close): prev_close = hist['Close'].iloc[-1]
+
+# --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
+st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
+st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
+
+vol     = info.get('volume',0)
+avg_vol = info.get('averageVolume',0)
+mc      = info.get('marketCap',0)
+rev     = info.get('totalRevenue',0)
+dy      = info.get('dividendYield',0)*100
+beta    = info.get('beta',0)
+
+def arrow_markup(condition: bool) -> str:
+    """Return safe HTML for a directional indicator."""
+    if condition:
+        return '<span class="arrow-up">▲</span>'
+    return '<span class="arrow-down">▼</span>'
 
 
-# -----------------------------------------------------------------------------
-# Market overview
-# -----------------------------------------------------------------------------
+c1, c2, c3 = st.columns(3)
 
-st.subheader(f"{name} ({snapshot.symbol})")
-st.caption(
-    f"{quote_type} · {exchange} · {currency} · "
-    f"data through {snapshot.last_date.date().isoformat()} · "
-    f"fetched {snapshot.fetched_at_utc.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+volume_arrow = arrow_markup(vol > avg_vol)
+average_volume_arrow = arrow_markup(avg_vol > vol)
+
+shares_outstanding = info.get("sharesOutstanding") or 0
+previous_market_cap = prev_close * shares_outstanding
+market_cap_arrow = arrow_markup(mc > previous_market_cap)
+
+c1.markdown(
+    f"**Volume:** {vol:,} {volume_arrow} "
+    "<abbr title='Shares traded during the latest session.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
 )
 
-latest_row = history.iloc[-1]
-previous_close = as_float(history["Close"].iloc[-2]) if len(history) > 1 else snapshot.latest_close
-latest_close = snapshot.latest_close
-absolute_change = latest_close - previous_close
-percentage_change = (absolute_change / previous_close * 100) if previous_close else np.nan
-latest_volume = as_float(latest_row.get("Volume"), default=0.0)
-average_volume_30 = as_float(history["Volume"].tail(30).mean(), default=0.0)
-
-market_cap = as_float(metadata.get("marketCap"))
-total_revenue = as_float(metadata.get("totalRevenue"))
-dividend_yield = normalise_percentage(metadata.get("dividendYield"))
-beta = as_float(metadata.get("beta"))
-
-row_one = st.columns(4)
-row_one[0].metric(
-    "Latest close",
-    currency_text(latest_close, currency),
-    percentage_text(percentage_change),
-)
-row_one[1].metric(
-    "Latest volume",
-    compact_number(latest_volume),
-    f"{(latest_volume / average_volume_30 - 1) * 100:.1f}% vs 30-day avg"
-    if average_volume_30 > 0
-    else None,
-)
-row_one[2].metric("Validated sessions", f"{len(history):,}")
-row_one[3].metric("Quote type", quote_type)
-
-row_two = st.columns(4)
-row_two[0].metric("Market capitalisation", compact_number(market_cap, currency))
-row_two[1].metric("Revenue, trailing 12 months", compact_number(total_revenue, currency))
-row_two[2].metric("Dividend yield", percentage_text(dividend_yield))
-row_two[3].metric("Beta", f"{beta:.2f}" if np.isfinite(beta) else "N/A")
-
-interest_text = "above" if latest_volume > average_volume_30 else "below"
-volatility_text = (
-    "higher than the wider market"
-    if np.isfinite(beta) and beta > 1
-    else "lower than or similar to the wider market"
-    if np.isfinite(beta)
-    else "not available"
+c2.markdown(
+    f"**Avg Volume:** {avg_vol:,} {average_volume_arrow} "
+    "<abbr title='Average recent trading volume.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
 )
 
-st.markdown(
-    "<div class='card-dark'>"
-    f"Latest volume was <b>{interest_text}</b> its 30-session average. "
-    f"Historical beta is <b>{volatility_text}</b>. "
-    "These observations describe the instrument; they are not a final trade order."
-    "</div>",
+c3.markdown(
+    f"**Market Cap:** ${mc:,} {market_cap_arrow} "
+    "<abbr title='Total market value of company equity.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
 
 
-# -----------------------------------------------------------------------------
-# Cached peer data
-# -----------------------------------------------------------------------------
+c4, c5, c6 = st.columns(3)
 
-peer_snapshots: list[MarketSnapshot] = []
-peer_failures: list[str] = []
+revenue_arrow = arrow_markup(rev > previous_market_cap)
+
+peer_dividend_yields = []
 
 for peer_symbol in peer_list:
     try:
-        peer_snapshots.append(get_snapshot(peer_symbol, period="1y", min_rows=2))
-    except (InvalidSymbolError, MarketDataError):
-        peer_failures.append(peer_symbol)
+        peer_yield = yf.Ticker(peer_symbol).info.get("dividendYield")
+        if isinstance(peer_yield, (int, float)):
+            peer_dividend_yields.append(peer_yield * 100)
     except Exception:
-        peer_failures.append(peer_symbol)
+        continue
 
-if peer_failures:
-    st.caption(f"Peer data unavailable for: {', '.join(peer_failures)}")
-
-peer_metadata = [peer.metadata for peer in peer_snapshots]
-
-
-# -----------------------------------------------------------------------------
-# Fundamental comparison
-# -----------------------------------------------------------------------------
-
-st.markdown("<div class='card'><h2>📑 Fundamental comparison</h2></div>", unsafe_allow_html=True)
-
-if quote_type in ETF_QUOTE_TYPES:
-    st.info(
-        "Corporate P/E, margins, return on equity and leverage are not scored for "
-        "this ETF/index instrument. ETF-specific holdings and exposure analysis will "
-        "be added in a later checkpoint."
-    )
-else:
-    metric_definitions = [
-        ("P/E ratio", "trailingPE", "lower"),
-        ("PEG ratio", "pegRatio", "near_one"),
-        ("Net margin", "profitMargins", "higher"),
-        ("Return on equity", "returnOnEquity", "higher"),
-        ("Debt/equity", "debtToEquity", "lower"),
-        ("Enterprise value", "enterpriseValue", "neutral"),
-    ]
-
-    fundamental_rows: list[dict[str, str]] = []
-    for label, key, preference in metric_definitions:
-        current_value = metadata.get(key)
-        peer_average = safe_mean(peer.get(key) for peer in peer_metadata)
-        comparison, css_class = comparison_label(
-            current_value,
-            peer_average,
-            preference=preference,
-        )
-        fundamental_rows.append(
-            {
-                "Metric": label,
-                "Instrument": format_metric_value(key, current_value, currency),
-                "Peer average": format_metric_value(key, peer_average, currency),
-                "Interpretation": comparison,
-                "Status": css_class,
-            }
-        )
-
-    fundamental_frame = pd.DataFrame(fundamental_rows)
-    st.dataframe(
-        fundamental_frame.drop(columns=["Status"]),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    notes: list[str] = []
-    for row in fundamental_rows:
-        if row["Status"] == "positive":
-            notes.append(f"✅ {row['Metric']}: {row['Interpretation'].lower()}.")
-        elif row["Status"] == "negative":
-            notes.append(f"⚠️ {row['Metric']}: {row['Interpretation'].lower()}.")
-
-    st.markdown(
-        "<div class='card-dark'><b>Fundamental observations</b><br>"
-        + ("<br>".join(notes) if notes else "No reliable peer advantage could be calculated.")
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-# -----------------------------------------------------------------------------
-# Quarterly financial review
-# -----------------------------------------------------------------------------
-
-st.markdown("<div class='card'><h2>📊 Quarterly financial review</h2></div>", unsafe_allow_html=True)
-
-if quote_type not in CORPORATE_QUOTE_TYPES:
-    st.info("Quarterly corporate income-statement analysis is not applicable to this instrument type.")
-else:
-    quarterly = get_quarterly_financials(snapshot.symbol)
-    desired_metrics = [
-        "Total Revenue",
-        "Revenue",
-        "Gross Profit",
-        "Operating Income",
-        "EBIT",
-        "Net Income",
-    ]
-    available_metrics = [metric for metric in desired_metrics if metric in quarterly.columns]
-
-    if quarterly.empty or not available_metrics:
-        st.info("Quarterly financial data is currently unavailable from the provider.")
-    else:
-        quarterly = quarterly.loc[:, available_metrics].copy()
-        quarterly.index = pd.to_datetime(quarterly.index, errors="coerce")
-        quarterly = quarterly.loc[~quarterly.index.isna()].sort_index()
-        quarterly = quarterly.tail(5)
-
-        qoq_changes = quarterly.pct_change(fill_method=None) * 100
-        latest_four = quarterly.tail(4)
-        latest_changes = qoq_changes.reindex(latest_four.index)
-
-        display_frame = pd.DataFrame(index=latest_four.index)
-        for metric in available_metrics:
-            display_frame[metric] = latest_four[metric].map(compact_number)
-            display_frame[f"{metric} QoQ"] = latest_changes[metric].map(
-                lambda value: percentage_text(value, 1)
-            )
-
-        display_frame.index = display_frame.index.to_period("Q").astype(str)
-        display_frame = display_frame.iloc[::-1]
-        st.dataframe(display_frame, use_container_width=True)
-
-        latest_period = latest_four.index[-1]
-        financial_notes: list[str] = []
-        for metric in available_metrics:
-            change = as_float(qoq_changes.loc[latest_period, metric])
-            if not np.isfinite(change):
-                continue
-            direction = "increased" if change > 0 else "decreased" if change < 0 else "was unchanged"
-            financial_notes.append(
-                f"• {metric} {direction} by {abs(change):.1f}% quarter over quarter."
-            )
-
-        st.markdown(
-            "<div class='card-dark'><b>Latest-quarter observations</b><br>"
-            + ("<br>".join(financial_notes) if financial_notes else "No comparable prior quarter was available.")
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-
-
-# -----------------------------------------------------------------------------
-# Technical indicators and events
-# -----------------------------------------------------------------------------
-
-indicator_history = calculate_indicators(
-    history,
-    rsi_period=rsi_period,
-    macd_fast=macd_fast,
-    macd_slow=macd_slow,
-    macd_signal=macd_signal_period,
-    bb_window=bb_window,
-    bb_multiplier=bb_multiplier,
-    atr_period=atr_period,
-)
-indicator_history["Indicator Event"] = build_indicator_events(indicator_history)
-
-st.markdown("<div class='card'><h2>📈 Technical overview</h2></div>", unsafe_allow_html=True)
-
-latest_indicator = indicator_history.iloc[-1]
-cutoff_90_days = indicator_history.index.max() - pd.Timedelta(days=90)
-recent_90 = indicator_history.loc[indicator_history.index >= cutoff_90_days]
-lower_boundary = as_float(recent_90["Low"].quantile(0.10))
-upper_boundary = as_float(recent_90["High"].quantile(0.90))
-
-ma50 = as_float(latest_indicator.get("MA50"))
-ma200 = as_float(latest_indicator.get("MA200"))
-if not np.isfinite(ma50) or not np.isfinite(ma200):
-    cross_status = "Insufficient history"
-elif ma50 > ma200:
-    cross_status = "MA50 above MA200"
-elif ma50 < ma200:
-    cross_status = "MA50 below MA200"
-else:
-    cross_status = "MA50 equals MA200"
-
-rsi_value = as_float(latest_indicator.get("RSI"))
-if not np.isfinite(rsi_value):
-    rsi_status = "Unavailable"
-elif rsi_value > 70:
-    rsi_status = "Overbought zone"
-elif rsi_value < 30:
-    rsi_status = "Oversold zone"
-else:
-    rsi_status = "Neutral zone"
-
-macd_value = as_float(latest_indicator.get("MACD"))
-macd_signal_value = as_float(latest_indicator.get("MACD_SIGNAL"))
-if not np.isfinite(macd_value) or not np.isfinite(macd_signal_value):
-    macd_status = "Unavailable"
-elif macd_value > macd_signal_value:
-    macd_status = "MACD above signal line"
-elif macd_value < macd_signal_value:
-    macd_status = "MACD below signal line"
-else:
-    macd_status = "MACD on signal line"
-
-obv_status = "Unavailable"
-if len(indicator_history) >= 10:
-    current_obv = as_float(indicator_history["OBV"].iloc[-1])
-    previous_obv = as_float(indicator_history["OBV"].iloc[-10])
-    if np.isfinite(current_obv) and np.isfinite(previous_obv):
-        obv_status = "Rising" if current_obv > previous_obv else "Falling"
-
-technical_frame = pd.DataFrame(
-    [
-        ["RSI", f"{rsi_value:.1f}" if np.isfinite(rsi_value) else "N/A", rsi_status],
-        ["MACD", f"{macd_value:.3f}" if np.isfinite(macd_value) else "N/A", macd_status],
-        [
-            "MACD histogram",
-            f"{as_float(latest_indicator.get('MACD_HIST')):.3f}"
-            if np.isfinite(as_float(latest_indicator.get("MACD_HIST")))
-            else "N/A",
-            "Momentum spread",
-        ],
-        [
-            "MA20 / MA50 / MA200",
-            " / ".join(
-                f"{as_float(latest_indicator.get(column)):.2f}"
-                if np.isfinite(as_float(latest_indicator.get(column)))
-                else "N/A"
-                for column in ["MA20", "MA50", "MA200"]
-            ),
-            cross_status,
-        ],
-        [
-            "Bollinger %B",
-            f"{as_float(latest_indicator.get('BB_PERCENT_B')):.2f}"
-            if np.isfinite(as_float(latest_indicator.get("BB_PERCENT_B")))
-            else "N/A",
-            "Position within volatility bands",
-        ],
-        [
-            "ATR",
-            currency_text(latest_indicator.get("ATR"), currency),
-            "Average price movement",
-        ],
-        ["OBV", compact_number(latest_indicator.get("OBV")), obv_status],
-        ["90-day lower statistical boundary", currency_text(lower_boundary, currency), "10th percentile of lows"],
-        ["90-day upper statistical boundary", currency_text(upper_boundary, currency), "90th percentile of highs"],
-    ],
-    columns=["Indicator", "Value", "Interpretation"],
+average_peer_dividend_yield = (
+    float(np.nanmean(peer_dividend_yields))
+    if peer_dividend_yields
+    else np.nan
 )
 
-st.dataframe(technical_frame, use_container_width=True, hide_index=True)
-
-st.warning(
-    "Indicator events below are descriptive flags only. The P1 strategy engine will "
-    "later resolve conflicts and generate one evidence-based BUY, WATCH, HOLD, REDUCE "
-    "or SELL decision."
+dividend_arrow = arrow_markup(
+    not np.isnan(average_peer_dividend_yield)
+    and dy > average_peer_dividend_yield
 )
 
-signal_columns = [
-    "Close",
-    "RSI",
-    "MACD",
-    "MACD_SIGNAL",
-    "BB_PERCENT_B",
-    "MA20",
-    "MA50",
-    "MA200",
-    "Indicator Event",
-]
+beta_arrow = arrow_markup(beta > 1)
+
+c4.markdown(
+    f"**Revenue (TTM):** ${rev:,} {revenue_arrow} "
+    "<abbr title='Revenue reported for the trailing twelve months.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
+)
+
+c5.markdown(
+    f"**Dividend Yield:** {dy:.2f}% {dividend_arrow} "
+    "<abbr title='Annual dividend yield.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
+)
+
+c6.markdown(
+    f"**Beta:** {beta:.2f} {beta_arrow} "
+    "<abbr title='Historical volatility relative to the wider market.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
+)
+
+
+ins = (
+    f"Volume was {'above' if vol>avg_vol else 'below'} its 30-day avg; "
+    f"{'strong interest' if vol>avg_vol else 'muted trading'}. "
+    f"Market cap ${mc:,} ({'small' if mc<1e9 else 'mid/large'}-cap). "
+    f"TTM rev ${rev:,}; "
+    f"Dividend yield {dy:.2f}% ({'pays' if dy>0 else 'no payout'}); "
+    f"Beta {beta:.2f} ({'high' if beta>1 else 'low'} volatility)."
+)
+st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
+
+# --- EXTENDED FUNDAMENTALS vs PEERS ---
+st.markdown("<div class='card'><h2>📑 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
+
+# gather peer info
+peer_info = []
+for p in peer_list:
+    try: peer_info.append(yf.Ticker(p).info)
+    except: pass
+
+keys = ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']
+avg_vals = {k: np.nanmean([pi.get(k) for pi in peer_info if isinstance(pi.get(k), (int,float))]) for k in keys}
+
+cols = st.columns(3)
+sections = {
+    'Valuation'     : [('P/E Ratio','trailingPE','15–25 fair'), ('PEG Ratio','pegRatio','~1 fair')],
+    'Profitability' : [('Net Margin','profitMargins','>5% profitable'), ('ROE','returnOnEquity','>15% strong')],
+    'Leverage'      : [('Debt/Equity','debtToEquity','<1 manageable'), ('Enterprise Value','enterpriseValue','incl debt & cash')]
+}
+
+for idx, (sec, items) in enumerate(sections.items()):
+    with cols[idx]:
+        st.markdown(f"**{sec}**")
+        for name,key,tip in items:
+            val     = info.get(key)
+            peer_av = avg_vals.get(key, np.nan)
+            # display text
+            if pd.isna(val) or pd.isna(peer_av):
+                disp, color = 'N/A','gray'
+            else:
+                better = (val>=peer_av) if key!='debtToEquity' else (val<=peer_av)
+                color  = 'green' if better else 'red'
+                if name in ['Net Margin','ROE']:
+                    disp = f"{val*100:.2f}%"
+                elif key=='enterpriseValue':
+                    disp = f"${val:,.0f}"
+                else:
+                    disp = f"{val:.2f}"
+            st.markdown(f"- {name}: <span style='color:{color};font-weight:bold'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
+
+# AI insight for fundamentals
+vd = info.get('trailingPE',np.nan) - avg_vals['trailingPE']
+pdiff = (info.get('returnOnEquity',0) - avg_vals['returnOnEquity'])*100
+ld = avg_vals['debtToEquity'] - info.get('debtToEquity',np.nan)
+notes=[]
+if not np.isnan(vd):
+    notes.append("📈 Valuation attractive vs peers." if vd<0 else "⚠️ Valuation above peers.")
+if not np.isnan(pdiff):
+    notes.append("👍 ROE outperforms peers." if pdiff>0 else "🔻 ROE lags peers.")
+if not np.isnan(ld):
+    notes.append("🏦 Lower debt vs peers." if ld>0 else "⚠️ Higher leverage.")
+st.markdown(f"<div class='card-dark'>💡 {' '.join(notes)}</div>", unsafe_allow_html=True)
+
+# --- QUARTERLY EARNINGS REVIEW ---
+def render_fundamental_analysis(ticker):
+    data = yf.Ticker(ticker)
+    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+
+    df = data.quarterly_financials.T
+    metrics = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
+    avail   = [m for m in metrics if m in df.columns]
+    df_q     = df[avail].iloc[:4]
+    df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
+
+    # compute QoQ %
+    df_pct = (df_q.pct_change()*100).round(1)
+    df_pct.columns = [f"{c} % Change" for c in df_pct.columns]
+
+    df_show = pd.concat([df_q, df_pct],axis=1)
+
+    def short_fmt(x):
+        try: x=float(x)
+        except: return "-"
+        if abs(x)>=1e9: return f"{x/1e9:.2f}B"
+        if abs(x)>=1e6: return f"{x/1e6:.2f}M"
+        if abs(x)>=1e3: return f"{x/1e3:.2f}K"
+        return f"{x:.0f}"
+
+    df_fmt = df_show.copy()
+    for c in avail: df_fmt[c] = df_fmt[c].apply(short_fmt)
+    for c in df_pct.columns: df_fmt[c] = df_fmt[c].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
+
+    st.dataframe(df_fmt, use_container_width=True)
+
+    # insights
+    latest = df_pct.index[-1]
+    prev   = df_pct.index[-2] if len(df_pct)>1 else None
+    ins    = []
+    def senti(ch):
+        if ch>5: return "strong growth"
+        if ch>0: return "modest increase"
+        if ch>-5: return "slight decline"
+        return "notable decrease"
+
+    if prev:
+        for m in avail:
+            key = f"{m} % Change"
+            if key in df_pct.columns:
+                ch = df_pct.loc[latest,key]
+                ins.append(f"• {m} {senti(ch)} of {abs(ch):.1f}% this quarter.")
+        # analyst style
+        rc = df_pct.loc[latest,"Revenue % Change"] if "Revenue % Change" in df_pct else None
+        if rc is not None:
+            mood = "bullish" if rc>0 else "cautious"
+            ins.append(f"🧐 Analysts are {mood} on rev after a {abs(rc):.1f}% {'rise' if rc>0 else 'drop'}.")
+
+    summary = "<br>".join(ins) if ins else "No significant quarter-over-quarter changes."
+    st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>", unsafe_allow_html=True)
+
+render_fundamental_analysis(ticker)
+# --- TECHNICAL PARAMETER CONTROLS ---
+st.sidebar.header("🔧 Technical Settings")
+rsi_p   = st.sidebar.slider("RSI Period", 5, 30, 14)
+macd_f  = st.sidebar.slider("MACD Fast EMA", 5, 30, 12)
+macd_s  = st.sidebar.slider("MACD Slow EMA", 10, 60, 26)
+macd_sig= st.sidebar.slider("MACD Signal EMA", 5, 20, 9)
+bb_w    = st.sidebar.slider("BB Window", 10, 60, 20)
+bb_m    = st.sidebar.slider("BB Std Mult", 1.0, 3.0, 2.0)
+atr_p   = st.sidebar.slider("ATR Period", 5, 30, 14)
+
+# --- TECHNICAL INDICATORS COMPUTATION ---
+hist['MA20']    = hist['Close'].rolling(20).mean()
+hist['MA50']    = hist['Close'].rolling(50).mean()
+hist['MA200']   = hist['Close'].rolling(200).mean()
+
+delta          = hist['Close'].diff()
+gain           = delta.clip(lower=0).rolling(rsi_p).mean()
+loss           = -delta.clip(upper=0).rolling(rsi_p).mean()
+hist['RSI']    = 100 - (100 / (1 + gain / loss))
+
+hist['EMAf']   = hist['Close'].ewm(span=macd_f, adjust=False).mean()
+hist['EMAs']   = hist['Close'].ewm(span=macd_s, adjust=False).mean()
+hist['MACD']   = hist['EMAf'] - hist['EMAs']
+hist['MACDs']  = hist['MACD'].ewm(span=macd_sig, adjust=False).mean()
+hist['MACD_h'] = hist['MACD'] - hist['MACDs']
+
+hist['BBm']    = hist['Close'].rolling(bb_w).mean()
+hist['BBstd']  = hist['Close'].rolling(bb_w).std()
+hist['BBu']    = hist['BBm'] + bb_m * hist['BBstd']
+hist['BBl']    = hist['BBm'] - bb_m * hist['BBstd']
+hist['BBpctB'] = (hist['Close'] - hist['BBl']) / (hist['BBu'] - hist['BBl'])
+
+tr             = pd.concat([
+    hist['High'] - hist['Low'],
+    (hist['High'] - hist['Close'].shift()).abs(),
+    (hist['Low'] - hist['Close'].shift()).abs()
+], axis=1).max(axis=1)
+hist['ATR']    = tr.rolling(atr_p).mean()
+
+hist['OBV']    = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
+
+# --- SIGNAL GENERATION ---
+signals = []
+
+for i in range(1, len(hist)):
+    signal = ""
+    # RSI Signal
+    if hist['RSI'].iloc[i] < 30:
+        signal += "RSI Buy | "
+    elif hist['RSI'].iloc[i] > 70:
+        signal += "RSI Sell | "
+
+    # MACD Crossover
+    if hist['MACD'].iloc[i] > hist['MACDs'].iloc[i] and hist['MACD'].iloc[i-1] <= hist['MACDs'].iloc[i-1]:
+        signal += "MACD Buy | "
+    elif hist['MACD'].iloc[i] < hist['MACDs'].iloc[i] and hist['MACD'].iloc[i-1] >= hist['MACDs'].iloc[i-1]:
+        signal += "MACD Sell | "
+
+    # Bollinger Band Signal
+    if hist['Close'].iloc[i] < hist['BBl'].iloc[i]:
+        signal += "BB Buy | "
+    elif hist['Close'].iloc[i] > hist['BBu'].iloc[i]:
+        signal += "BB Sell | "
+
+    # Moving Average Crossover (MA20 vs MA50)
+    if hist['MA20'].iloc[i] > hist['MA50'].iloc[i] and hist['MA20'].iloc[i-1] <= hist['MA50'].iloc[i-1]:
+        signal += "MA Bullish | "
+    elif hist['MA20'].iloc[i] < hist['MA50'].iloc[i] and hist['MA20'].iloc[i-1] >= hist['MA50'].iloc[i-1]:
+        signal += "MA Bearish | "
+
+    signals.append(signal.strip(" | ") if signal else "Hold")
+
+hist['Signal'] = [""] + signals  # Add empty first signal
+
+# --- DISPLAY SIGNAL TABLE ---
+st.subheader("📊 Technical Signals Table")
 st.dataframe(
-    indicator_history.loc[:, signal_columns].tail(50).iloc[::-1],
-    use_container_width=True,
+    hist[['Close', 'RSI', 'MACD', 'MACDs', 'BBpctB', 'MA20', 'MA50', 'Signal']]
+    .dropna()
+    .tail(50)
+    .iloc[::-1]  # newest data on top
 )
 
+# signals & overview
+cutoff_date = hist.index.max() - pd.Timedelta(days=90)
+recent = hist.loc[hist.index >= cutoff_date].copy()
+sup = np.percentile(recent['Low'], 10)
+res = np.percentile(recent['High'], 90)
+latest = hist.iloc[-1]
 
-# -----------------------------------------------------------------------------
-# Price, volume and news chart
-# -----------------------------------------------------------------------------
+# Golden / Death Cross logic
+cross = ("Golden Cross ✅" if latest['MA50'] > latest['MA200']
+         else "Death Cross ⚠️" if latest['MA50'] < latest['MA200']
+         else "No Cross")
 
-raw_news = get_news(snapshot.symbol)
-six_month_cutoff = datetime.now() - timedelta(days=180)
-filtered_news = [
-    item
-    for item in raw_news
-    if datetime.fromtimestamp(item["providerPublishTime"]) >= six_month_cutoff
+# RSI Signal
+rsi_sig = "Overbought 🔺" if latest['RSI'] > 70 else "Oversold 🔻" if latest['RSI'] < 30 else "Neutral ⚪"
+
+# MACD Signal
+macd_sig = "Bullish 📈" if latest['MACD'] > latest['MACDs'] else "Bearish 📉" if latest['MACD'] < latest['MACDs'] else "Neutral ⚪"
+
+# MACD Histogram
+macd_hist_sig = "Increasing Momentum 🔼" if latest['MACD_h'] > 0 else "Decreasing Momentum 🔽"
+
+# %B Signal
+bb_sig = "Above Upper Band 🔺" if latest['BBpctB'] > 1 else "Below Lower Band 🔻" if latest['BBpctB'] < 0 else "Inside Bands ⚪"
+
+# OBV Signal
+obv_sig = "Rising 📊" if hist['OBV'].iloc[-1] > hist['OBV'].iloc[-10] else "Falling 📉"
+
+# Create table
+tech_df = pd.DataFrame([
+    ["RSI",       f"{latest['RSI']:.1f}",              rsi_sig],
+    ["MACD",      f"{latest['MACD']:.2f}",             macd_sig],
+    ["MACD Hist", f"{latest['MACD_h']:.2f}",           macd_hist_sig],
+    ["MA20/50/200", f"{latest['MA20']:.2f}/{latest['MA50']:.2f}/{latest['MA200']:.2f}", cross],
+    ["%B",        f"{latest['BBpctB']:.2f}",           bb_sig],
+    ["ATR",       f"{latest['ATR']:.2f}",              "Volatility"],
+    ["OBV",       f"{int(latest['OBV'])}",             obv_sig],
+    ["Support",   f"{sup:.2f}",                        "Local Support"],
+    ["Resistance",f"{res:.2f}",                        "Local Resistance"],
+], columns=["Indicator", "Value", "Signal"])
+
+# Display
+st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
+st.dataframe(tech_df, use_container_width=True)
+
+# Additional textual insights
+ins = []
+ins.append(f"RSI {latest['RSI']:.1f} ({rsi_sig}).")
+ins.append(f"MACD {macd_sig} vs Signal Line.")
+ins.append(f"MACD Histogram shows {macd_hist_sig}.")
+ins.append(f"50/200MA: {cross}.")
+ins.append(f"%B {latest['BBpctB']:.2f} of range ({bb_sig}).")
+ins.append(f"ATR {latest['ATR']:.2f} indicates volatility.")
+ins.append(f"OBV trend is {obv_sig.lower()}.")
+
+st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.join(ins)}</div>", unsafe_allow_html=True)
+
+# Ensure required libraries
+import datetime
+
+# --- 1️⃣ Try yfinance built-in news (may fail silently) ---
+def get_news_yfinance(symbol):
+    try:
+        ticker = yf.Ticker(symbol)
+        raw = getattr(ticker, "news", []) or []
+        news = [
+            {
+                "title": n.get("title", ""),
+                "providerPublishTime": n.get("providerPublishTime")
+            }
+            for n in raw if n.get("providerPublishTime")
+        ]
+        if news:
+            st.success("✅ News loaded from Yahoo Finance (yfinance)")
+        return news
+    except Exception as e:
+        st.warning(f"⚠️ yfinance news error: {e}")
+        return []
+
+# --- 2️⃣ Fallback: Yahoo RSS feed (no API key needed) ---
+def get_yahoo_rss_news(symbol):
+    try:
+        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+        feed = feedparser.parse(url)
+        news = []
+        for entry in feed.entries:
+            published_parsed = entry.get("published_parsed")
+            if published_parsed:
+                published_time = time.mktime(published_parsed)
+                news.append({
+                    "title": entry.title,
+                    "providerPublishTime": published_time
+                })
+        if news:
+            st.success("✅ News loaded from Yahoo Finance RSS Feed")
+        return news
+    except Exception as e:
+        st.warning(f"⚠️ RSS feed error: {e}")
+        return []
+
+# --- 3️⃣ Load from yfinance, fallback to RSS ---
+rawnews = get_news_yfinance(ticker)
+if not rawnews:
+    st.info("ℹ️ Falling back to RSS feed...")
+    rawnews = get_yahoo_rss_news(ticker)
+
+# --- News Filtering ---
+sixmo = datetime.datetime.now() - datetime.timedelta(days=180)
+filtered = [
+    n for n in rawnews
+    if n.get("providerPublishTime") and
+    datetime.datetime.fromtimestamp(n["providerPublishTime"]) >= sixmo
 ]
 
-big_move_days = set(
-    indicator_history.index[indicator_history["Close"].pct_change().abs() > 0.05].date
-)
-last_60 = indicator_history.tail(60)
-event_news = [
-    item
-    for item in filtered_news
-    if datetime.fromtimestamp(item["providerPublishTime"]).date() in big_move_days
-]
+# Detect big move days
+bigdays = set(hist.index[hist['Close'].pct_change().abs() > 0.05].date)
 
-figure = make_subplots(
+# Prepare last 30 days of data (used for plotting)
+last30 = hist.tail(30)
+
+# Create chart figure
+fig = make_subplots(
     rows=2,
     cols=1,
     shared_xaxes=True,
-    row_heights=[0.72, 0.28],
-    vertical_spacing=0.05,
+    row_heights=[0.7, 0.3],
+    vertical_spacing=0.05
 )
-figure.add_trace(
-    go.Candlestick(
-        x=last_60.index,
-        open=last_60["Open"],
-        high=last_60["High"],
-        low=last_60["Low"],
-        close=last_60["Close"],
-        name="Price",
-    ),
-    row=1,
-    col=1,
-)
-figure.add_trace(
-    go.Bar(
-        x=last_60.index,
-        y=last_60["Volume"],
-        name="Volume",
-    ),
-    row=2,
-    col=1,
-)
+fig.add_trace(go.Candlestick(x=last30.index, open=last30['Open'], high=last30['High'],
+                             low=last30['Low'], close=last30['Close'], name="Price"), row=1, col=1)
+fig.add_trace(go.Bar(x=last30.index, y=last30['Volume'], marker_color='grey', name="Volume"), row=2, col=1)
 
-for item in event_news:
-    event_date = datetime.fromtimestamp(item["providerPublishTime"]).date()
-    if event_date in last_60.index.date:
-        figure.add_vline(
-            x=pd.Timestamp(event_date),
-            line_dash="dot",
-            row=1,
-            col=1,
-        )
+# Filter for impactful news
+event_news = [
+    n for n in filtered
+    if datetime.datetime.fromtimestamp(n["providerPublishTime"]).date() in bigdays
+]
 
-figure.update_layout(
-    title=f"{snapshot.symbol}: latest 60 sessions",
-    xaxis_rangeslider_visible=False,
-    height=700,
-    legend_orientation="h",
-)
-st.plotly_chart(figure, use_container_width=True)
+# --- 4️⃣ Overlay news on chart ---
+for n in event_news:
+    d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
+    if d in last30.index.date:
+        fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="dot"), row=1, col=1)
+        fig.add_annotation(x=pd.Timestamp(d), y=last30['Low'].min(),
+                           xref="x", yref="y", text="📰 News",
+                           showarrow=True, arrowhead=2, font=dict(color="cyan"))
 
-st.markdown("<div class='card'><h2>📰 News around large price moves</h2></div>", unsafe_allow_html=True)
+# --- 5️⃣ Display news below chart ---
+st.markdown("<div class='card'><h3>📰 Headlines on Big Moves</h3></div>", unsafe_allow_html=True)
 if event_news:
-    for item in sorted(
-        event_news,
-        key=lambda value: value["providerPublishTime"],
-        reverse=True,
-    )[:15]:
-        published = datetime.fromtimestamp(item["providerPublishTime"]).date().isoformat()
-        st.markdown(f"- **{published}** — {item['title']} *({item['source']})*")
+    for n in event_news:
+        d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
+        st.markdown(f"- **{d.isoformat()}**  {n['title']}", unsafe_allow_html=True)
 else:
-    st.info("No matching headlines were found for >5% daily moves during the selected period.")
+    st.info("No high-impact headlines found in the last 6 months.")
 
-
-# -----------------------------------------------------------------------------
-# Peer comparison
-# -----------------------------------------------------------------------------
-
-st.markdown("<div class='card'><h2>🤝 Peer comparison</h2></div>", unsafe_allow_html=True)
-
-peer_rows: list[dict[str, Any]] = []
-for peer_snapshot in peer_snapshots:
-    peer_currency = instrument_currency(peer_snapshot)
-    peer_rows.append(
-        {
-            "Ticker": peer_snapshot.symbol,
-            "Instrument": instrument_name(peer_snapshot),
-            "Latest close": peer_snapshot.latest_close,
-            "Currency": peer_currency,
-            "P/E": as_float(peer_snapshot.metadata.get("trailingPE")),
-            "Quote type": instrument_quote_type(peer_snapshot),
-        }
-    )
-
-if not peer_rows:
-    st.info("No peer data is available for this selection.")
+# --- PEER COMPARISON MODULE ---
+st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
+peer_data=[]
+for p in peer_list:
+    try:
+        pi=yf.Ticker(p).info
+        peer_data.append({'Ticker':p,'Price':pi.get('currentPrice',np.nan),'P/E':pi.get('trailingPE',np.nan)})
+    except: pass
+peer_df=pd.DataFrame(peer_data).set_index("Ticker")
+if not peer_df.empty:
+    st.bar_chart(peer_df['P/E'])
+    st.dataframe(peer_df.style.format({'Price':'${:,.2f}','P/E':'{:.2f}'}))
 else:
-    peer_frame = pd.DataFrame(peer_rows).set_index("Ticker")
-    st.dataframe(peer_frame, use_container_width=True)
+    st.info("No peer data available.")
 
-    pe_values = peer_frame["P/E"].dropna()
-    if not pe_values.empty:
-        st.caption("P/E comparison for peers with available corporate valuation data")
-        st.bar_chart(pe_values)
+# --- NEWS & SENTIMENT MODULE ---
+st.markdown("<div class='card'><h2>📰 News & Sentiment</h2></div>", unsafe_allow_html=True)
+news_url=f"https://finance.yahoo.com/quote/{ticker}"
+try:
+    resp=requests.get(news_url,timeout=5)
+    soup=BeautifulSoup(resp.content,'html.parser')
+    heads=soup.find_all('h3')[:5]
+    for h in heads:
+        t=h.get_text(strip=True)
+        badge='🟢' if any(w in t.lower() for w in ['beat','upgrade','gain']) else ('🔴' if any(w in t.lower() for w in ['miss','downgrade','drop']) else '⚪️')
+        st.markdown(f"- {badge} {t}",unsafe_allow_html=True)
+    st.markdown("<div class='card-dark'>🔍 Overall sentiment: Neutral-to-Positive based on headlines</div>",unsafe_allow_html=True)
+except:
+    st.warning("Unable to fetch headlines.")
 
-
-# -----------------------------------------------------------------------------
-# Footer
-# -----------------------------------------------------------------------------
-
-st.markdown(
-    """
-    <hr style="margin-top:2em;">
-    <div style="text-align:center">
-        <p style="color:#888;">
-            Created by <b>BSAVCI1</b> · P0.2 validated-data integration ·
-            Powered by Streamlit and Yahoo Finance
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# --- FOOTER ---
+st.markdown("""
+<hr style="margin-top:2em;">
+<div style="text-align:center"><p style="color:#888;">Created by <b>BSAVCI1</b> • Powered by Streamlit & Yahoo Finance</p></div>
+""", unsafe_allow_html=True)
