@@ -27,12 +27,24 @@ from .regime import (
     classify_history,
     classify_market_regime,
 )
+from .scoring import (
+    RecommendationThresholds,
+    ScoreComponents,
+    ScoreWeights,
+    resolve_recommendation,
+    weighted_component_score,
+)
 from .trend_pullback import (
     TrendPullbackThresholds,
     evaluate_trend_pullback,
 )
 
 __all__ = [
+    "RecommendationThresholds",
+    "ScoreComponents",
+    "ScoreWeights",
+    "resolve_recommendation",
+    "weighted_component_score",
     "MeanReversionContext",
     "MeanReversionThresholds",
     "evaluate_mean_reversion",
