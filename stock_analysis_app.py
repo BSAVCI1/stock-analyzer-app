@@ -12,6 +12,11 @@ import datetime
 import feedparser
 import feedparser
 import time
+from src.data.market_data import (
+    InvalidSymbolError,
+    MarketDataError,
+    load_market_snapshot,
+)
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
@@ -65,7 +70,19 @@ else:
 # --- FETCH DATA ---
 data = yf.Ticker(ticker)
 info = data.info
-hist = data.history(period="6mo")
+
+try:
+    snapshot = load_market_snapshot(
+        ticker,
+        period="2y",
+        interval="1d",
+        min_rows=200,
+    )
+except (InvalidSymbolError, MarketDataError) as exc:
+    st.error(str(exc))
+    st.stop()
+
+hist = snapshot.history.copy()
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
