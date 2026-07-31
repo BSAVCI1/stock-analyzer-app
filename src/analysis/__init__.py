@@ -27,6 +27,12 @@ from .regime import (
     classify_history,
     classify_market_regime,
 )
+from .risk import (
+    PaperOrder,
+    RiskDecision,
+    RiskThresholds,
+    apply_risk_management,
+)
 from .scoring import (
     RecommendationThresholds,
     ScoreComponents,
@@ -40,6 +46,10 @@ from .trend_pullback import (
 )
 
 __all__ = [
+    "PaperOrder",
+    "RiskDecision",
+    "RiskThresholds",
+    "apply_risk_management",
     "RecommendationThresholds",
     "ScoreComponents",
     "ScoreWeights",
