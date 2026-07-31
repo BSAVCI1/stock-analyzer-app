@@ -1,5 +1,10 @@
 """Trading-expert analysis domain models and classifiers."""
 
+from .breakout import (
+    BreakoutContext,
+    BreakoutThresholds,
+    evaluate_breakout,
+)
 from .model import (
     AnalysisSnapshot,
     Evidence,
@@ -23,6 +28,9 @@ from .trend_pullback import (
 )
 
 __all__ = [
+    "BreakoutContext",
+    "BreakoutThresholds",
+    "evaluate_breakout",
     "AnalysisSnapshot",
     "Evidence",
     "EvidenceDirection",
