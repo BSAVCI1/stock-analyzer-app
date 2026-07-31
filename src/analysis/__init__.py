@@ -5,6 +5,11 @@ from .breakout import (
     BreakoutThresholds,
     evaluate_breakout,
 )
+from .mean_reversion import (
+    MeanReversionContext,
+    MeanReversionThresholds,
+    evaluate_mean_reversion,
+)
 from .model import (
     AnalysisSnapshot,
     Evidence,
@@ -28,6 +33,9 @@ from .trend_pullback import (
 )
 
 __all__ = [
+    "MeanReversionContext",
+    "MeanReversionThresholds",
+    "evaluate_mean_reversion",
     "BreakoutContext",
     "BreakoutThresholds",
     "evaluate_breakout",
