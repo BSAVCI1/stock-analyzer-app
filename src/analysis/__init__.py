@@ -17,6 +17,10 @@ from .regime import (
     classify_history,
     classify_market_regime,
 )
+from .trend_pullback import (
+    TrendPullbackThresholds,
+    evaluate_trend_pullback,
+)
 
 __all__ = [
     "AnalysisSnapshot",
@@ -29,7 +33,9 @@ __all__ = [
     "RegimeThresholds",
     "Signal",
     "StrategyResult",
+    "TrendPullbackThresholds",
     "build_regime_inputs",
     "classify_history",
     "classify_market_regime",
+    "evaluate_trend_pullback",
 ]
