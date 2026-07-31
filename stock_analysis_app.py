@@ -6,12 +6,9 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-from bs4 import BeautifulSoup
 import requests
 import datetime
 import feedparser
-import feedparser
-import time
 from src.data.market_data import (
     InvalidSymbolError,
     MarketDataError,
@@ -24,7 +21,7 @@ st.set_page_config(page_title="📈 AI Stock Analyzer", layout="wide")
 # --- GLOBAL STYLES ---
 st.markdown("""
 <style>
-.card {background:#ffffff; padding:20px; margin-bottom:20px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.1);}
+.card {background:#ffffff; color:#222; padding:20px; margin-bottom:20px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.1);}
 .card-dark {background:#2b2b2b; color:#fff; padding:20px; margin-bottom:20px; border-radius:10px;}
 .metric-tooltip {text-decoration:underline; cursor:help;}
 .arrow-up {color:green;}
@@ -99,22 +96,113 @@ hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
 # --- DIVIDEND DATES FIX ---
-div_dates = [dt.date() for dt in data.dividends.index]
+try:
+    div_dates = [dt.date() for dt in data.dividends.index]
+except Exception as exc:
+    div_dates = []
+    st.warning(
+        "Dividend dates could not be loaded "
+        f"({type(exc).__name__}). Price analysis remains available."
+    )
 
 # Safe previous-close lookup
 prev_close = hist['Close'].shift(1).iloc[-1]
 if pd.isna(prev_close): prev_close = hist['Close'].iloc[-1]
 
 # --- MARKET OVERVIEW & SUPPORT/RESISTANCE ---
-st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
-st.markdown("<div class='card'><h2>📈 Market & Trading Overview</h2></div>", unsafe_allow_html=True)
+instrument_currency = str(info.get("currency") or "N/A").upper()
+financial_currency = str(
+    info.get("financialCurrency") or instrument_currency
+).upper()
+exchange = str(
+    info.get("fullExchangeName")
+    or info.get("exchangeName")
+    or info.get("exchange")
+    or "N/A"
+)
 
-vol     = info.get('volume',0)
-avg_vol = info.get('averageVolume',0)
-mc      = info.get('marketCap',0)
-rev     = info.get('totalRevenue',0)
-dy      = info.get('dividendYield',0)*100
-beta    = info.get('beta',0)
+latest_market_date = snapshot.last_date.strftime("%Y-%m-%d")
+fetched_at_utc = snapshot.fetched_at_utc.astimezone(
+    datetime.timezone.utc
+).strftime("%Y-%m-%d %H:%M UTC")
+
+st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
+
+financial_currency_note = (
+    f" · Financial currency: **{financial_currency}**"
+    if financial_currency != instrument_currency
+    else ""
+)
+
+st.caption(
+    f"Currency: **{instrument_currency}**"
+    f"{financial_currency_note}"
+    f" · Exchange: **{exchange}**"
+    f" · Latest market date: **{latest_market_date}**"
+    f" · Retrieved: **{fetched_at_utc}**"
+)
+
+st.markdown(
+    "<div class='card'><h2>📈 Market & Trading Overview</h2></div>",
+    unsafe_allow_html=True,
+)
+
+vol = info.get("volume") or 0
+avg_vol = info.get("averageVolume") or 0
+mc = info.get("marketCap") or 0
+rev = info.get("totalRevenue") or 0
+dy = (info.get("dividendYield") or 0) * 100
+beta = info.get("beta") or 0
+
+CURRENCY_SYMBOLS = {
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CHF": "CHF ",
+    "CAD": "C$",
+    "AUD": "A$",
+    "CNY": "CN¥",
+    "HKD": "HK$",
+    "SEK": "SEK ",
+    "NOK": "NOK ",
+    "DKK": "DKK ",
+}
+
+
+def format_money(value, currency: str, decimals: int = 0) -> str:
+    """Format a monetary value using its actual provider currency."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+
+    if not np.isfinite(number):
+        return "N/A"
+
+    code = str(currency or "N/A").upper()
+    symbol = CURRENCY_SYMBOLS.get(code)
+    sign = "-" if number < 0 else ""
+    absolute_value = abs(number)
+
+    if symbol:
+        return f"{sign}{symbol}{absolute_value:,.{decimals}f}"
+
+    return f"{sign}{absolute_value:,.{decimals}f} {code}"
+
+
+def format_ratio(value, decimals: int = 2) -> str:
+    """Safely format a numeric ratio."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+
+    if not np.isfinite(number):
+        return "N/A"
+
+    return f"{number:.{decimals}f}"
+
 
 def arrow_markup(condition: bool) -> str:
     """Return safe HTML for a directional indicator."""
@@ -145,7 +233,7 @@ c2.markdown(
 )
 
 c3.markdown(
-    f"**Market Cap:** ${mc:,} {market_cap_arrow} "
+    f"**Market Cap:** {format_money(mc, instrument_currency, 0)} {market_cap_arrow} "
     "<abbr title='Total market value of company equity.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
@@ -156,14 +244,25 @@ c4, c5, c6 = st.columns(3)
 revenue_arrow = arrow_markup(rev > previous_market_cap)
 
 peer_dividend_yields = []
+peer_dividend_warnings = []
 
-for peer_symbol in peer_list:
+for peer_symbol in dict.fromkeys(peer_list):
     try:
-        peer_yield = yf.Ticker(peer_symbol).info.get("dividendYield")
+        peer_metadata = yf.Ticker(peer_symbol).get_info() or {}
+        peer_yield = peer_metadata.get("dividendYield")
+
         if isinstance(peer_yield, (int, float)):
             peer_dividend_yields.append(peer_yield * 100)
-    except Exception:
-        continue
+    except Exception as exc:
+        peer_dividend_warnings.append(
+            f"{peer_symbol}: {type(exc).__name__}"
+        )
+
+if peer_dividend_warnings:
+    st.warning(
+        "Some peer dividend data could not be loaded: "
+        + ", ".join(peer_dividend_warnings)
+    )
 
 average_peer_dividend_yield = (
     float(np.nanmean(peer_dividend_yields))
@@ -179,7 +278,7 @@ dividend_arrow = arrow_markup(
 beta_arrow = arrow_markup(beta > 1)
 
 c4.markdown(
-    f"**Revenue (TTM):** ${rev:,} {revenue_arrow} "
+    f"**Revenue (TTM):** {format_money(rev, financial_currency, 0)} {revenue_arrow} "
     "<abbr title='Revenue reported for the trailing twelve months.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
@@ -200,8 +299,9 @@ c6.markdown(
 ins = (
     f"Volume was {'above' if vol>avg_vol else 'below'} its 30-day avg; "
     f"{'strong interest' if vol>avg_vol else 'muted trading'}. "
-    f"Market cap ${mc:,} ({'small' if mc<1e9 else 'mid/large'}-cap). "
-    f"TTM rev ${rev:,}; "
+    f"Market cap {format_money(mc, instrument_currency, 0)} "
+    f"({'small' if mc < 1e9 else 'mid/large'}-cap). "
+    f"TTM revenue {format_money(rev, financial_currency, 0)}; "
     f"Dividend yield {dy:.2f}% ({'pays' if dy>0 else 'no payout'}); "
     f"Beta {beta:.2f} ({'high' if beta>1 else 'low'} volatility)."
 )
@@ -210,11 +310,25 @@ st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 # --- EXTENDED FUNDAMENTALS vs PEERS ---
 st.markdown("<div class='card'><h2>📑 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
 
-# gather peer info
+# Gather peer metadata with controlled provider warnings.
 peer_info = []
-for p in peer_list:
-    try: peer_info.append(yf.Ticker(p).info)
-    except: pass
+peer_info_warnings = []
+
+for peer_symbol in dict.fromkeys(peer_list):
+    try:
+        provider_info = yf.Ticker(peer_symbol).get_info() or {}
+        if provider_info:
+            peer_info.append(provider_info)
+    except Exception as exc:
+        peer_info_warnings.append(
+            f"{peer_symbol}: {type(exc).__name__}"
+        )
+
+if peer_info_warnings:
+    st.warning(
+        "Some peer fundamental data could not be loaded: "
+        + ", ".join(peer_info_warnings)
+    )
 
 keys = ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']
 avg_vals = {k: np.nanmean([pi.get(k) for pi in peer_info if isinstance(pi.get(k), (int,float))]) for k in keys}
@@ -241,7 +355,7 @@ for idx, (sec, items) in enumerate(sections.items()):
                 if name in ['Net Margin','ROE']:
                     disp = f"{val*100:.2f}%"
                 elif key=='enterpriseValue':
-                    disp = f"${val:,.0f}"
+                    disp = format_money(val, instrument_currency, 0)
                 else:
                     disp = f"{val:.2f}"
             st.markdown(f"- {name}: <span style='color:{color};font-weight:bold'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
@@ -264,7 +378,21 @@ def render_fundamental_analysis(ticker):
     data = yf.Ticker(ticker)
     st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
-    df = data.quarterly_financials.T
+    try:
+        df = data.quarterly_financials.T
+    except Exception as exc:
+        st.warning(
+            "Quarterly financial statements could not be loaded "
+            f"({type(exc).__name__})."
+        )
+        return
+
+    if df.empty:
+        st.warning(
+            "No quarterly financial statements are available "
+            f"for {ticker}."
+        )
+        return
     metrics = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
     avail   = [m for m in metrics if m in df.columns]
     df_q     = df[avail].iloc[:4]
@@ -278,7 +406,7 @@ def render_fundamental_analysis(ticker):
 
     def short_fmt(x):
         try: x=float(x)
-        except: return "-"
+        except (TypeError, ValueError): return "-"
         if abs(x)>=1e9: return f"{x/1e9:.2f}B"
         if abs(x)>=1e6: return f"{x/1e6:.2f}M"
         if abs(x)>=1e3: return f"{x/1e3:.2f}K"
@@ -288,7 +416,7 @@ def render_fundamental_analysis(ticker):
     for c in avail: df_fmt[c] = df_fmt[c].apply(short_fmt)
     for c in df_pct.columns: df_fmt[c] = df_fmt[c].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
-    st.dataframe(df_fmt, use_container_width=True)
+    st.dataframe(df_fmt, width="stretch")
 
     # insights
     latest = df_pct.index[-1]
@@ -441,7 +569,7 @@ tech_df = pd.DataFrame([
 
 # Display
 st.markdown("<div class='card'><h2>📈 Technical Overview</h2></div>", unsafe_allow_html=True)
-st.dataframe(tech_df, use_container_width=True)
+st.dataframe(tech_df, width="stretch")
 
 # Additional textual insights
 ins = []
@@ -455,134 +583,352 @@ ins.append(f"OBV trend is {obv_sig.lower()}.")
 
 st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.join(ins)}</div>", unsafe_allow_html=True)
 
-# Ensure required libraries
-import datetime
+# --- CONSOLIDATED MARKET CHART, NEWS AND PEER COMPARISON ---
+def load_yahoo_rss_news(
+    symbol: str,
+) -> tuple[list[dict[str, object]], str | None]:
+    """Load one normalized news feed from Yahoo Finance RSS."""
+    endpoint = (
+        "https://feeds.finance.yahoo.com/rss/2.0/headline"
+    )
+    params = {
+        "s": symbol,
+        "region": "US",
+        "lang": "en-US",
+    }
 
-# --- 1️⃣ Try yfinance built-in news (may fail silently) ---
-def get_news_yfinance(symbol):
     try:
-        ticker = yf.Ticker(symbol)
-        raw = getattr(ticker, "news", []) or []
-        news = [
-            {
-                "title": n.get("title", ""),
-                "providerPublishTime": n.get("providerPublishTime")
-            }
-            for n in raw if n.get("providerPublishTime")
-        ]
-        if news:
-            st.success("✅ News loaded from Yahoo Finance (yfinance)")
-        return news
-    except Exception as e:
-        st.warning(f"⚠️ yfinance news error: {e}")
-        return []
+        response = requests.get(
+            endpoint,
+            params=params,
+            timeout=8,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 BSAVCI-Stock-Analyzer/1.0"
+                )
+            },
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        return (
+            [],
+            "Yahoo Finance RSS news could not be loaded "
+            f"({type(exc).__name__}).",
+        )
 
-# --- 2️⃣ Fallback: Yahoo RSS feed (no API key needed) ---
-def get_yahoo_rss_news(symbol):
     try:
-        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
-        feed = feedparser.parse(url)
-        news = []
-        for entry in feed.entries:
+        feed = feedparser.parse(response.content)
+        entries = list(getattr(feed, "entries", []) or [])
+        articles: list[dict[str, object]] = []
+
+        for entry in entries:
             published_parsed = entry.get("published_parsed")
-            if published_parsed:
-                published_time = time.mktime(published_parsed)
-                news.append({
-                    "title": entry.title,
-                    "providerPublishTime": published_time
-                })
-        if news:
-            st.success("✅ News loaded from Yahoo Finance RSS Feed")
-        return news
-    except Exception as e:
-        st.warning(f"⚠️ RSS feed error: {e}")
-        return []
+            title = str(entry.get("title", "")).strip()
 
-# --- 3️⃣ Load from yfinance, fallback to RSS ---
-rawnews = get_news_yfinance(ticker)
-if not rawnews:
-    st.info("ℹ️ Falling back to RSS feed...")
-    rawnews = get_yahoo_rss_news(ticker)
+            if not published_parsed or not title:
+                continue
 
-# --- News Filtering ---
-sixmo = datetime.datetime.now() - datetime.timedelta(days=180)
-filtered = [
-    n for n in rawnews
-    if n.get("providerPublishTime") and
-    datetime.datetime.fromtimestamp(n["providerPublishTime"]) >= sixmo
+            published_at = datetime.datetime(
+                *published_parsed[:6],
+                tzinfo=datetime.timezone.utc,
+            )
+
+            articles.append(
+                {
+                    "title": title,
+                    "link": str(entry.get("link", "")).strip(),
+                    "published_at": published_at,
+                }
+            )
+
+        articles.sort(
+            key=lambda item: item["published_at"],
+            reverse=True,
+        )
+
+        if not articles:
+            parse_error = getattr(feed, "bozo_exception", None)
+            error_name = (
+                type(parse_error).__name__
+                if parse_error is not None
+                else "EmptyFeed"
+            )
+            return (
+                [],
+                "Yahoo Finance RSS returned no usable headlines "
+                f"({error_name}).",
+            )
+
+        return articles, None
+
+    except (AttributeError, TypeError, ValueError) as exc:
+        return (
+            [],
+            "Yahoo Finance RSS could not be interpreted "
+            f"({type(exc).__name__}).",
+        )
+
+
+raw_news, news_warning = load_yahoo_rss_news(ticker)
+
+news_cutoff = (
+    datetime.datetime.now(datetime.timezone.utc)
+    - datetime.timedelta(days=180)
+)
+
+recent_news = [
+    article
+    for article in raw_news
+    if article["published_at"] >= news_cutoff
 ]
 
-# Detect big move days
-bigdays = set(hist.index[hist['Close'].pct_change().abs() > 0.05].date)
+big_move_dates = set(
+    hist.index[
+        hist["Close"].pct_change().abs() > 0.05
+    ].date
+)
 
-# Prepare last 30 days of data (used for plotting)
-last30 = hist.tail(30)
+event_news = [
+    article
+    for article in recent_news
+    if article["published_at"].date() in big_move_dates
+]
 
-# Create chart figure
+last_sessions = hist.tail(60)
+
 fig = make_subplots(
     rows=2,
     cols=1,
     shared_xaxes=True,
-    row_heights=[0.7, 0.3],
-    vertical_spacing=0.05
+    row_heights=[0.72, 0.28],
+    vertical_spacing=0.05,
 )
-fig.add_trace(go.Candlestick(x=last30.index, open=last30['Open'], high=last30['High'],
-                             low=last30['Low'], close=last30['Close'], name="Price"), row=1, col=1)
-fig.add_trace(go.Bar(x=last30.index, y=last30['Volume'], marker_color='grey', name="Volume"), row=2, col=1)
 
-# Filter for impactful news
-event_news = [
-    n for n in filtered
-    if datetime.datetime.fromtimestamp(n["providerPublishTime"]).date() in bigdays
-]
+fig.add_trace(
+    go.Candlestick(
+        x=last_sessions.index,
+        open=last_sessions["Open"],
+        high=last_sessions["High"],
+        low=last_sessions["Low"],
+        close=last_sessions["Close"],
+        name="Price",
+    ),
+    row=1,
+    col=1,
+)
 
-# --- 4️⃣ Overlay news on chart ---
-for n in event_news:
-    d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
-    if d in last30.index.date:
-        fig.add_vline(x=pd.Timestamp(d), line=dict(color="cyan", dash="dot"), row=1, col=1)
-        fig.add_annotation(x=pd.Timestamp(d), y=last30['Low'].min(),
-                           xref="x", yref="y", text="📰 News",
-                           showarrow=True, arrowhead=2, font=dict(color="cyan"))
+fig.add_trace(
+    go.Bar(
+        x=last_sessions.index,
+        y=last_sessions["Volume"],
+        name="Volume",
+    ),
+    row=2,
+    col=1,
+)
 
-# --- 5️⃣ Display news below chart ---
-st.markdown("<div class='card'><h3>📰 Headlines on Big Moves</h3></div>", unsafe_allow_html=True)
-if event_news:
-    for n in event_news:
-        d = datetime.datetime.fromtimestamp(n["providerPublishTime"]).date()
-        st.markdown(f"- **{d.isoformat()}**  {n['title']}", unsafe_allow_html=True)
+session_index_by_date = {
+    timestamp.date(): timestamp
+    for timestamp in last_sessions.index
+}
+
+annotated_dates = set()
+
+for article in event_news:
+    article_date = article["published_at"].date()
+    chart_timestamp = session_index_by_date.get(article_date)
+
+    if (
+        chart_timestamp is None
+        or article_date in annotated_dates
+    ):
+        continue
+
+    annotated_dates.add(article_date)
+
+    fig.add_vline(
+        x=chart_timestamp,
+        line_dash="dot",
+        line_width=1,
+        row=1,
+        col=1,
+    )
+
+    fig.add_annotation(
+        x=chart_timestamp,
+        y=float(last_sessions["High"].max()),
+        text="News",
+        showarrow=True,
+        arrowhead=2,
+        row=1,
+        col=1,
+    )
+
+fig.update_layout(
+    title=f"{ticker} — latest {len(last_sessions)} sessions",
+    height=650,
+    xaxis_rangeslider_visible=False,
+    margin=dict(l=20, r=20, t=60, b=20),
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+    ),
+)
+
+fig.update_yaxes(
+    title_text=f"Price ({instrument_currency})",
+    row=1,
+    col=1,
+)
+
+fig.update_yaxes(
+    title_text="Volume",
+    row=2,
+    col=1,
+)
+
+st.markdown(
+    "<div class='card'>"
+    "<h2 style='color:#222;'>📊 Market Chart</h2>"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+st.plotly_chart(
+    fig,
+    width="stretch",
+    config={"displaylogo": False},
+)
+
+
+# One normalized news panel.
+st.markdown(
+    "<div class='card'>"
+    "<h2 style='color:#222;'>📰 Market News</h2>"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+if news_warning:
+    st.warning(news_warning)
+
+headlines_to_display = (
+    event_news
+    if event_news
+    else recent_news
+)
+
+if headlines_to_display:
+    if event_news:
+        st.caption(
+            "Showing headlines published on sessions with "
+            "an absolute price move above 5%."
+        )
+    else:
+        st.caption(
+            "No matching big-move headlines were found. "
+            "Showing the latest available headlines."
+        )
+
+    for article in headlines_to_display[:8]:
+        publication_date = article[
+            "published_at"
+        ].date().isoformat()
+        article_title = str(article["title"])
+        article_link = str(article.get("link", ""))
+
+        safe_title = (
+            article_title
+            .replace("[", r"\[")
+            .replace("]", r"\]")
+        )
+
+        if article_link:
+            st.markdown(
+                f"- **{publication_date}** "
+                f"[{safe_title}]({article_link})"
+            )
+        else:
+            st.markdown(
+                f"- **{publication_date}** {safe_title}"
+            )
 else:
-    st.info("No high-impact headlines found in the last 6 months.")
+    st.info(
+        "No recent Yahoo Finance RSS headlines are available "
+        f"for {ticker}."
+    )
 
-# --- PEER COMPARISON MODULE ---
-st.markdown("<div class='card'><h2>🤝 Peer Comparison</h2></div>", unsafe_allow_html=True)
-peer_data=[]
-for p in peer_list:
+
+# Peer comparison table. Prices retain each peer's own currency.
+st.markdown(
+    "<div class='card'>"
+    "<h2 style='color:#222;'>🤝 Peer Comparison</h2>"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+peer_rows = []
+peer_errors = []
+
+for peer_symbol in dict.fromkeys(peer_list):
     try:
-        pi=yf.Ticker(p).info
-        peer_data.append({'Ticker':p,'Price':pi.get('currentPrice',np.nan),'P/E':pi.get('trailingPE',np.nan)})
-    except: pass
-peer_df=pd.DataFrame(peer_data).set_index("Ticker")
-if not peer_df.empty:
-    st.bar_chart(peer_df['P/E'])
-    st.dataframe(peer_df.style.format({'Price':'${:,.2f}','P/E':'{:.2f}'}))
-else:
-    st.info("No peer data available.")
+        peer_metadata = (
+            yf.Ticker(peer_symbol).get_info() or {}
+        )
 
-# --- NEWS & SENTIMENT MODULE ---
-st.markdown("<div class='card'><h2>📰 News & Sentiment</h2></div>", unsafe_allow_html=True)
-news_url=f"https://finance.yahoo.com/quote/{ticker}"
-try:
-    resp=requests.get(news_url,timeout=5)
-    soup=BeautifulSoup(resp.content,'html.parser')
-    heads=soup.find_all('h3')[:5]
-    for h in heads:
-        t=h.get_text(strip=True)
-        badge='🟢' if any(w in t.lower() for w in ['beat','upgrade','gain']) else ('🔴' if any(w in t.lower() for w in ['miss','downgrade','drop']) else '⚪️')
-        st.markdown(f"- {badge} {t}",unsafe_allow_html=True)
-    st.markdown("<div class='card-dark'>🔍 Overall sentiment: Neutral-to-Positive based on headlines</div>",unsafe_allow_html=True)
-except:
-    st.warning("Unable to fetch headlines.")
+        peer_price = peer_metadata.get("currentPrice")
+        if peer_price is None:
+            peer_price = peer_metadata.get(
+                "regularMarketPrice"
+            )
+
+        peer_currency = str(
+            peer_metadata.get("currency") or "N/A"
+        ).upper()
+
+        peer_pe = peer_metadata.get("trailingPE")
+
+        if peer_price is None and peer_pe is None:
+            peer_errors.append(
+                f"{peer_symbol}: no usable values"
+            )
+            continue
+
+        peer_rows.append(
+            {
+                "Ticker": peer_symbol,
+                "Price": format_money(
+                    peer_price,
+                    peer_currency,
+                    2,
+                ),
+                "Currency": peer_currency,
+                "P/E": format_ratio(peer_pe),
+            }
+        )
+
+    except Exception as exc:
+        peer_errors.append(
+            f"{peer_symbol}: {type(exc).__name__}"
+        )
+
+if peer_errors:
+    st.warning(
+        "Some peer data could not be loaded: "
+        + ", ".join(peer_errors)
+    )
+
+if peer_rows:
+    st.dataframe(
+        pd.DataFrame(peer_rows),
+        width="stretch",
+        hide_index=True,
+    )
+else:
+    st.info("No peer comparison data are available.")
 
 # --- FOOTER ---
 st.markdown("""
