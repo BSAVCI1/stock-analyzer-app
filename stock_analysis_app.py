@@ -61,6 +61,13 @@ ticker = snapshot.symbol
 hist = snapshot.history.copy()
 info = dict(snapshot.metadata)
 
+quote_type = str(
+    info.get("quoteType")
+    or info.get("instrumentType")
+    or "UNKNOWN"
+).upper()
+is_etf = quote_type == "ETF"
+
 # Additional yfinance endpoints are used later for dividends, financial
 # statements and news. They are created only after the symbol is validated.
 data = yf.Ticker(ticker)
@@ -81,6 +88,13 @@ if st.sidebar.checkbox("Auto-select peers by sector/industry", True):
     }
 
     peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
+
+    if is_etf:
+        etf_peer_map = {
+            "VWCE.DE": ["VWRL.AS", "IUSQ.DE", "EUNL.DE"],
+            "SXR8.DE": ["CSPX.L", "VUAA.DE", "IUSA.L"],
+        }
+        peer_list = etf_peer_map.get(ticker, [])
 else:
     peer_text = st.sidebar.text_input(
         "Or enter peers (comma separated)",
@@ -135,7 +149,8 @@ financial_currency_note = (
 )
 
 st.caption(
-    f"Currency: **{instrument_currency}**"
+    f"Type: **{quote_type}**"
+    f" · Currency: **{instrument_currency}**"
     f"{financial_currency_note}"
     f" · Exchange: **{exchange}**"
     f" · Latest market date: **{latest_market_date}**"
@@ -146,13 +161,6 @@ st.markdown(
     "<div class='card'><h2>📈 Market & Trading Overview</h2></div>",
     unsafe_allow_html=True,
 )
-
-vol = info.get("volume") or 0
-avg_vol = info.get("averageVolume") or 0
-mc = info.get("marketCap") or 0
-rev = info.get("totalRevenue") or 0
-dy = (info.get("dividendYield") or 0) * 100
-beta = info.get("beta") or 0
 
 CURRENCY_SYMBOLS = {
     "USD": "$",
@@ -170,14 +178,17 @@ CURRENCY_SYMBOLS = {
 }
 
 
-def format_money(value, currency: str, decimals: int = 0) -> str:
-    """Format a monetary value using its actual provider currency."""
+def numeric_or_nan(value) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
-        return "N/A"
+        return np.nan
+    return number if np.isfinite(number) else np.nan
 
-    if not np.isfinite(number):
+
+def format_money(value, currency: str, decimals: int = 0) -> str:
+    number = numeric_or_nan(value)
+    if np.isnan(number):
         return "N/A"
 
     code = str(currency or "N/A").upper()
@@ -192,56 +203,79 @@ def format_money(value, currency: str, decimals: int = 0) -> str:
 
 
 def format_ratio(value, decimals: int = 2) -> str:
-    """Safely format a numeric ratio."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
+    number = numeric_or_nan(value)
+    if np.isnan(number):
         return "N/A"
-
-    if not np.isfinite(number):
-        return "N/A"
-
     return f"{number:.{decimals}f}"
 
 
-def arrow_markup(condition: bool) -> str:
-    """Return safe HTML for a directional indicator."""
-    if condition:
+def format_count(value) -> str:
+    number = numeric_or_nan(value)
+    if np.isnan(number):
+        return "N/A"
+    return f"{number:,.0f}"
+
+
+def dividend_yield_percent(metadata: dict) -> float:
+    direct = numeric_or_nan(metadata.get("dividendYield"))
+    trailing = numeric_or_nan(
+        metadata.get("trailingAnnualDividendYield")
+    )
+
+    if not np.isnan(direct) and not np.isnan(trailing):
+        trailing_percent = trailing * 100
+        direct_as_percent = direct
+        direct_as_fraction = direct * 100
+        return (
+            direct_as_percent
+            if abs(direct_as_percent - trailing_percent)
+            <= abs(direct_as_fraction - trailing_percent)
+            else direct_as_fraction
+        )
+
+    if not np.isnan(direct):
+        return direct * 100 if abs(direct) < 0.20 else direct
+
+    if not np.isnan(trailing):
+        return trailing * 100
+
+    return np.nan
+
+
+def comparison_arrow(left, right) -> str:
+    lhs = numeric_or_nan(left)
+    rhs = numeric_or_nan(right)
+
+    if np.isnan(lhs) or np.isnan(rhs) or lhs == rhs:
+        return ""
+    if lhs > rhs:
         return '<span class="arrow-up">▲</span>'
     return '<span class="arrow-down">▼</span>'
 
 
+vol = numeric_or_nan(info.get("volume"))
+avg_vol = numeric_or_nan(info.get("averageVolume"))
+mc = numeric_or_nan(info.get("marketCap"))
+rev = numeric_or_nan(info.get("totalRevenue"))
+beta = numeric_or_nan(info.get("beta"))
+dy = dividend_yield_percent(info)
+
 c1, c2, c3 = st.columns(3)
 
-volume_arrow = arrow_markup(vol > avg_vol)
-average_volume_arrow = arrow_markup(avg_vol > vol)
+volume_arrow = comparison_arrow(vol, avg_vol)
+average_volume_arrow = comparison_arrow(avg_vol, vol)
 
-shares_outstanding = info.get("sharesOutstanding") or 0
-previous_market_cap = prev_close * shares_outstanding
-market_cap_arrow = arrow_markup(mc > previous_market_cap)
-
-c1.markdown(
-    f"**Volume:** {vol:,} {volume_arrow} "
-    "<abbr title='Shares traded during the latest session.'>ℹ️</abbr>",
-    unsafe_allow_html=True,
+shares_outstanding = numeric_or_nan(info.get("sharesOutstanding"))
+previous_market_cap = (
+    prev_close * shares_outstanding
+    if not np.isnan(shares_outstanding)
+    else np.nan
 )
-
-c2.markdown(
-    f"**Avg Volume:** {avg_vol:,} {average_volume_arrow} "
-    "<abbr title='Average recent trading volume.'>ℹ️</abbr>",
-    unsafe_allow_html=True,
+market_cap_arrow = (
+    ""
+    if is_etf
+    else comparison_arrow(mc, previous_market_cap)
 )
-
-c3.markdown(
-    f"**Market Cap:** {format_money(mc, instrument_currency, 0)} {market_cap_arrow} "
-    "<abbr title='Total market value of company equity.'>ℹ️</abbr>",
-    unsafe_allow_html=True,
-)
-
-
-c4, c5, c6 = st.columns(3)
-
-revenue_arrow = arrow_markup(rev > previous_market_cap)
 
 peer_dividend_yields = []
 peer_dividend_warnings = []
@@ -249,10 +283,9 @@ peer_dividend_warnings = []
 for peer_symbol in dict.fromkeys(peer_list):
     try:
         peer_metadata = yf.Ticker(peer_symbol).get_info() or {}
-        peer_yield = peer_metadata.get("dividendYield")
-
-        if isinstance(peer_yield, (int, float)):
-            peer_dividend_yields.append(peer_yield * 100)
+        peer_yield = dividend_yield_percent(peer_metadata)
+        if not np.isnan(peer_yield):
+            peer_dividend_yields.append(peer_yield)
     except Exception as exc:
         peer_dividend_warnings.append(
             f"{peer_symbol}: {type(exc).__name__}"
@@ -265,185 +298,264 @@ if peer_dividend_warnings:
     )
 
 average_peer_dividend_yield = (
-    float(np.nanmean(peer_dividend_yields))
+    float(np.mean(peer_dividend_yields))
     if peer_dividend_yields
     else np.nan
 )
 
-dividend_arrow = arrow_markup(
-    not np.isnan(average_peer_dividend_yield)
-    and dy > average_peer_dividend_yield
+dividend_arrow = comparison_arrow(
+    dy,
+    average_peer_dividend_yield,
+)
+beta_arrow = comparison_arrow(beta, 1)
+
+market_cap_text = (
+    "N/A"
+    if is_etf
+    else format_money(mc, instrument_currency, 0)
+)
+revenue_text = (
+    "Not applicable to ETF"
+    if is_etf
+    else format_money(rev, financial_currency, 0)
+)
+dividend_text = "N/A" if np.isnan(dy) else f"{dy:.2f}%"
+beta_text = format_ratio(beta)
+
+c1.markdown(
+    f"**Volume:** {format_count(vol)} {volume_arrow} "
+    "<abbr title='Shares traded during the latest session.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
+)
+c2.markdown(
+    f"**Avg Volume:** {format_count(avg_vol)} {average_volume_arrow} "
+    "<abbr title='Average recent trading volume.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
+)
+c3.markdown(
+    f"**Market Cap:** {market_cap_text} {market_cap_arrow} "
+    "<abbr title='Corporate market value; unavailable for ETFs.'>ℹ️</abbr>",
+    unsafe_allow_html=True,
 )
 
-beta_arrow = arrow_markup(beta > 1)
-
+c4, c5, c6 = st.columns(3)
 c4.markdown(
-    f"**Revenue (TTM):** {format_money(rev, financial_currency, 0)} {revenue_arrow} "
-    "<abbr title='Revenue reported for the trailing twelve months.'>ℹ️</abbr>",
+    f"**Revenue (TTM):** {revenue_text} "
+    "<abbr title='Corporate trailing-twelve-month revenue.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
-
 c5.markdown(
-    f"**Dividend Yield:** {dy:.2f}% {dividend_arrow} "
-    "<abbr title='Annual dividend yield.'>ℹ️</abbr>",
+    f"**Dividend Yield:** {dividend_text} {dividend_arrow} "
+    "<abbr title='Annual dividend or distribution yield.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
-
 c6.markdown(
-    f"**Beta:** {beta:.2f} {beta_arrow} "
+    f"**Beta:** {beta_text} {beta_arrow} "
     "<abbr title='Historical volatility relative to the wider market.'>ℹ️</abbr>",
     unsafe_allow_html=True,
 )
 
+overview_notes = []
 
-ins = (
-    f"Volume was {'above' if vol>avg_vol else 'below'} its 30-day avg; "
-    f"{'strong interest' if vol>avg_vol else 'muted trading'}. "
-    f"Market cap {format_money(mc, instrument_currency, 0)} "
-    f"({'small' if mc < 1e9 else 'mid/large'}-cap). "
-    f"TTM revenue {format_money(rev, financial_currency, 0)}; "
-    f"Dividend yield {dy:.2f}% ({'pays' if dy>0 else 'no payout'}); "
-    f"Beta {beta:.2f} ({'high' if beta>1 else 'low'} volatility)."
+if not np.isnan(vol) and not np.isnan(avg_vol):
+    overview_notes.append(
+        "Volume was "
+        f"{'above' if vol > avg_vol else 'below'} its recent average; "
+        f"{'stronger interest' if vol > avg_vol else 'muted trading'}."
+    )
+else:
+    overview_notes.append("Volume comparison is unavailable.")
+
+if is_etf:
+    overview_notes.append(
+        "Corporate market-cap, revenue and profitability metrics "
+        "are not applicable to this ETF."
+    )
+else:
+    if not np.isnan(mc):
+        size_label = "small" if mc < 1e9 else "mid/large"
+        overview_notes.append(
+            f"Market cap {format_money(mc, instrument_currency, 0)} "
+            f"({size_label}-cap)."
+        )
+    if not np.isnan(rev):
+        overview_notes.append(
+            f"TTM revenue {format_money(rev, financial_currency, 0)}."
+        )
+
+if not np.isnan(dy):
+    overview_notes.append(
+        f"Dividend yield {dy:.2f}% "
+        f"({'pays a distribution' if dy > 0 else 'no payout reported'})."
+    )
+else:
+    overview_notes.append("Dividend yield is unavailable.")
+
+if not np.isnan(beta):
+    overview_notes.append(
+        f"Beta {beta:.2f} "
+        f"({'high' if beta > 1 else 'lower'} relative volatility)."
+    )
+else:
+    overview_notes.append("Beta is unavailable.")
+
+st.markdown(
+    "<div class='card-dark'>🔍 "
+    + " ".join(overview_notes)
+    + "</div>",
+    unsafe_allow_html=True,
 )
-st.markdown(f"<div class='card-dark'>🔍 {ins}</div>", unsafe_allow_html=True)
 
 # --- EXTENDED FUNDAMENTALS vs PEERS ---
-st.markdown("<div class='card'><h2>📑 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
-
-# Gather peer metadata with controlled provider warnings.
-peer_info = []
-peer_info_warnings = []
-
-for peer_symbol in dict.fromkeys(peer_list):
-    try:
-        provider_info = yf.Ticker(peer_symbol).get_info() or {}
-        if provider_info:
-            peer_info.append(provider_info)
-    except Exception as exc:
-        peer_info_warnings.append(
-            f"{peer_symbol}: {type(exc).__name__}"
-        )
-
-if peer_info_warnings:
-    st.warning(
-        "Some peer fundamental data could not be loaded: "
-        + ", ".join(peer_info_warnings)
+if is_etf:
+    st.markdown(
+        "<div class='card'><h2>📑 Fund Structure</h2></div>",
+        unsafe_allow_html=True,
     )
+    st.info(
+        "Corporate valuation, profitability, leverage and quarterly "
+        "earnings metrics are not applicable to ETFs. "
+        "ETF-specific holdings, fees, assets and tracking metrics "
+        "will be added in a later implementation step."
+    )
+else:
+    st.markdown("<div class='card'><h2>📑 Fundamental Breakdown vs Peers</h2></div>", unsafe_allow_html=True)
 
-keys = ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']
-avg_vals = {k: np.nanmean([pi.get(k) for pi in peer_info if isinstance(pi.get(k), (int,float))]) for k in keys}
+    # Gather peer metadata with controlled provider warnings.
+    peer_info = []
+    peer_info_warnings = []
 
-cols = st.columns(3)
-sections = {
-    'Valuation'     : [('P/E Ratio','trailingPE','15–25 fair'), ('PEG Ratio','pegRatio','~1 fair')],
-    'Profitability' : [('Net Margin','profitMargins','>5% profitable'), ('ROE','returnOnEquity','>15% strong')],
-    'Leverage'      : [('Debt/Equity','debtToEquity','<1 manageable'), ('Enterprise Value','enterpriseValue','incl debt & cash')]
-}
+    for peer_symbol in dict.fromkeys(peer_list):
+        try:
+            provider_info = yf.Ticker(peer_symbol).get_info() or {}
+            if provider_info:
+                peer_info.append(provider_info)
+        except Exception as exc:
+            peer_info_warnings.append(
+                f"{peer_symbol}: {type(exc).__name__}"
+            )
 
-for idx, (sec, items) in enumerate(sections.items()):
-    with cols[idx]:
-        st.markdown(f"**{sec}**")
-        for name,key,tip in items:
-            val     = info.get(key)
-            peer_av = avg_vals.get(key, np.nan)
-            # display text
-            if pd.isna(val) or pd.isna(peer_av):
-                disp, color = 'N/A','gray'
-            else:
-                better = (val>=peer_av) if key!='debtToEquity' else (val<=peer_av)
-                color  = 'green' if better else 'red'
-                if name in ['Net Margin','ROE']:
-                    disp = f"{val*100:.2f}%"
-                elif key=='enterpriseValue':
-                    disp = format_money(val, instrument_currency, 0)
+    if peer_info_warnings:
+        st.warning(
+            "Some peer fundamental data could not be loaded: "
+            + ", ".join(peer_info_warnings)
+        )
+
+    keys = ['trailingPE','pegRatio','profitMargins','returnOnEquity','debtToEquity','enterpriseValue']
+    avg_vals = {k: np.nanmean([pi.get(k) for pi in peer_info if isinstance(pi.get(k), (int,float))]) for k in keys}
+
+    cols = st.columns(3)
+    sections = {
+        'Valuation'     : [('P/E Ratio','trailingPE','15–25 fair'), ('PEG Ratio','pegRatio','~1 fair')],
+        'Profitability' : [('Net Margin','profitMargins','>5% profitable'), ('ROE','returnOnEquity','>15% strong')],
+        'Leverage'      : [('Debt/Equity','debtToEquity','<1 manageable'), ('Enterprise Value','enterpriseValue','incl debt & cash')]
+    }
+
+    for idx, (sec, items) in enumerate(sections.items()):
+        with cols[idx]:
+            st.markdown(f"**{sec}**")
+            for name,key,tip in items:
+                val     = info.get(key)
+                peer_av = avg_vals.get(key, np.nan)
+                # display text
+                if pd.isna(val) or pd.isna(peer_av):
+                    disp, color = 'N/A','gray'
                 else:
-                    disp = f"{val:.2f}"
-            st.markdown(f"- {name}: <span style='color:{color};font-weight:bold'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
+                    better = (val>=peer_av) if key!='debtToEquity' else (val<=peer_av)
+                    color  = 'green' if better else 'red'
+                    if name in ['Net Margin','ROE']:
+                        disp = f"{val*100:.2f}%"
+                    elif key=='enterpriseValue':
+                        disp = format_money(val, instrument_currency, 0)
+                    else:
+                        disp = f"{val:.2f}"
+                st.markdown(f"- {name}: <span style='color:{color};font-weight:bold'>{disp}</span> <abbr title='{tip}'>ℹ️</abbr>", unsafe_allow_html=True)
 
-# AI insight for fundamentals
-vd = info.get('trailingPE',np.nan) - avg_vals['trailingPE']
-pdiff = (info.get('returnOnEquity',0) - avg_vals['returnOnEquity'])*100
-ld = avg_vals['debtToEquity'] - info.get('debtToEquity',np.nan)
-notes=[]
-if not np.isnan(vd):
-    notes.append("📈 Valuation attractive vs peers." if vd<0 else "⚠️ Valuation above peers.")
-if not np.isnan(pdiff):
-    notes.append("👍 ROE outperforms peers." if pdiff>0 else "🔻 ROE lags peers.")
-if not np.isnan(ld):
-    notes.append("🏦 Lower debt vs peers." if ld>0 else "⚠️ Higher leverage.")
-st.markdown(f"<div class='card-dark'>💡 {' '.join(notes)}</div>", unsafe_allow_html=True)
+    # AI insight for fundamentals
+    vd = info.get('trailingPE',np.nan) - avg_vals['trailingPE']
+    pdiff = (info.get('returnOnEquity',0) - avg_vals['returnOnEquity'])*100
+    ld = avg_vals['debtToEquity'] - info.get('debtToEquity',np.nan)
+    notes=[]
+    if not np.isnan(vd):
+        notes.append("📈 Valuation attractive vs peers." if vd<0 else "⚠️ Valuation above peers.")
+    if not np.isnan(pdiff):
+        notes.append("👍 ROE outperforms peers." if pdiff>0 else "🔻 ROE lags peers.")
+    if not np.isnan(ld):
+        notes.append("🏦 Lower debt vs peers." if ld>0 else "⚠️ Higher leverage.")
+    st.markdown(f"<div class='card-dark'>💡 {' '.join(notes)}</div>", unsafe_allow_html=True)
 
-# --- QUARTERLY EARNINGS REVIEW ---
-def render_fundamental_analysis(ticker):
-    data = yf.Ticker(ticker)
-    st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
+    # --- QUARTERLY EARNINGS REVIEW ---
+    def render_fundamental_analysis(ticker):
+        data = yf.Ticker(ticker)
+        st.markdown("<div class='card'><h2>📊 Quarterly Earnings Review</h2></div>", unsafe_allow_html=True)
 
-    try:
-        df = data.quarterly_financials.T
-    except Exception as exc:
-        st.warning(
-            "Quarterly financial statements could not be loaded "
-            f"({type(exc).__name__})."
-        )
-        return
+        try:
+            df = data.quarterly_financials.T
+        except Exception as exc:
+            st.warning(
+                "Quarterly financial statements could not be loaded "
+                f"({type(exc).__name__})."
+            )
+            return
 
-    if df.empty:
-        st.warning(
-            "No quarterly financial statements are available "
-            f"for {ticker}."
-        )
-        return
-    metrics = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
-    avail   = [m for m in metrics if m in df.columns]
-    df_q     = df[avail].iloc[:4]
-    df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
+        if df.empty:
+            st.warning(
+                "No quarterly financial statements are available "
+                f"for {ticker}."
+            )
+            return
+        metrics = ['Total Revenue','Revenue','Gross Profit','Operating Income','EBIT','Net Income','Operating Cash Flow']
+        avail   = [m for m in metrics if m in df.columns]
+        df_q     = df[avail].iloc[:4]
+        df_q.index = pd.to_datetime(df_q.index).to_period('Q').astype(str)
 
-    # compute QoQ %
-    df_pct = (df_q.pct_change()*100).round(1)
-    df_pct.columns = [f"{c} % Change" for c in df_pct.columns]
+        # compute QoQ %
+        df_pct = (df_q.pct_change()*100).round(1)
+        df_pct.columns = [f"{c} % Change" for c in df_pct.columns]
 
-    df_show = pd.concat([df_q, df_pct],axis=1)
+        df_show = pd.concat([df_q, df_pct],axis=1)
 
-    def short_fmt(x):
-        try: x=float(x)
-        except (TypeError, ValueError): return "-"
-        if abs(x)>=1e9: return f"{x/1e9:.2f}B"
-        if abs(x)>=1e6: return f"{x/1e6:.2f}M"
-        if abs(x)>=1e3: return f"{x/1e3:.2f}K"
-        return f"{x:.0f}"
+        def short_fmt(x):
+            try: x=float(x)
+            except (TypeError, ValueError): return "-"
+            if abs(x)>=1e9: return f"{x/1e9:.2f}B"
+            if abs(x)>=1e6: return f"{x/1e6:.2f}M"
+            if abs(x)>=1e3: return f"{x/1e3:.2f}K"
+            return f"{x:.0f}"
 
-    df_fmt = df_show.copy()
-    for c in avail: df_fmt[c] = df_fmt[c].apply(short_fmt)
-    for c in df_pct.columns: df_fmt[c] = df_fmt[c].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
+        df_fmt = df_show.copy()
+        for c in avail: df_fmt[c] = df_fmt[c].apply(short_fmt)
+        for c in df_pct.columns: df_fmt[c] = df_fmt[c].apply(lambda v: f"{v:.1f}%" if pd.notna(v) else "-")
 
-    st.dataframe(df_fmt, width="stretch")
+        st.dataframe(df_fmt, width="stretch")
 
-    # insights
-    latest = df_pct.index[-1]
-    prev   = df_pct.index[-2] if len(df_pct)>1 else None
-    ins    = []
-    def senti(ch):
-        if ch>5: return "strong growth"
-        if ch>0: return "modest increase"
-        if ch>-5: return "slight decline"
-        return "notable decrease"
+        # insights
+        latest = df_pct.index[-1]
+        prev   = df_pct.index[-2] if len(df_pct)>1 else None
+        ins    = []
+        def senti(ch):
+            if ch>5: return "strong growth"
+            if ch>0: return "modest increase"
+            if ch>-5: return "slight decline"
+            return "notable decrease"
 
-    if prev:
-        for m in avail:
-            key = f"{m} % Change"
-            if key in df_pct.columns:
-                ch = df_pct.loc[latest,key]
-                ins.append(f"• {m} {senti(ch)} of {abs(ch):.1f}% this quarter.")
-        # analyst style
-        rc = df_pct.loc[latest,"Revenue % Change"] if "Revenue % Change" in df_pct else None
-        if rc is not None:
-            mood = "bullish" if rc>0 else "cautious"
-            ins.append(f"🧐 Analysts are {mood} on rev after a {abs(rc):.1f}% {'rise' if rc>0 else 'drop'}.")
+        if prev:
+            for m in avail:
+                key = f"{m} % Change"
+                if key in df_pct.columns:
+                    ch = df_pct.loc[latest,key]
+                    ins.append(f"• {m} {senti(ch)} of {abs(ch):.1f}% this quarter.")
+            # analyst style
+            rc = df_pct.loc[latest,"Revenue % Change"] if "Revenue % Change" in df_pct else None
+            if rc is not None:
+                mood = "bullish" if rc>0 else "cautious"
+                ins.append(f"🧐 Analysts are {mood} on rev after a {abs(rc):.1f}% {'rise' if rc>0 else 'drop'}.")
 
-    summary = "<br>".join(ins) if ins else "No significant quarter-over-quarter changes."
-    st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>", unsafe_allow_html=True)
+        summary = "<br>".join(ins) if ins else "No significant quarter-over-quarter changes."
+        st.markdown(f"<div class='card-dark'><b>💡 Earnings Insights:</b><br>{summary}</div>", unsafe_allow_html=True)
 
-render_fundamental_analysis(ticker)
+    render_fundamental_analysis(ticker)
+
 # --- TECHNICAL PARAMETER CONTROLS ---
 st.sidebar.header("🔧 Technical Settings")
 rsi_p   = st.sidebar.slider("RSI Period", 5, 30, 14)
