@@ -47,30 +47,7 @@ ticker_select = st.sidebar.selectbox("Choose from popular tickers", popular, ind
 ticker_input  = st.sidebar.text_input("Or enter any ticker symbol", "").upper().strip()
 ticker = ticker_input or ticker_select
 
-# Auto-select peers by industry/sector
-data = yf.Ticker(ticker)
-info = data.info
-if st.sidebar.checkbox("Auto-select peers by sector/industry", True):
-    sector   = info.get("sector")
-    industry = info.get("industry")
-    industry_map = {
-        'Information Technology Services': ['SOUN','CRNC','AI','NVDA','PLTR'],
-        'Software—Infrastructure':          ['NOW','CRM','ORCL','ADBE','SNOW'],
-    }
-    sector_map = {
-        'Technology':          ['AAPL','MSFT','GOOGL','AMZN','TSLA'],
-        'Consumer Cyclical':   ['AMZN','TSLA','BBWI'],
-        'Communication Services':['META','NFLX','DIS'],
-    }
-    peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
-else:
-    text = st.sidebar.text_input("Or enter peers (comma separated)", ",".join(popular))
-    peer_list = [p.strip().upper() for p in text.split(",") if p.strip()]
-
-# --- FETCH DATA ---
-data = yf.Ticker(ticker)
-info = data.info
-
+# --- VALIDATE AND FETCH PRIMARY DATA ---
 try:
     snapshot = load_market_snapshot(
         ticker,
@@ -82,7 +59,42 @@ except (InvalidSymbolError, MarketDataError) as exc:
     st.error(str(exc))
     st.stop()
 
+# Use the validated and normalised symbol throughout the production app.
+ticker = snapshot.symbol
 hist = snapshot.history.copy()
+info = dict(snapshot.metadata)
+
+# Additional yfinance endpoints are used later for dividends, financial
+# statements and news. They are created only after the symbol is validated.
+data = yf.Ticker(ticker)
+
+# Auto-select peers only after validated metadata is available.
+if st.sidebar.checkbox("Auto-select peers by sector/industry", True):
+    sector = info.get("sector")
+    industry = info.get("industry")
+
+    industry_map = {
+        'Information Technology Services': ['SOUN', 'CRNC', 'AI', 'NVDA', 'PLTR'],
+        'Software—Infrastructure': ['NOW', 'CRM', 'ORCL', 'ADBE', 'SNOW'],
+    }
+    sector_map = {
+        'Technology': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'],
+        'Consumer Cyclical': ['AMZN', 'TSLA', 'BBWI'],
+        'Communication Services': ['META', 'NFLX', 'DIS'],
+    }
+
+    peer_list = industry_map.get(industry) or sector_map.get(sector) or popular
+else:
+    peer_text = st.sidebar.text_input(
+        "Or enter peers (comma separated)",
+        ",".join(popular),
+    )
+    peer_list = [
+        symbol.strip().upper()
+        for symbol in peer_text.split(",")
+        if symbol.strip()
+    ]
+
 hist['MA20'] = hist['Close'].rolling(20).mean()
 hist['MA50'] = hist['Close'].rolling(50).mean()
 
