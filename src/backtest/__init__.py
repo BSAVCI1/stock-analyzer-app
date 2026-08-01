@@ -57,6 +57,18 @@ from .performance import (
     calculate_sharpe_ratio,
 )
 
+from .release import (
+    APPROVED_THRESHOLD_STATUS,
+    DEFAULT_P2_LIMITATIONS,
+    REQUIRED_REGRESSION_PHASES,
+    ApprovedThresholdManifest,
+    P2ReleaseGateReport,
+    RegressionEvidence,
+    ReleaseGateStatus,
+    evaluate_p2_release_gate,
+    load_approved_threshold_manifest,
+)
+
 from .validation import (
     CandidateEvaluation,
     ChronologicalSplit,
@@ -77,6 +89,15 @@ from .validation import (
 )
 
 __all__ = [
+    "APPROVED_THRESHOLD_STATUS",
+    "DEFAULT_P2_LIMITATIONS",
+    "REQUIRED_REGRESSION_PHASES",
+    "ApprovedThresholdManifest",
+    "P2ReleaseGateReport",
+    "RegressionEvidence",
+    "ReleaseGateStatus",
+    "evaluate_p2_release_gate",
+    "load_approved_threshold_manifest",
     "AcceptanceCheck",
     "AcceptanceStatus",
     "PerformanceScope",
