@@ -5,6 +5,13 @@ from .breakout import (
     BreakoutThresholds,
     evaluate_breakout,
 )
+from .dashboard import (
+    ComponentTrace,
+    TradingExpertReport,
+    build_score_components,
+    build_trading_expert_report,
+    score_fundamentals,
+)
 from .mean_reversion import (
     MeanReversionContext,
     MeanReversionThresholds,
@@ -46,6 +53,11 @@ from .trend_pullback import (
 )
 
 __all__ = [
+    "ComponentTrace",
+    "TradingExpertReport",
+    "build_score_components",
+    "build_trading_expert_report",
+    "score_fundamentals",
     "PaperOrder",
     "RiskDecision",
     "RiskThresholds",

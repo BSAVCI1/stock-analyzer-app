@@ -9,6 +9,11 @@ from plotly.subplots import make_subplots
 import requests
 import datetime
 import feedparser
+from src.analysis import (
+    AnalysisSnapshot,
+    IndicatorSnapshot,
+    build_trading_expert_report,
+)
 from src.data.market_data import (
     InvalidSymbolError,
     MarketDataError,
@@ -842,6 +847,356 @@ ins.append(f"ATR {latest['ATR']:.2f} indicates volatility.")
 ins.append(f"OBV trend is {obv_sig.lower()}.")
 
 st.markdown(f"<div class='card-dark'><b>📊 Technical Insights:</b><br>{'<br>'.join(ins)}</div>", unsafe_allow_html=True)
+
+
+# --- TRADING EXPERT DASHBOARD ---
+st.markdown(
+    "<div class='card'>"
+    "<h2 style='color:#222;'>🧭 Trading Expert</h2>"
+    "<p style='color:#555;margin-bottom:0;'>"
+    "Deterministic decision, conflict resolution and "
+    "paper-only risk plan."
+    "</p>"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+try:
+    # Preserve the provider's local market-session date for display.
+    expert_market_timestamp = pd.Timestamp(
+        hist.index[-1]
+    )
+    expert_market_date = (
+        expert_market_timestamp.date()
+    )
+
+    # The canonical analysis model still requires an aware timestamp.
+    if expert_market_timestamp.tzinfo is None:
+        expert_as_of = expert_market_timestamp.tz_localize(
+            "UTC"
+        )
+    else:
+        expert_as_of = expert_market_timestamp.tz_convert(
+            "UTC"
+        )
+
+    expert_snapshot = AnalysisSnapshot(
+        symbol=ticker,
+        display_name=str(
+            info.get("shortName")
+            or info.get("longName")
+            or ticker
+        ),
+        fetched_at_utc=snapshot.fetched_at_utc,
+        history_rows=len(hist),
+        indicators=IndicatorSnapshot(
+            as_of=expert_as_of.to_pydatetime(),
+            close=float(latest["Close"]),
+            volume=float(latest["Volume"]),
+            ma20=float(latest["MA20"]),
+            ma50=float(latest["MA50"]),
+            ma200=float(latest["MA200"]),
+            rsi=float(latest["RSI"]),
+            macd=float(latest["MACD"]),
+            macd_signal=float(latest["MACDs"]),
+            macd_histogram=float(
+                latest["MACD_h"]
+            ),
+            bollinger_percent_b=float(
+                latest["BBpctB"]
+            ),
+            atr=float(latest["ATR"]),
+            obv=float(latest["OBV"]),
+            support=float(sup),
+            resistance=float(res),
+        ),
+        quote_type=quote_type,
+        currency=instrument_currency,
+        exchange=exchange,
+        warnings=tuple(snapshot.warnings),
+    )
+
+    expert_report = build_trading_expert_report(
+        expert_snapshot,
+        hist,
+        info,
+    )
+
+    expert_decision = (
+        expert_report
+        .risk_decision
+        .recommendation
+    )
+
+    decision_styles = {
+        "BUY": (
+            "#123d2a",
+            "#55e38f",
+        ),
+        "WATCH": (
+            "#3d3512",
+            "#ffd866",
+        ),
+        "HOLD": (
+            "#263043",
+            "#b8c7e0",
+        ),
+        "REDUCE": (
+            "#472d16",
+            "#ffad66",
+        ),
+        "SELL": (
+            "#481f25",
+            "#ff6b75",
+        ),
+    }
+
+    card_background, card_text = (
+        decision_styles.get(
+            expert_decision.signal.value,
+            ("#263043", "#ffffff"),
+        )
+    )
+
+    st.markdown(
+        (
+            "<div style='"
+            f"background:{card_background};"
+            f"color:{card_text};"
+            "padding:24px;"
+            "border-radius:12px;"
+            "margin-bottom:18px;"
+            "border:1px solid rgba(255,255,255,0.12);"
+            "'>"
+            "<div style='font-size:14px;"
+            "font-weight:700;letter-spacing:0.08em;'>"
+            "FINAL DETERMINISTIC DECISION"
+            "</div>"
+            "<div style='font-size:42px;"
+            "font-weight:800;margin:6px 0;'>"
+            f"{expert_decision.signal.value}"
+            "</div>"
+            "<div style='font-size:16px;'>"
+            f"Score {expert_decision.score:.1f}/100"
+            " · "
+            f"Confidence "
+            f"{expert_decision.confidence * 100:.0f}%"
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+    decision_col1, decision_col2, decision_col3, decision_col4 = (
+        st.columns(4)
+    )
+
+    decision_col1.metric(
+        "Market regime",
+        expert_report.regime.regime.value,
+    )
+
+    decision_col2.metric(
+        "Regime confidence",
+        (
+            f"{expert_report.regime.confidence * 100:.0f}%"
+        ),
+    )
+
+    decision_col3.metric(
+        "Bullish / bearish votes",
+        (
+            f"{expert_report.regime.bullish_votes}"
+            " / "
+            f"{expert_report.regime.bearish_votes}"
+        ),
+    )
+
+    decision_col4.metric(
+        "Completed session",
+        expert_market_date.isoformat(),
+    )
+
+    st.caption(
+        "⚠️ Paper-only analytical output. "
+        "No broker connection, live-order submission "
+        "or automatic execution is available."
+    )
+
+    component_rows = [
+        {
+            "Component": trace.name,
+            "Score": trace.score,
+            "Deterministic calculation": (
+                trace.explanation
+            ),
+        }
+        for trace in expert_report.component_traces
+    ]
+
+    st.markdown("### Weighted score components")
+
+    st.dataframe(
+        pd.DataFrame(component_rows),
+        width="stretch",
+        hide_index=True,
+    )
+
+    strategy_rows = [
+        {
+            "Strategy": result.strategy,
+            "Signal": result.signal.value,
+            "Score": result.score,
+            "Confidence": (
+                f"{result.confidence * 100:.0f}%"
+            ),
+            "Vetoed": "Yes" if result.vetoed else "No",
+            "Veto reason": (
+                result.veto_reason or ""
+            ),
+        }
+        for result in expert_report.strategy_results
+    ]
+
+    st.markdown(
+        "### Strategy agreement and conflicts"
+    )
+
+    st.dataframe(
+        pd.DataFrame(strategy_rows),
+        width="stretch",
+        hide_index=True,
+    )
+
+    with st.expander(
+        "Evidence and conflict-resolution trace",
+        expanded=False,
+    ):
+        evidence_rows = [
+            {
+                "Code": item.code,
+                "Direction": item.direction.value,
+                "Strength": item.strength,
+                "Observed value": str(
+                    item.observed_value
+                ),
+                "Explanation": item.message,
+            }
+            for item in expert_decision.evidence
+        ]
+
+        st.dataframe(
+            pd.DataFrame(evidence_rows),
+            width="stretch",
+            hide_index=True,
+        )
+
+        st.markdown("#### Market-regime reasons")
+
+        for reason in expert_report.regime.reasons:
+            st.markdown(f"- {reason}")
+
+    risk_decision = expert_report.risk_decision
+
+    if risk_decision.risk_vetoes:
+        st.error(
+            "Risk veto: "
+            + " ".join(
+                risk_decision.risk_vetoes
+            )
+        )
+
+    paper_order = risk_decision.order
+
+    if paper_order is not None:
+        st.success(
+            "✅ Risk gate passed. "
+            "A paper-only setup has been generated."
+        )
+
+        order_col1, order_col2, order_col3, order_col4 = (
+            st.columns(4)
+        )
+
+        order_col1.metric(
+            "Entry zone",
+            (
+                f"{paper_order.entry_low:,.2f}"
+                "–"
+                f"{paper_order.entry_high:,.2f} "
+                f"{instrument_currency}"
+            ),
+        )
+
+        order_col2.metric(
+            "Invalidation stop",
+            (
+                f"{paper_order.stop_price:,.2f} "
+                f"{instrument_currency}"
+            ),
+        )
+
+        order_col3.metric(
+            "Reward / risk",
+            f"{paper_order.reward_to_risk:.2f}",
+        )
+
+        order_col4.metric(
+            "Expires",
+            paper_order.expires_at.strftime(
+                "%Y-%m-%d"
+            ),
+        )
+
+        targets_frame = pd.DataFrame(
+            {
+                "Target": [
+                    f"T{index}"
+                    for index in range(
+                        1,
+                        len(paper_order.targets) + 1,
+                    )
+                ],
+                "Price": [
+                    (
+                        f"{target:,.2f} "
+                        f"{instrument_currency}"
+                    )
+                    for target in paper_order.targets
+                ],
+            }
+        )
+
+        st.dataframe(
+            targets_frame,
+            width="stretch",
+            hide_index=True,
+        )
+
+        st.caption(
+            "This setup is informational and paper-only. "
+            "Its stop price is the defined invalidation point."
+        )
+
+    elif not risk_decision.risk_vetoes:
+        st.info(
+            "No paper order was generated because the "
+            f"final decision is "
+            f"{expert_decision.signal.value}."
+        )
+
+except (
+    IndexError,
+    KeyError,
+    TypeError,
+    ValueError,
+) as exc:
+    st.warning(
+        "Trading Expert could not be calculated from "
+        "the current completed-session data "
+        f"({type(exc).__name__}: {exc})."
+    )
+
 
 # --- CONSOLIDATED MARKET CHART, NEWS AND PEER COMPARISON ---
 def load_yahoo_rss_news(
