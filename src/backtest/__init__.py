@@ -1,5 +1,21 @@
 """Backtesting domain records and lifecycle validation."""
 
+from .economics import (
+    BindingConstraint,
+    ExecutionCostModel,
+    PositionSizeDecision,
+    PositionSizingConstraints,
+    PositionSizingError,
+    TradeSettlement,
+    apply_entry_slippage,
+    apply_exit_slippage,
+    apply_position_size,
+    calculate_fee,
+    calculate_position_size,
+    settle_trade,
+    validate_order_quantity,
+)
+
 from .execution import (
     ExecutionResult,
     ExecutionStatus,
@@ -22,6 +38,19 @@ from .model import (
 )
 
 __all__ = [
+    "BindingConstraint",
+    "ExecutionCostModel",
+    "PositionSizeDecision",
+    "PositionSizingConstraints",
+    "PositionSizingError",
+    "TradeSettlement",
+    "apply_entry_slippage",
+    "apply_exit_slippage",
+    "apply_position_size",
+    "calculate_fee",
+    "calculate_position_size",
+    "settle_trade",
+    "validate_order_quantity",
     "ExecutionResult",
     "ExecutionStatus",
     "FillRule",
