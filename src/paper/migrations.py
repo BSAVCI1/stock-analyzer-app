@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 _SCHEMA_V1 = """
@@ -248,6 +248,91 @@ COMMIT;
 """
 
 
+_SCHEMA_V2 = """
+BEGIN IMMEDIATE;
+
+ALTER TABLE paper_scans
+    ADD COLUMN scan_key TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE paper_scans
+    ADD COLUMN requested_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE paper_scans
+    ADD COLUMN configuration_json TEXT NOT NULL DEFAULT '{}';
+
+ALTER TABLE paper_scans
+    ADD COLUMN app_version TEXT NOT NULL DEFAULT 'unknown';
+
+CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_scans_account_key
+    ON paper_scans(account_id, scan_key)
+    WHERE scan_key <> '';
+
+CREATE TABLE IF NOT EXISTS paper_scan_results (
+    result_id TEXT PRIMARY KEY,
+    scan_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    status TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+
+    data_as_of TEXT,
+    history_rows INTEGER NOT NULL,
+
+    latest_price REAL,
+    average_volume REAL,
+    average_dollar_volume REAL,
+
+    recommendation TEXT,
+    strategy TEXT,
+    score REAL,
+    confidence REAL,
+    market_regime TEXT,
+    reward_to_risk REAL,
+
+    release_eligible INTEGER NOT NULL,
+
+    rank_score REAL,
+    rank_position INTEGER,
+
+    signal_id TEXT,
+
+    reasons_json TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    metadata_json TEXT NOT NULL,
+
+    UNIQUE(scan_id, symbol),
+
+    FOREIGN KEY(scan_id)
+        REFERENCES paper_scans(scan_id),
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id),
+
+    FOREIGN KEY(signal_id)
+        REFERENCES paper_signals(signal_id)
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_scan_results_status
+    ON paper_scan_results(
+        scan_id,
+        status
+    );
+
+CREATE INDEX IF NOT EXISTS
+    idx_scan_results_rank
+    ON paper_scan_results(
+        scan_id,
+        rank_position
+    );
+
+PRAGMA user_version = 2;
+
+COMMIT;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -264,6 +349,7 @@ def apply_migrations(
 
     if current_version == 0:
         connection.executescript(_SCHEMA_V1)
+
         connection.execute(
             """
             INSERT OR REPLACE INTO schema_migrations(
@@ -272,7 +358,31 @@ def apply_migrations(
             )
             VALUES (
                 1,
-                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                strftime(
+                    '%Y-%m-%dT%H:%M:%fZ',
+                    'now'
+                )
+            )
+            """
+        )
+
+        current_version = 1
+
+    if current_version == 1:
+        connection.executescript(_SCHEMA_V2)
+
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO schema_migrations(
+                version,
+                applied_at
+            )
+            VALUES (
+                2,
+                strftime(
+                    '%Y-%m-%dT%H:%M:%fZ',
+                    'now'
+                )
             )
             """
         )
