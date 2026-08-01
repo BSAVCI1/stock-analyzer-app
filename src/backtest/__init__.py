@@ -37,7 +37,24 @@ from .model import (
     side_from_signal,
 )
 
+from .performance import (
+    BuyAndHoldComparison,
+    EquityPoint,
+    PerformanceReport,
+    SettledTrade,
+    calculate_max_drawdown,
+    calculate_performance,
+    calculate_sharpe_ratio,
+)
+
 __all__ = [
+    "BuyAndHoldComparison",
+    "EquityPoint",
+    "PerformanceReport",
+    "SettledTrade",
+    "calculate_max_drawdown",
+    "calculate_performance",
+    "calculate_sharpe_ratio",
     "BindingConstraint",
     "ExecutionCostModel",
     "PositionSizeDecision",
