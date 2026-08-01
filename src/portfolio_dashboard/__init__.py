@@ -1,0 +1,81 @@
+"""Read-only persisted paper-portfolio dashboard."""
+
+from .metrics import (
+    calculate_breakdowns,
+    calculate_equity_performance,
+    calculate_performance,
+    calculate_reliability,
+    make_provenance,
+)
+from .models import (
+    DecisionTrace,
+    EquityPerformance,
+    PerformanceBreakdown,
+    PerformanceSummary,
+    PortfolioDashboardSnapshot,
+    Provenance,
+    ReliabilityMetric,
+    ReliabilitySummary,
+    SectionProvenance,
+)
+from .repository import (
+    PortfolioDashboardRepository,
+)
+from .service import (
+    PortfolioDashboardService,
+)
+from .view import (
+    closed_trade_rows,
+    decision_trace_rows,
+    equity_rows,
+    execution_run_rows,
+    format_money,
+    format_percent,
+    job_rows,
+    metric_cards,
+    notification_rows,
+    open_position_rows,
+    pending_order_rows,
+    performance_breakdown_rows,
+    provenance_rows,
+    reliability_rows,
+    scan_result_rows,
+    scan_rows,
+    system_event_rows,
+)
+
+__all__ = [
+    "DecisionTrace",
+    "EquityPerformance",
+    "PerformanceBreakdown",
+    "PerformanceSummary",
+    "PortfolioDashboardRepository",
+    "PortfolioDashboardService",
+    "PortfolioDashboardSnapshot",
+    "Provenance",
+    "ReliabilityMetric",
+    "ReliabilitySummary",
+    "SectionProvenance",
+    "calculate_breakdowns",
+    "calculate_equity_performance",
+    "calculate_performance",
+    "calculate_reliability",
+    "make_provenance",
+    "closed_trade_rows",
+    "decision_trace_rows",
+    "equity_rows",
+    "execution_run_rows",
+    "format_money",
+    "format_percent",
+    "job_rows",
+    "metric_cards",
+    "notification_rows",
+    "open_position_rows",
+    "pending_order_rows",
+    "performance_breakdown_rows",
+    "provenance_rows",
+    "reliability_rows",
+    "scan_result_rows",
+    "scan_rows",
+    "system_event_rows",
+]
