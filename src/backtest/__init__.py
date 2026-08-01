@@ -1,5 +1,12 @@
 """Backtesting domain records and lifecycle validation."""
 
+from .execution import (
+    ExecutionResult,
+    ExecutionStatus,
+    FillRule,
+    execute_next_session,
+)
+
 from .model import (
     BacktestLifecycle,
     ClosedTradeRecord,
@@ -15,6 +22,10 @@ from .model import (
 )
 
 __all__ = [
+    "ExecutionResult",
+    "ExecutionStatus",
+    "FillRule",
+    "execute_next_session",
     "BacktestLifecycle",
     "ClosedTradeRecord",
     "ExitReason",
