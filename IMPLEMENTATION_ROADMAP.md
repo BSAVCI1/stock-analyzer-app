@@ -242,3 +242,113 @@ Gate:
 - OpenAI or any other AI-platform connection
 - broker connection and live order execution
 - background alerts and scheduled watchlist scans
+
+## P3 — Autonomous paper portfolio and monitoring
+
+P3 remains strictly paper-only. Broker connectivity and real-money execution
+remain deferred until the internal paper portfolio has demonstrated reliable
+operation and acceptable validated performance.
+
+### P3.1 — Persistent automated paper portfolio
+
+Deliverables:
+- SQLite account and cash ledger
+- persistent signals, orders, fills, positions and closed trades
+- idempotent order creation
+- exact account reconciliation
+- persistent audit events and notification queue
+- strategy, threshold and application version tracking
+
+Gate:
+- account creation, reservation, fill, position closure and realised P&L
+  reconcile exactly
+- repeating the same order request cannot create a duplicate purchase
+- every material state change has an audit record
+
+### P3.2 — Automatic market scanner
+
+Deliverables:
+- configured stock universe
+- liquidity, price-history and data-quality filters
+- batch deterministic analysis
+- candidate ranking
+- scan history and rejection reasons
+
+Gate:
+- every candidate and rejection is traceable to validated data and rules
+- only P2 release-eligible strategies can create candidate orders
+
+### P3.3 — Automated paper execution and monitoring
+
+Deliverables:
+- portfolio-level risk approval
+- automatic pending paper buys
+- automatic next-session fills
+- stop, target, expiry and signal-reversal monitoring
+- automatic paper sells
+- duplicate-order and stale-data protection
+- kill switch and portfolio circuit breakers
+
+Gate:
+- no same-session or future-data execution
+- cash, reserved capital, open risk and realised P&L reconcile after every run
+- repeated jobs remain idempotent
+
+### P3.4 — Notifications and scheduled jobs
+
+Deliverables:
+- Telegram and/or email notifications
+- buy and sell confirmations
+- risk-rejection and system-failure alerts
+- daily portfolio summary
+- weekly performance and reliability report
+- exchange-calendar-aware scheduled scans
+
+Gate:
+- notification delivery status and failures are persisted
+- missed or repeated scheduler runs cannot duplicate orders
+
+### P3.5 — Paper portfolio and reliability dashboard
+
+Deliverables:
+- account, cash and open-position overview
+- pending orders and trade history
+- decision evidence and exit reasons
+- equity curve and performance metrics
+- results by strategy, instrument, regime and threshold version
+- scan, notification and system reliability metrics
+
+Gate:
+- every displayed value can be traced to persisted records
+
+### P3.6 — Broker paper-account adapter
+
+Deliverables:
+- common execution-adapter interface
+- internal paper adapter
+- broker paper-account adapter
+- account, order and position reconciliation
+- live adapter explicitly disabled
+
+Gate:
+- internal and broker-paper records reconcile without unresolved differences
+- no live credentials or live-order path are enabled
+
+### P3.7 — P3 release gate
+
+Deliverables:
+- complete P0–P3 regression suite
+- operational reliability report
+- paper-trading performance report
+- documented limitations and approved operating configuration
+
+Gate:
+- automated paper trading must demonstrate stable, reconciled operation
+- live trading remains ineligible until separately reviewed and approved
+
+## Deferred until after P3
+
+- real-money broker execution
+- fully automatic live trading
+- options, leverage and short selling
+- AI-generated changes to deterministic scores, orders or risk decisions
