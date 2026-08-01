@@ -1870,6 +1870,162 @@ class PaperRepository:
             for row in rows
         )
 
+    def list_pending_orders(
+        self,
+        account_id: str,
+    ) -> tuple[PaperOrderRecord, ...]:
+        connection = connect_database(
+            self.database_path
+        )
+
+        try:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_orders
+                WHERE account_id = ?
+                  AND status = ?
+                ORDER BY created_at, order_id
+                """,
+                (
+                    account_id,
+                    OrderStatus.PENDING.value,
+                ),
+            ).fetchall()
+        finally:
+            connection.close()
+
+        return tuple(
+            self._order_from_row(row)
+            for row in rows
+        )
+
+    def expire_order(
+        self,
+        order_id: str,
+        *,
+        expired_at: datetime,
+        reason: str,
+    ) -> PaperOrderRecord:
+        with transaction(
+            self.database_path
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM paper_orders
+                WHERE order_id = ?
+                """,
+                (order_id,),
+            ).fetchone()
+
+            if row is None:
+                raise ValueError(
+                    f"Unknown order: {order_id}."
+                )
+
+            order = self._order_from_row(row)
+
+            if order.status is OrderStatus.EXPIRED:
+                return order
+
+            if order.status is not OrderStatus.PENDING:
+                raise ValueError(
+                    "Only pending orders can expire."
+                )
+
+            account = self._account_from_row(
+                connection.execute(
+                    """
+                    SELECT *
+                    FROM paper_accounts
+                    WHERE account_id = ?
+                    """,
+                    (order.account_id,),
+                ).fetchone()
+            )
+
+            new_reserved = money(
+                account.reserved_cash
+                - order.reserved_cash
+            )
+
+            if new_reserved < 0:
+                raise RuntimeError(
+                    "Reserved cash would become negative."
+                )
+
+            connection.execute(
+                """
+                UPDATE paper_orders
+                SET status = ?,
+                    closed_at = ?
+                WHERE order_id = ?
+                """,
+                (
+                    OrderStatus.EXPIRED.value,
+                    _timestamp(expired_at),
+                    order_id,
+                ),
+            )
+
+            connection.execute(
+                """
+                UPDATE paper_accounts
+                SET reserved_cash = ?,
+                    updated_at = ?
+                WHERE account_id = ?
+                """,
+                (
+                    str(new_reserved),
+                    _timestamp(expired_at),
+                    order.account_id,
+                ),
+            )
+
+            _insert_event(
+                connection,
+                account_id=order.account_id,
+                event_type="ORDER_EXPIRED",
+                severity="INFO",
+                reference_type="ORDER",
+                reference_id=order_id,
+                message=reason,
+                metadata={},
+                created_at=expired_at,
+            )
+
+        return self.get_order(order_id)
+
+    def record_system_event(
+        self,
+        *,
+        event_type: str,
+        message: str,
+        severity: str = "INFO",
+        account_id: str | None = None,
+        reference_type: str | None = None,
+        reference_id: str | None = None,
+        metadata: Mapping[str, object] | None = None,
+        created_at: datetime | None = None,
+    ) -> None:
+        at = created_at or _utc_now()
+
+        with transaction(
+            self.database_path
+        ) as connection:
+            _insert_event(
+                connection,
+                account_id=account_id,
+                event_type=event_type,
+                severity=severity,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                message=message,
+                metadata=metadata,
+                created_at=at,
+            )
+
     def reconcile_account(
         self,
         account_id: str,

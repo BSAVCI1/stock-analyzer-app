@@ -245,7 +245,7 @@ def test_configured_universe_loads() -> None:
     assert len(universe.symbols) >= 20
 
 
-def test_schema_migrates_to_version_two(
+def test_schema_migrates_to_latest_version(
     tmp_path,
 ) -> None:
     (
@@ -277,7 +277,7 @@ def test_schema_migrates_to_version_two(
     finally:
         connection.close()
 
-    assert version == 2
+    assert version == 3
     assert table is not None
 
 

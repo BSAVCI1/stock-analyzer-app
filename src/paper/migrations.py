@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 _SCHEMA_V1 = """
@@ -333,6 +333,134 @@ COMMIT;
 """
 
 
+_SCHEMA_V3 = """
+BEGIN IMMEDIATE;
+
+CREATE TABLE IF NOT EXISTS paper_execution_runs (
+    run_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    run_key TEXT NOT NULL,
+    scan_id TEXT,
+
+    status TEXT NOT NULL,
+
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+
+    created_orders INTEGER NOT NULL DEFAULT 0,
+    filled_orders INTEGER NOT NULL DEFAULT 0,
+    expired_orders INTEGER NOT NULL DEFAULT 0,
+    cancelled_orders INTEGER NOT NULL DEFAULT 0,
+    closed_positions INTEGER NOT NULL DEFAULT 0,
+    rejected_entries INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+
+    entry_block_reasons_json TEXT NOT NULL DEFAULT '[]',
+    configuration_json TEXT NOT NULL,
+    app_version TEXT NOT NULL,
+    error_message TEXT,
+
+    UNIQUE(account_id, run_key),
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id),
+
+    FOREIGN KEY(scan_id)
+        REFERENCES paper_scans(scan_id)
+);
+
+CREATE TABLE IF NOT EXISTS paper_account_controls (
+    account_id TEXT PRIMARY KEY,
+
+    kill_switch_active INTEGER NOT NULL DEFAULT 0,
+    kill_switch_reason TEXT,
+
+    maximum_daily_loss_fraction TEXT NOT NULL DEFAULT '0.03',
+    maximum_drawdown_fraction TEXT NOT NULL DEFAULT '0.10',
+    maximum_new_orders_per_run INTEGER NOT NULL DEFAULT 3,
+    maximum_stale_market_days INTEGER NOT NULL DEFAULT 7,
+
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+CREATE TABLE IF NOT EXISTS paper_exit_requests (
+    request_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    position_id TEXT NOT NULL,
+
+    reason TEXT NOT NULL,
+    triggered_at TEXT NOT NULL,
+
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    executed_at TEXT,
+    error_message TEXT,
+
+    UNIQUE(
+        position_id,
+        reason,
+        triggered_at
+    ),
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id),
+
+    FOREIGN KEY(position_id)
+        REFERENCES paper_positions(position_id)
+);
+
+CREATE TABLE IF NOT EXISTS paper_equity_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+
+    captured_at TEXT NOT NULL,
+
+    cash_balance TEXT NOT NULL,
+    reserved_cash TEXT NOT NULL,
+    market_value TEXT NOT NULL,
+    equity TEXT NOT NULL,
+
+    UNIQUE(run_id, account_id),
+
+    FOREIGN KEY(run_id)
+        REFERENCES paper_execution_runs(run_id),
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_execution_runs_account_time
+    ON paper_execution_runs(
+        account_id,
+        started_at
+    );
+
+CREATE INDEX IF NOT EXISTS
+    idx_exit_requests_status
+    ON paper_exit_requests(
+        account_id,
+        status,
+        triggered_at
+    );
+
+CREATE INDEX IF NOT EXISTS
+    idx_equity_snapshots_account_time
+    ON paper_equity_snapshots(
+        account_id,
+        captured_at
+    );
+
+PRAGMA user_version = 3;
+
+COMMIT;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -379,6 +507,27 @@ def apply_migrations(
             )
             VALUES (
                 2,
+                strftime(
+                    '%Y-%m-%dT%H:%M:%fZ',
+                    'now'
+                )
+            )
+            """
+        )
+
+        current_version = 2
+
+    if current_version == 2:
+        connection.executescript(_SCHEMA_V3)
+
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO schema_migrations(
+                version,
+                applied_at
+            )
+            VALUES (
+                3,
                 strftime(
                     '%Y-%m-%dT%H:%M:%fZ',
                     'now'
