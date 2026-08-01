@@ -1826,6 +1826,233 @@ class PaperRepository:
             for row in rows
         )
 
+    def list_pending_notifications(
+        self,
+        account_id: str,
+        *,
+        channels: tuple[
+            NotificationChannel,
+            ...,
+        ] | None = None,
+        include_failed: bool = False,
+    ) -> tuple[NotificationRecord, ...]:
+        allowed_statuses = {
+            NotificationStatus.PENDING,
+        }
+
+        if include_failed:
+            allowed_statuses.add(
+                NotificationStatus.FAILED
+            )
+
+        allowed_channels = (
+            set(channels)
+            if channels is not None
+            else None
+        )
+
+        return tuple(
+            notification
+            for notification
+            in self.list_notifications(
+                account_id
+            )
+            if (
+                notification.status
+                in allowed_statuses
+                and (
+                    allowed_channels is None
+                    or notification.channel
+                    in allowed_channels
+                )
+            )
+        )
+
+    def mark_notification_sent(
+        self,
+        notification_id: str,
+        *,
+        sent_at: datetime,
+        provider_message_id: str | None = None,
+        delivery_metadata: Mapping[
+            str,
+            object,
+        ] | None = None,
+    ) -> NotificationRecord:
+        with transaction(
+            self.database_path
+        ) as connection:
+            existing = connection.execute(
+                """
+                SELECT notification_id
+                FROM paper_notifications
+                WHERE notification_id = ?
+                """,
+                (notification_id,),
+            ).fetchone()
+
+            if existing is None:
+                raise ValueError(
+                    "Unknown notification: "
+                    f"{notification_id}."
+                )
+
+            connection.execute(
+                """
+                UPDATE paper_notifications
+                SET status = ?,
+                    sent_at = ?,
+                    error_message = NULL,
+                    attempt_count =
+                        attempt_count + 1,
+                    last_attempt_at = ?,
+                    provider_message_id = ?,
+                    delivery_metadata_json = ?
+                WHERE notification_id = ?
+                """,
+                (
+                    NotificationStatus.SENT.value,
+                    _timestamp(sent_at),
+                    _timestamp(sent_at),
+                    (
+                        str(
+                            provider_message_id
+                        ).strip()
+                        if provider_message_id
+                        else None
+                    ),
+                    _json_dump(
+                        dict(
+                            delivery_metadata
+                            or {}
+                        )
+                    ),
+                    notification_id,
+                ),
+            )
+
+        return self.get_notification(
+            notification_id
+        )
+
+    def mark_notification_failed(
+        self,
+        notification_id: str,
+        *,
+        attempted_at: datetime,
+        error_message: str,
+        delivery_metadata: Mapping[
+            str,
+            object,
+        ] | None = None,
+    ) -> NotificationRecord:
+        message = str(error_message).strip()
+
+        if not message:
+            raise ValueError(
+                "error_message cannot be empty."
+            )
+
+        with transaction(
+            self.database_path
+        ) as connection:
+            existing = connection.execute(
+                """
+                SELECT notification_id
+                FROM paper_notifications
+                WHERE notification_id = ?
+                """,
+                (notification_id,),
+            ).fetchone()
+
+            if existing is None:
+                raise ValueError(
+                    "Unknown notification: "
+                    f"{notification_id}."
+                )
+
+            connection.execute(
+                """
+                UPDATE paper_notifications
+                SET status = ?,
+                    sent_at = NULL,
+                    error_message = ?,
+                    attempt_count =
+                        attempt_count + 1,
+                    last_attempt_at = ?,
+                    provider_message_id = NULL,
+                    delivery_metadata_json = ?
+                WHERE notification_id = ?
+                """,
+                (
+                    NotificationStatus
+                                       .FAILED.value,
+                    message,
+                    _timestamp(attempted_at),
+                    _json_dump(
+                        dict(
+                            delivery_metadata
+                            or {}
+                        )
+                    ),
+                    notification_id,
+                ),
+            )
+
+        return self.get_notification(
+            notification_id
+        )
+
+    def requeue_notification(
+        self,
+        notification_id: str,
+    ) -> NotificationRecord:
+        with transaction(
+            self.database_path
+        ) as connection:
+            existing = connection.execute(
+                """
+                SELECT status
+                FROM paper_notifications
+                WHERE notification_id = ?
+                """,
+                (notification_id,),
+            ).fetchone()
+
+            if existing is None:
+                raise ValueError(
+                    "Unknown notification: "
+                    f"{notification_id}."
+                )
+
+            if (
+                existing["status"]
+                == NotificationStatus.SENT.value
+            ):
+                raise ValueError(
+                    "A sent notification cannot "
+                    "be requeued."
+                )
+
+            connection.execute(
+                """
+                UPDATE paper_notifications
+                SET status = ?,
+                    sent_at = NULL,
+                    error_message = NULL
+                WHERE notification_id = ?
+                """,
+                (
+                    NotificationStatus
+                    .PENDING.value,
+                    notification_id,
+                ),
+            )
+
+        return self.get_notification(
+            notification_id
+        )
+
     def list_system_events(
         self,
         account_id: str,

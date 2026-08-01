@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 _SCHEMA_V1 = """
@@ -461,6 +461,80 @@ COMMIT;
 """
 
 
+_SCHEMA_V4 = """
+BEGIN IMMEDIATE;
+
+ALTER TABLE paper_notifications
+    ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE paper_notifications
+    ADD COLUMN last_attempt_at TEXT;
+
+ALTER TABLE paper_notifications
+    ADD COLUMN provider_message_id TEXT;
+
+ALTER TABLE paper_notifications
+    ADD COLUMN delivery_metadata_json TEXT NOT NULL DEFAULT '{}';
+
+CREATE TABLE IF NOT EXISTS paper_job_runs (
+    job_run_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+
+    job_key TEXT NOT NULL,
+    job_type TEXT NOT NULL,
+
+    scheduled_for TEXT NOT NULL,
+    exchange_code TEXT NOT NULL,
+
+    status TEXT NOT NULL,
+
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+
+    scan_id TEXT,
+    execution_run_id TEXT,
+
+    queued_notifications INTEGER NOT NULL DEFAULT 0,
+    sent_notifications INTEGER NOT NULL DEFAULT 0,
+    failed_notifications INTEGER NOT NULL DEFAULT 0,
+
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    error_message TEXT,
+
+    UNIQUE(account_id, job_key),
+
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id),
+
+    FOREIGN KEY(scan_id)
+        REFERENCES paper_scans(scan_id),
+
+    FOREIGN KEY(execution_run_id)
+        REFERENCES paper_execution_runs(run_id)
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_notifications_delivery
+    ON paper_notifications(
+        account_id,
+        status,
+        channel,
+        created_at
+    );
+
+CREATE INDEX IF NOT EXISTS
+    idx_job_runs_account_time
+    ON paper_job_runs(
+        account_id,
+        scheduled_for
+    );
+
+PRAGMA user_version = 4;
+
+COMMIT;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -534,6 +608,36 @@ def apply_migrations(
                 )
             )
             """
+        )
+
+        current_version = 3
+
+    if current_version == 3:
+        connection.executescript(_SCHEMA_V4)
+
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO schema_migrations(
+                version,
+                applied_at
+            )
+            VALUES (
+                4,
+                strftime(
+                    '%Y-%m-%dT%H:%M:%fZ',
+                    'now'
+                )
+            )
+            """
+        )
+
+        current_version = 4
+
+    if current_version != SCHEMA_VERSION:
+        raise RuntimeError(
+            "Database migration did not reach "
+            f"schema version {SCHEMA_VERSION}; "
+            f"stopped at {current_version}."
         )
 
 
