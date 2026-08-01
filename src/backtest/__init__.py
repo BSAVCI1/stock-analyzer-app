@@ -1,5 +1,15 @@
 """Backtesting domain records and lifecycle validation."""
 
+from .acceptance import (
+    AcceptanceCheck,
+    AcceptanceStatus,
+    PerformanceScope,
+    PerformanceSlice,
+    StrategyAcceptanceReport,
+    StrategyAcceptanceThresholds,
+    build_strategy_acceptance_report,
+)
+
 from .economics import (
     BindingConstraint,
     ExecutionCostModel,
@@ -67,6 +77,13 @@ from .validation import (
 )
 
 __all__ = [
+    "AcceptanceCheck",
+    "AcceptanceStatus",
+    "PerformanceScope",
+    "PerformanceSlice",
+    "StrategyAcceptanceReport",
+    "StrategyAcceptanceThresholds",
+    "build_strategy_acceptance_report",
     "CandidateEvaluation",
     "ChronologicalSplit",
     "FoldValidationResult",
