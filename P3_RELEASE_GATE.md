@@ -115,3 +115,29 @@ The P3 release command:
 - changes no runtime configuration
 
 It converts persisted evidence into a deterministic release decision.
+
+## Release profiles
+
+P3 supports two explicit release profiles.
+
+### Internal-only
+
+This is the default profile.
+
+- the application uses its internal paper-trading account
+- no external broker-paper account is required
+- missing broker reconciliation is reported as `NOT_OBSERVED`
+- that missing broker evidence does not block the internal-only release
+- any broker reconciliation that does exist and contains differences still blocks release
+
+### Broker-paper
+
+Enable this profile with:
+
+```bash
+--require-broker-reconciliation
+```
+
+This profile requires a persisted matched broker-paper reconciliation with zero unresolved differences.
+
+The profile changes only release requirements. It never enables live trading.

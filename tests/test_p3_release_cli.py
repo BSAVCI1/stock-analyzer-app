@@ -328,3 +328,75 @@ def test_live_descriptor_blocks_release(
         ]["live_trading_enabled"]
         is True
     )
+
+
+def test_cli_defaults_to_internal_only_profile(
+    monkeypatch,
+    capsys,
+) -> None:
+    source = make_snapshot()
+    source.broker_reconciliation_run = None
+
+    install_fakes(
+        monkeypatch,
+        snapshot=source,
+    )
+
+    result = cli.main(
+        command_arguments()
+    )
+
+    payload = json.loads(
+        capsys.readouterr().out
+    )
+
+    assert result == 0
+
+    assert (
+        payload[
+            "operational_reliability"
+        ]["release_profile"]
+        == "INTERNAL_ONLY"
+    )
+
+    assert (
+        payload[
+            "operational_reliability"
+        ][
+            "broker_reconciliation_required"
+        ]
+        is False
+    )
+
+
+def test_cli_can_require_broker_profile(
+    monkeypatch,
+    capsys,
+) -> None:
+    source = make_snapshot()
+    source.broker_reconciliation_run = None
+
+    install_fakes(
+        monkeypatch,
+        snapshot=source,
+    )
+
+    arguments = command_arguments()
+    arguments.append(
+        "--require-broker-reconciliation"
+    )
+
+    result = cli.main(arguments)
+
+    payload = json.loads(
+        capsys.readouterr().out
+    )
+
+    assert result == 1
+
+    assert (
+        payload[
+            "operational_reliability"
+        ]["release_profile"]
+        == "BROKER_PAPER"
+    )

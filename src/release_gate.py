@@ -232,6 +232,8 @@ class OperationalReliabilityReport:
     unresolved_broker_differences: int
     live_trading_enabled: bool
 
+    broker_reconciliation_required: bool = True
+
     def __post_init__(self) -> None:
         generated_at = _aware_utc(
             "generated_at",
@@ -316,6 +318,15 @@ class OperationalReliabilityReport:
         ):
             raise ValueError(
                 "live_trading_enabled must "
+                "be boolean."
+            )
+
+        if not isinstance(
+            self.broker_reconciliation_required,
+            bool,
+        ):
+            raise ValueError(
+                "broker_reconciliation_required must "
                 "be boolean."
             )
 
@@ -411,14 +422,53 @@ class OperationalReliabilityReport:
         )
 
     @property
-    def passed(self) -> bool:
-        return (
-            not self.non_passing_checks
+    def blocking_checks(
+        self,
+    ) -> tuple[
+        OperationalReliabilityCheck,
+        ...,
+    ]:
+        return tuple(
+            check
+            for check in self.checks
+            if not (
+                check.name
+                == "broker_reconciliation"
+                and (
+                    check.status
+                    is OperationalCheckStatus
+                    .NOT_OBSERVED
+                )
+                and not (
+                    self
+                    .broker_reconciliation_required
+                )
+            )
             and (
+                check.status
+                is not
+                OperationalCheckStatus.PASS
+            )
+        )
+
+    @property
+    def passed(self) -> bool:
+        broker_evidence_satisfied = (
+            (
                 self
                 .broker_reconciliation_run_id
                 is not None
             )
+            if (
+                self
+                .broker_reconciliation_required
+            )
+            else True
+        )
+
+        return (
+            not self.blocking_checks
+            and broker_evidence_satisfied
             and (
                 self
                 .unresolved_broker_differences
@@ -575,7 +625,7 @@ def evaluate_p3_release_gate(
 
     non_passing = (
         operational_reliability
-        .non_passing_checks
+        .blocking_checks
     )
 
     if non_passing:
@@ -594,8 +644,12 @@ def evaluate_p3_release_gate(
 
     if (
         operational_reliability
-        .broker_reconciliation_run_id
-        is None
+        .broker_reconciliation_required
+        and (
+            operational_reliability
+            .broker_reconciliation_run_id
+            is None
+        )
     ):
         reasons.append(
             "No persisted broker-paper "
@@ -758,6 +812,8 @@ def build_operational_reliability_report(
     snapshot,
     *,
     execution_descriptor,
+    broker_reconciliation_required:
+    bool = True,
 ) -> OperationalReliabilityReport:
     """Build P3 operational evidence from one persisted snapshot.
 
@@ -973,6 +1029,9 @@ def build_operational_reliability_report(
         live_trading_enabled=(
             execution_descriptor
             .live_trading_enabled
+        ),
+        broker_reconciliation_required=(
+            broker_reconciliation_required
         ),
     )
 

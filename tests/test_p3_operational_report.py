@@ -455,3 +455,63 @@ def test_metric_counts_must_reconcile():
                 descriptor()
             ),
         )
+
+
+def test_internal_only_profile_allows_missing_broker():
+    source = snapshot()
+    source.broker_reconciliation_run = None
+
+    report = (
+        build_operational_reliability_report(
+            source,
+            execution_descriptor=(
+                descriptor()
+            ),
+            broker_reconciliation_required=(
+                False
+            ),
+        )
+    )
+
+    assert (
+        report
+        .check_for(
+            "broker_reconciliation"
+        )
+        .status
+        is OperationalCheckStatus
+        .NOT_OBSERVED
+    )
+
+    assert (
+        report
+        .broker_reconciliation_required
+        is False
+    )
+
+    assert report.passed is True
+
+
+def test_broker_profile_requires_broker_run():
+    source = snapshot()
+    source.broker_reconciliation_run = None
+
+    report = (
+        build_operational_reliability_report(
+            source,
+            execution_descriptor=(
+                descriptor()
+            ),
+            broker_reconciliation_required=(
+                True
+            ),
+        )
+    )
+
+    assert report.passed is False
+
+    assert (
+        report
+        .broker_reconciliation_required
+        is True
+    )

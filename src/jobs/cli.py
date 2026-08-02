@@ -254,6 +254,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    p3_release.add_argument(
+        "--require-broker-reconciliation",
+        action="store_true",
+        help=(
+            "Require a persisted matched external "
+            "broker-paper reconciliation. Omit "
+            "for the internal-only P3 profile."
+        ),
+    )
+
     broker_status = commands.add_parser(
         "broker-reconciliation-status",
         help=(
@@ -638,6 +648,10 @@ def _run_p3_release_status(
                 .execution_adapter
                 .descriptor
             ),
+            broker_reconciliation_required=(
+                args
+                .require_broker_reconciliation
+            ),
         )
     )
 
@@ -687,6 +701,17 @@ def _run_p3_release_status(
                 "live_trading_enabled":
                 operational_reliability
                 .live_trading_enabled,
+                "broker_reconciliation_required":
+                operational_reliability
+                .broker_reconciliation_required,
+                "release_profile": (
+                    "BROKER_PAPER"
+                    if (
+                        operational_reliability
+                        .broker_reconciliation_required
+                    )
+                    else "INTERNAL_ONLY"
+                ),
                 "checks": tuple(
                     _p3_operational_check_payload(
                         check
