@@ -62,6 +62,30 @@ st.caption(
     "order submission occurs from this dashboard."
 )
 
+
+navigation_left, navigation_right = st.columns(2)
+
+with navigation_left:
+    if st.button(
+        "📈 Back to Stock Analyzer",
+        width="stretch",
+        key="open_stock_analyzer",
+    ):
+        st.switch_page(
+            "stock_analysis_app.py"
+        )
+
+with navigation_right:
+    if st.button(
+        "ℹ️ How to Read Both Apps",
+        width="stretch",
+        key="open_portfolio_guide",
+    ):
+        st.switch_page(
+            "pages/3_App_Guide.py"
+        )
+
+
 default_database = os.getenv(
     "PAPER_DATABASE_PATH",
     "data/paper_trading.db",
@@ -175,24 +199,27 @@ st.caption(
 
 cards = metric_cards(snapshot)
 
-card_columns = st.columns(
-    len(cards)
-)
-
-for column, card in zip(
-    card_columns,
-    cards,
+for start in range(
+    0,
+    len(cards),
+    3,
 ):
-    with column:
-        st.metric(
-            card["label"],
-            card["value"],
-        )
+    card_columns = st.columns(3)
 
-        st.caption(
-            "Source: "
-            f"`{card['source_table']}`"
-        )
+    for column, card in zip(
+        card_columns,
+        cards[start:start + 3],
+    ):
+        with column:
+            st.metric(
+                card["label"],
+                card["value"],
+            )
+
+            st.caption(
+                "Source: "
+                f"`{card['source_table']}`"
+            )
 
 
 (

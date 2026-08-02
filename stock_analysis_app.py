@@ -42,6 +42,31 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+# --- APPLICATION NAVIGATION ---
+navigation_left, navigation_right = st.columns(2)
+
+with navigation_left:
+    if st.button(
+        "📊 Open Paper Portfolio Dashboard",
+        width="stretch",
+        key="open_paper_portfolio",
+    ):
+        st.switch_page(
+            "pages/2_Paper_Portfolio.py"
+        )
+
+with navigation_right:
+    if st.button(
+        "ℹ️ How to Read Both Apps",
+        width="stretch",
+        key="open_app_guide",
+    ):
+        st.switch_page(
+            "pages/3_App_Guide.py"
+        )
+
+
 # --- USER INPUT & PEERS ---
 st.sidebar.header("Select Stock & Peers")
 popular = ["BBAI","ARCC","SPCE","AAPL","MSFT","GOOGL","AMZN","QS","TSLA","NVDA"]

@@ -106,3 +106,15 @@ Example:
 This dashboard is part of the internal paper-trading system.
 It contains no live-trading adapter, broker credentials or
 real-money order path.
+
+## Integrated application navigation
+
+For navigation between the Stock Analyzer, Paper Portfolio
+and App Guide, use the Stock Analyzer as the primary
+Streamlit entry point:
+
+    streamlit run stock_analysis_app.py
+
+The buttons at the top of each application switch between
+the registered Streamlit pages without requiring a second
+server.
