@@ -15,6 +15,16 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
+from src.backtest import RegressionEvidence
+from src.portfolio_dashboard import (
+    PortfolioDashboardRepository,
+    PortfolioDashboardService,
+)
+from src.release_gate import (
+    build_operational_reliability_report,
+    evaluate_p3_release_gate,
+)
+
 from src.execution_adapters import (
     BrokerReconciliationItemStatus,
     BrokerReconciliationRepository,
@@ -190,6 +200,57 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Retry persisted FAILED "
             "notifications."
+        ),
+    )
+
+    p3_release = commands.add_parser(
+        "p3-release-status",
+        help=(
+            "Build the read-only P3 release "
+            "report from persisted operational "
+            "evidence."
+        ),
+    )
+
+    _add_runtime_arguments(
+        p3_release
+    )
+
+    p3_release.add_argument(
+        "--at",
+        help=(
+            "Timezone-aware ISO timestamp used "
+            "as the report generation time. "
+            "Defaults to current UTC time."
+        ),
+    )
+
+    p3_release.add_argument(
+        "--regression-passed",
+        action="store_true",
+        help=(
+            "Explicitly attest that the complete "
+            "P0-P3 regression suite passed."
+        ),
+    )
+
+    p3_release.add_argument(
+        "--test-count",
+        type=int,
+        required=True,
+        help=(
+            "Number of tests in the complete "
+            "attested regression run."
+        ),
+    )
+
+    p3_release.add_argument(
+        "--workflow",
+        default="Automated tests",
+        help=(
+            "Name or identifier of the workflow "
+            "that produced the regression "
+            "evidence."
         ),
     )
 
@@ -516,6 +577,136 @@ def _run_broker_reconciliation_status(
     return 1
 
 
+def _p3_operational_check_payload(
+    check,
+) -> dict[str, object]:
+    return {
+        "name": check.name,
+        "status": check.status.value,
+        "observed_count":
+        check.observed_count,
+        "failed_count":
+        check.failed_count,
+        "details": check.details,
+    }
+
+
+def _run_p3_release_status(
+    runtime: PaperJobRuntime,
+    args,
+) -> int:
+    generated_at = _parse_datetime(
+        args.at
+    )
+
+    repository = (
+        PortfolioDashboardRepository(
+            runtime.settings.database_path
+        )
+    )
+
+    snapshot = (
+        PortfolioDashboardService(
+            repository
+        ).build_snapshot(
+            runtime.settings.account_id,
+            generated_at=generated_at,
+        )
+    )
+
+    regression_evidence = (
+        RegressionEvidence(
+            passed=bool(
+                args.regression_passed
+            ),
+            test_count=args.test_count,
+            covered_phases=(
+                "P0",
+                "P1",
+                "P2",
+                "P3",
+            ),
+            workflow=args.workflow,
+        )
+    )
+
+    operational_reliability = (
+        build_operational_reliability_report(
+            snapshot,
+            execution_descriptor=(
+                runtime
+                .execution_adapter
+                .descriptor
+            ),
+        )
+    )
+
+    report = evaluate_p3_release_gate(
+        regression_evidence=(
+            regression_evidence
+        ),
+        operational_reliability=(
+            operational_reliability
+        ),
+    )
+
+    _write_json(
+        {
+            "status": report.status.value,
+            "release_ready":
+            report.release_ready,
+            "generated_at":
+            operational_reliability
+            .generated_at,
+            "account_id":
+            operational_reliability
+            .account_id,
+            "regression": {
+                "passed":
+                regression_evidence.passed,
+                "test_count":
+                regression_evidence
+                .test_count,
+                "covered_phases":
+                regression_evidence
+                .covered_phases,
+                "workflow":
+                regression_evidence
+                .workflow,
+            },
+            "operational_reliability": {
+                "passed":
+                operational_reliability
+                .passed,
+                "broker_reconciliation_run_id":
+                operational_reliability
+                .broker_reconciliation_run_id,
+                "unresolved_broker_differences":
+                operational_reliability
+                .unresolved_broker_differences,
+                "live_trading_enabled":
+                operational_reliability
+                .live_trading_enabled,
+                "checks": tuple(
+                    _p3_operational_check_payload(
+                        check
+                    )
+                    for check
+                    in operational_reliability
+                    .checks
+                ),
+            },
+            "reasons": report.reasons,
+        }
+    )
+
+    return (
+        0
+        if report.release_ready
+        else 1
+    )
+
+
 def _run_status(
     runtime: PaperJobRuntime,
 ) -> int:
@@ -698,6 +889,12 @@ def main(
 
         if args.command == "dispatch":
             return _run_dispatch(
+                runtime,
+                args,
+            )
+
+        if args.command == "p3-release-status":
+            return _run_p3_release_status(
                 runtime,
                 args,
             )
