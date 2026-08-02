@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from src.execution_adapters import (
+    BrokerReconciliationRepository,
+)
+
 from datetime import datetime, timezone
 
 from src.paper import PersistedSignal
@@ -141,6 +145,43 @@ class PortfolioDashboardService:
         reconciliation = (
             self.repository
             .reconcile_account(account_id)
+        )
+
+        broker_reconciliation_repository = (
+            BrokerReconciliationRepository(
+                self.repository.paper.database_path
+            )
+        )
+
+        broker_reconciliation_run = (
+            broker_reconciliation_repository
+            .latest_run(account_id)
+        )
+
+        broker_reconciliation_items = (
+            broker_reconciliation_repository
+            .list_items(
+                broker_reconciliation_run
+                .reconciliation_run_id
+            )
+            if broker_reconciliation_run
+            is not None
+            else ()
+        )
+
+        broker_reconciliation_record_ids = (
+            (
+                broker_reconciliation_run
+                .reconciliation_run_id,
+            )
+            + tuple(
+                item.reconciliation_item_id
+                for item
+                in broker_reconciliation_items
+            )
+            if broker_reconciliation_run
+            is not None
+            else ()
         )
 
         signals = (
@@ -418,6 +459,33 @@ class PortfolioDashboardService:
                 ),
             ),
             SectionProvenance(
+                section="broker_reconciliation",
+                provenance=(
+                    make_provenance(
+                        tables=(
+                            "paper_broker_"
+                            "reconciliation_runs",
+                            "paper_broker_"
+                            "reconciliation_items",
+                        ),
+                        record_ids=(
+                            broker_reconciliation_record_ids
+                        ),
+                        filters=(
+                            f"account_id={account_id}",
+                            "latest persisted run",
+                        ),
+                        calculation=(
+                            "Latest persisted "
+                            "broker-paper reconciliation "
+                            "run and comparison items. "
+                            "No broker request is "
+                            "performed."
+                        ),
+                    )
+                ),
+            ),
+            SectionProvenance(
                 section="positions",
                 provenance=(
                     make_provenance(
@@ -553,6 +621,12 @@ class PortfolioDashboardService:
             reconciliation=(
                 reconciliation
             ),
+            broker_reconciliation_run=(
+                broker_reconciliation_run
+            ),
+            broker_reconciliation_items=(
+                broker_reconciliation_items
+            ),
             open_positions=(
                 open_positions
             ),
@@ -596,5 +670,10 @@ class PortfolioDashboardService:
                     "persisted_sqlite_records"
                 ),
                 "read_only": True,
+                "broker_reconciliation_available":
+                (
+                    broker_reconciliation_run
+                    is not None
+                ),
             },
         )

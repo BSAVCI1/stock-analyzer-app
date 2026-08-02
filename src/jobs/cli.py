@@ -15,6 +15,11 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
+from src.execution_adapters import (
+    BrokerReconciliationItemStatus,
+    BrokerReconciliationRepository,
+    BrokerReconciliationRunStatus,
+)
 from .models import (
     JobStatus,
     ScheduledJobReport,
@@ -186,6 +191,19 @@ def build_parser() -> argparse.ArgumentParser:
             "Retry persisted FAILED "
             "notifications."
         ),
+    )
+
+    broker_status = commands.add_parser(
+        "broker-reconciliation-status",
+        help=(
+            "Show the latest persisted "
+            "broker-paper reconciliation "
+            "without contacting a broker."
+        ),
+    )
+
+    _add_runtime_arguments(
+        broker_status
     )
 
     status = commands.add_parser(
@@ -363,6 +381,139 @@ def _run_dispatch(
     )
 
     return 1 if report.failed else 0
+
+
+def _broker_reconciliation_run_payload(
+    run,
+) -> dict[str, object]:
+    return {
+        "reconciliation_run_id":
+        run.reconciliation_run_id,
+        "account_id": run.account_id,
+        "reconciliation_key":
+        run.reconciliation_key,
+        "provider": run.provider,
+        "broker_account_id":
+        run.broker_account_id,
+        "status": run.status.value,
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+        "account_item_count":
+        run.account_item_count,
+        "order_item_count":
+        run.order_item_count,
+        "position_item_count":
+        run.position_item_count,
+        "matched_item_count":
+        run.matched_item_count,
+        "mismatched_item_count":
+        run.mismatched_item_count,
+        "missing_internal_item_count":
+        run.missing_internal_item_count,
+        "missing_broker_item_count":
+        run.missing_broker_item_count,
+        "unresolved_item_count":
+        run.unresolved_item_count,
+        "reconciled": run.reconciled,
+        "metadata": dict(run.metadata),
+        "error_message":
+        run.error_message,
+    }
+
+
+def _broker_reconciliation_item_payload(
+    item,
+) -> dict[str, object]:
+    return {
+        "reconciliation_item_id":
+        item.reconciliation_item_id,
+        "category": item.category.value,
+        "comparison_key":
+        item.comparison_key,
+        "status": item.status.value,
+        "internal_reference_ids":
+        item.internal_reference_ids,
+        "broker_reference_ids":
+        item.broker_reference_ids,
+        "differences":
+        dict(item.differences),
+        "message": item.message,
+        "created_at": item.created_at,
+        "metadata": dict(item.metadata),
+    }
+
+
+def _run_broker_reconciliation_status(
+    runtime: PaperJobRuntime,
+) -> int:
+    account_id = (
+        runtime.settings.account_id
+    )
+
+    repository = (
+        BrokerReconciliationRepository(
+            runtime.settings.database_path
+        )
+    )
+
+    run = repository.latest_run(
+        account_id
+    )
+
+    if run is None:
+        _write_json(
+            {
+                "account_id": account_id,
+                "status": "NOT_RUN",
+                "latest_run": None,
+                "unresolved_items": (),
+                "message": (
+                    "No persisted broker-paper "
+                    "reconciliation run exists."
+                ),
+            }
+        )
+
+        return 2
+
+    items = repository.list_items(
+        run.reconciliation_run_id
+    )
+
+    unresolved = tuple(
+        item
+        for item in items
+        if item.status
+        is not
+        BrokerReconciliationItemStatus
+        .MATCH
+    )
+
+    _write_json(
+        {
+            "account_id": account_id,
+            "status": run.status.value,
+            "latest_run":
+            _broker_reconciliation_run_payload(
+                run
+            ),
+            "unresolved_items": tuple(
+                _broker_reconciliation_item_payload(
+                    item
+                )
+                for item in unresolved
+            ),
+        }
+    )
+
+    if (
+        run.status
+        is BrokerReconciliationRunStatus
+        .MATCHED
+    ):
+        return 0
+
+    return 1
 
 
 def _run_status(
@@ -549,6 +700,11 @@ def main(
             return _run_dispatch(
                 runtime,
                 args,
+            )
+
+        if args.command == "broker-reconciliation-status":
+            return _run_broker_reconciliation_status(
+                runtime
             )
 
         if args.command == "status":

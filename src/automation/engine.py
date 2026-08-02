@@ -22,6 +22,10 @@ from src.backtest import (
     calculate_fee,
     execute_next_session,
 )
+from src.execution_adapters import (
+    ExecutionAdapter,
+    InternalPaperExecutionAdapter,
+)
 from src.data import (
     MarketSnapshot,
     load_market_snapshot,
@@ -75,6 +79,7 @@ class AutomatedPaperExecutionEngine:
         *,
         paper_repository: PaperRepository,
         paper_service: PaperTradingService,
+        execution_adapter: ExecutionAdapter | None = None,
         scanner_repository: ScannerRepository,
         automation_repository: AutomationRepository,
         config: AutomatedExecutionConfig | None = None,
@@ -89,6 +94,14 @@ class AutomatedPaperExecutionEngine:
         )
 
         self.paper_service = paper_service
+
+        self.execution_adapter = (
+            execution_adapter
+            or InternalPaperExecutionAdapter(
+                paper_repository=paper_repository,
+                paper_service=paper_service,
+            )
+        )
 
         self.scanner_repository = (
             scanner_repository
@@ -465,7 +478,7 @@ class AutomatedPaperExecutionEngine:
             self.config.costs,
         )
 
-        self.paper_service.close_automatic_position(
+        self.execution_adapter.close_position(
             position_id=(
                 position.position_id
             ),
@@ -1007,7 +1020,7 @@ class AutomatedPaperExecutionEngine:
             self.paper_repository
             .list_pending_orders(account_id)
         ):
-            self.paper_service.cancel_pending_order(
+            self.execution_adapter.cancel_order(
                 order_id=order.order_id,
                 reason=reason,
                 cancelled_at=run_at,
@@ -1100,7 +1113,7 @@ class AutomatedPaperExecutionEngine:
                         self.config.costs,
                     )
 
-                    self.paper_service.record_automatic_buy_fill(
+                    self.execution_adapter.record_buy_fill(
                         order_id=order.order_id,
                         fill_price=(
                             adjusted_price
@@ -1118,7 +1131,7 @@ class AutomatedPaperExecutionEngine:
                     result.status
                     is ExecutionStatus.EXPIRED
                 ):
-                    self.paper_repository.expire_order(
+                    self.execution_adapter.expire_order(
                         order.order_id,
                         expired_at=(
                             result.decision_at
@@ -1135,7 +1148,7 @@ class AutomatedPaperExecutionEngine:
                     and self.config.fill_rule
                     .value == "NEXT_OPEN"
                 ):
-                    self.paper_service.cancel_pending_order(
+                    self.execution_adapter.cancel_order(
                         order_id=order.order_id,
                         reason=result.reason,
                         cancelled_at=(

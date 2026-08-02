@@ -11,6 +11,10 @@ from src.automation import (
     AutomatedPaperExecutionEngine,
     AutomationRepository,
 )
+from src.execution_adapters import (
+    ExecutionAdapter,
+    InternalPaperExecutionAdapter,
+)
 from src.notifications import (
     EmailNotificationSender,
     NotificationService,
@@ -68,6 +72,7 @@ class PaperJobRuntime:
     job_repository: JobRepository
 
     paper_service: PaperTradingService
+    execution_adapter: ExecutionAdapter
     scanner: AutomaticMarketScanner
     execution_engine: (
         AutomatedPaperExecutionEngine
@@ -262,6 +267,13 @@ def build_runtime(
         ),
     )
 
+    execution_adapter = (
+        InternalPaperExecutionAdapter(
+            paper_repository=paper_repository,
+            paper_service=paper_service,
+        )
+    )
+
     release_gate_lookup = (
         make_release_gate_lookup(
             settings
@@ -286,6 +298,7 @@ def build_runtime(
                 paper_repository
             ),
             paper_service=paper_service,
+            execution_adapter=execution_adapter,
             scanner_repository=(
                 scanner_repository
             ),
@@ -378,6 +391,7 @@ def build_runtime(
         ),
         job_repository=job_repository,
         paper_service=paper_service,
+        execution_adapter=execution_adapter,
         scanner=scanner,
         execution_engine=(
             execution_engine

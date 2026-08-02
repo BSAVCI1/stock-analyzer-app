@@ -707,3 +707,95 @@ def provenance_rows(
         for item
         in snapshot.section_provenance
     )
+
+
+def broker_reconciliation_summary_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    """Describe the latest persisted reconciliation run."""
+
+    run = (
+        snapshot
+        .broker_reconciliation_run
+    )
+
+    if run is None:
+        return ()
+
+    return (
+        {
+            "reconciliation_run_id":
+            run.reconciliation_run_id,
+            "provider": run.provider,
+            "broker_account_id":
+            run.broker_account_id,
+            "status": run.status.value,
+            "started_at": run.started_at,
+            "completed_at": run.completed_at,
+            "account_items":
+            run.account_item_count,
+            "order_items":
+            run.order_item_count,
+            "position_items":
+            run.position_item_count,
+            "matched":
+            run.matched_item_count,
+            "mismatched":
+            run.mismatched_item_count,
+            "missing_internal":
+            run.missing_internal_item_count,
+            "missing_broker":
+            run.missing_broker_item_count,
+            "unresolved":
+            run.unresolved_item_count,
+            "reconciled": run.reconciled,
+            "error_message":
+            run.error_message,
+        },
+    )
+
+
+def broker_reconciliation_item_rows(
+    snapshot: PortfolioDashboardSnapshot,
+    *,
+    unresolved_only: bool = True,
+) -> tuple[dict[str, object], ...]:
+    """Return persisted broker comparison evidence."""
+
+    items = (
+        snapshot
+        .broker_reconciliation_items
+    )
+
+    if unresolved_only:
+        items = tuple(
+            item
+            for item in items
+            if item.status.value != "MATCH"
+        )
+
+    return tuple(
+        {
+            "reconciliation_item_id":
+            item.reconciliation_item_id,
+            "category":
+            item.category.value,
+            "comparison_key":
+            item.comparison_key,
+            "status": item.status.value,
+            "message": item.message,
+            "internal_reference_ids":
+            ", ".join(
+                item.internal_reference_ids
+            ),
+            "broker_reference_ids":
+            ", ".join(
+                item.broker_reference_ids
+            ),
+            "differences":
+            dict(item.differences),
+            "created_at":
+            item.created_at,
+        }
+        for item in items
+    )

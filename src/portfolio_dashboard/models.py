@@ -7,6 +7,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Mapping
 
+from src.execution_adapters import (
+    BrokerReconciliationItem,
+    BrokerReconciliationRun,
+)
 from src.automation import (
     EquitySnapshot,
     ExecutionRun,
@@ -156,6 +160,15 @@ class PortfolioDashboardSnapshot:
 
     account: PaperAccount
     reconciliation: AccountReconciliation
+
+    broker_reconciliation_run: (
+        BrokerReconciliationRun | None
+    )
+
+    broker_reconciliation_items: tuple[
+        BrokerReconciliationItem,
+        ...,
+    ]
 
     open_positions: tuple[
         PaperPositionRecord,

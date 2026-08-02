@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 _SCHEMA_V1 = """
@@ -535,6 +535,136 @@ COMMIT;
 """
 
 
+_SCHEMA_V5 = """
+CREATE TABLE IF NOT EXISTS
+paper_broker_reconciliation_runs (
+    reconciliation_run_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    reconciliation_key TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    broker_account_id TEXT NOT NULL,
+    status TEXT NOT NULL
+        CHECK (
+            status IN (
+                'RUNNING',
+                'MATCHED',
+                'DIFFERENCES',
+                'FAILED'
+            )
+        ),
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    account_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    order_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    position_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    matched_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    mismatched_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    missing_internal_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    missing_broker_item_count INTEGER
+        NOT NULL DEFAULT 0,
+    metadata_json TEXT
+        NOT NULL DEFAULT '{}',
+    error_message TEXT,
+    FOREIGN KEY (account_id)
+        REFERENCES paper_accounts(account_id),
+    UNIQUE (
+        account_id,
+        provider,
+        reconciliation_key
+    )
+);
+
+CREATE TABLE IF NOT EXISTS
+paper_broker_reconciliation_items (
+    reconciliation_item_id TEXT PRIMARY KEY,
+    reconciliation_run_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    category TEXT NOT NULL
+        CHECK (
+            category IN (
+                'ACCOUNT',
+                'ORDER',
+                'POSITION'
+            )
+        ),
+    comparison_key TEXT NOT NULL,
+    status TEXT NOT NULL
+        CHECK (
+            status IN (
+                'MATCH',
+                'MISMATCH',
+                'MISSING_INTERNAL',
+                'MISSING_BROKER'
+            )
+        ),
+    internal_reference_ids_json TEXT
+        NOT NULL DEFAULT '[]',
+    broker_reference_ids_json TEXT
+        NOT NULL DEFAULT '[]',
+    differences_json TEXT
+        NOT NULL DEFAULT '{}',
+    message TEXT NOT NULL,
+    metadata_json TEXT
+        NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (reconciliation_run_id)
+        REFERENCES
+        paper_broker_reconciliation_runs(
+            reconciliation_run_id
+        )
+        ON DELETE CASCADE,
+    FOREIGN KEY (account_id)
+        REFERENCES paper_accounts(account_id),
+    UNIQUE (
+        reconciliation_run_id,
+        category,
+        comparison_key
+    )
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_broker_reconciliation_runs_account
+ON paper_broker_reconciliation_runs(
+    account_id,
+    started_at,
+    reconciliation_run_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_broker_reconciliation_runs_status
+ON paper_broker_reconciliation_runs(
+    account_id,
+    status,
+    started_at
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_broker_reconciliation_items_run
+ON paper_broker_reconciliation_items(
+    reconciliation_run_id,
+    category,
+    status
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_broker_reconciliation_items_unresolved
+ON paper_broker_reconciliation_items(
+    account_id,
+    status,
+    created_at
+)
+WHERE status <> 'MATCH';
+
+PRAGMA user_version = 5;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -632,6 +762,12 @@ def apply_migrations(
         )
 
         current_version = 4
+
+    if current_version < 5:
+        connection.executescript(
+            _SCHEMA_V5
+        )
+        current_version = 5
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

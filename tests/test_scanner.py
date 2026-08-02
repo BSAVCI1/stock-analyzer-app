@@ -277,7 +277,7 @@ def test_schema_migrates_to_latest_version(
     finally:
         connection.close()
 
-    assert version == 4
+    assert version == 5
     assert table is not None
 
 

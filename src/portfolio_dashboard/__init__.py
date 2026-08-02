@@ -25,6 +25,8 @@ from .service import (
     PortfolioDashboardService,
 )
 from .view import (
+    broker_reconciliation_item_rows,
+    broker_reconciliation_summary_rows,
     closed_trade_rows,
     decision_trace_rows,
     equity_rows,
@@ -61,6 +63,8 @@ __all__ = [
     "calculate_performance",
     "calculate_reliability",
     "make_provenance",
+    "broker_reconciliation_item_rows",
+    "broker_reconciliation_summary_rows",
     "closed_trade_rows",
     "decision_trace_rows",
     "equity_rows",

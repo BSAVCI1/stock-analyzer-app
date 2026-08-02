@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from src.execution_adapters import (
+    InternalPaperExecutionAdapter,
+)
 from src.jobs.cli import main
 from src.jobs.runtime import (
     build_runtime,
@@ -12,6 +15,42 @@ from src.jobs.runtime import (
     make_release_gate_lookup,
 )
 from src.paper import PaperRepository
+
+
+
+RUNTIME_ENVIRONMENT_KEYS = (
+    "PAPER_DATABASE_PATH",
+    "PAPER_ACCOUNT_ID",
+    "PAPER_UNIVERSE_PATH",
+    "PAPER_RELEASE_ELIGIBLE_STRATEGIES",
+    "PAPER_APP_VERSION",
+    "PAPER_THRESHOLD_VERSION",
+    "PAPER_TELEGRAM_BOT_TOKEN",
+    "PAPER_TELEGRAM_CHAT_ID",
+    "PAPER_TELEGRAM_TIMEOUT",
+    "PAPER_SMTP_HOST",
+    "PAPER_SMTP_PORT",
+    "PAPER_SMTP_USERNAME",
+    "PAPER_SMTP_PASSWORD",
+    "PAPER_SMTP_STARTTLS",
+    "PAPER_SMTP_SSL",
+    "PAPER_SMTP_TIMEOUT",
+    "PAPER_EMAIL_FROM",
+    "PAPER_EMAIL_TO",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_runtime_environment(
+    monkeypatch,
+) -> None:
+    """Prevent developer shell settings from changing tests."""
+
+    for key in RUNTIME_ENVIRONMENT_KEYS:
+        monkeypatch.delenv(
+            key,
+            raising=False,
+        )
 
 
 def create_account(
@@ -151,6 +190,18 @@ def test_runtime_without_delivery_configuration(
     assert (
         runtime.notification_channels
         == ()
+    )
+
+    assert isinstance(
+        runtime.execution_adapter,
+        InternalPaperExecutionAdapter,
+    )
+
+    assert (
+        runtime.execution_adapter
+        .descriptor
+        .live_trading_enabled
+        is False
     )
 
 

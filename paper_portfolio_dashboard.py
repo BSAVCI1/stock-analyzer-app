@@ -12,6 +12,8 @@ import streamlit as st
 from src.portfolio_dashboard import (
     PortfolioDashboardRepository,
     PortfolioDashboardService,
+    broker_reconciliation_item_rows,
+    broker_reconciliation_summary_rows,
     closed_trade_rows,
     decision_trace_rows,
     equity_rows,
@@ -598,6 +600,41 @@ with reliability_tab:
         empty_message=(
             "No persisted reliability "
             "records are available."
+        ),
+    )
+
+    st.subheader(
+        "Broker-paper reconciliation"
+    )
+
+    st.caption(
+        "This section reads only the latest "
+        "persisted reconciliation result. "
+        "It does not contact a broker."
+    )
+
+    show_table(
+        broker_reconciliation_summary_rows(
+            snapshot
+        ),
+        empty_message=(
+            "No persisted broker-paper "
+            "reconciliation run is available."
+        ),
+    )
+
+    st.subheader(
+        "Unresolved broker differences"
+    )
+
+    show_table(
+        broker_reconciliation_item_rows(
+            snapshot,
+            unresolved_only=True,
+        ),
+        empty_message=(
+            "No unresolved broker-paper "
+            "differences are persisted."
         ),
     )
 
