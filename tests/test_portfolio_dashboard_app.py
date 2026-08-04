@@ -6,11 +6,17 @@ import re
 
 from streamlit.testing.v1 import AppTest
 
+
+REPOSITORY_ROOT = (
+    Path(__file__).resolve().parents[1]
+)
+
 from src.paper import PaperRepository
 
 
-APP_PATH = Path(
-    "paper_portfolio_dashboard.py"
+APP_PATH = (
+    REPOSITORY_ROOT
+    / "paper_portfolio_dashboard.py"
 )
 
 PACKAGE_PATH = Path(

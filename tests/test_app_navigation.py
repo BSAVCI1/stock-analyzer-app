@@ -5,20 +5,30 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 
-STOCK_APP = Path(
-    "stock_analysis_app.py"
+REPOSITORY_ROOT = (
+    Path(__file__).resolve().parents[1]
 )
 
-PORTFOLIO_APP = Path(
-    "paper_portfolio_dashboard.py"
+STOCK_APP = (
+    REPOSITORY_ROOT
+    / "stock_analysis_app.py"
 )
 
-PORTFOLIO_PAGE = Path(
-    "pages/2_Paper_Portfolio.py"
+PORTFOLIO_APP = (
+    REPOSITORY_ROOT
+    / "paper_portfolio_dashboard.py"
 )
 
-GUIDE_PAGE = Path(
-    "pages/3_App_Guide.py"
+PORTFOLIO_PAGE = (
+    REPOSITORY_ROOT
+    / "pages"
+    / "2_Paper_Portfolio.py"
+)
+
+GUIDE_PAGE = (
+    REPOSITORY_ROOT
+    / "pages"
+    / "3_App_Guide.py"
 )
 
 
