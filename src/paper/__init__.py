@@ -5,6 +5,13 @@ from .database import (
     connect_database,
     transaction,
 )
+from .fx import (
+    FXRateError,
+    FXRateProvider,
+    QuoteToPortfolioFXRate,
+    StaticFXRateProvider,
+    identity_fx_rate,
+)
 from .ledger import (
     LongTradeCalculation,
     calculate_entry_cash,
@@ -38,6 +45,16 @@ from .service import (
     PaperPortfolioConfig,
     PaperTradingService,
 )
+from .sizing import (
+    FixedNotionalSizingDecision,
+    FixedNotionalSizingPolicy,
+    FixedNotionalSizingRequest,
+    PositionSizingConstraint,
+    PositionSizingMode,
+    PositionSizingRejected,
+    calculate_fixed_notional_size,
+    fixed_notional_policy_from_product_policy,
+)
 
 __all__ = [
     "DEFAULT_DATABASE_PATH",
@@ -45,6 +62,11 @@ __all__ = [
     "AccountReconciliation",
     "AccountStatus",
     "ClosedPaperTrade",
+    "FixedNotionalSizingDecision",
+    "FixedNotionalSizingPolicy",
+    "FixedNotionalSizingRequest",
+    "FXRateError",
+    "FXRateProvider",
     "LongTradeCalculation",
     "NotificationChannel",
     "NotificationRecord",
@@ -59,12 +81,20 @@ __all__ = [
     "PaperRepository",
     "PaperTradingService",
     "PersistedSignal",
+    "QuoteToPortfolioFXRate",
+    "PositionSizingConstraint",
+    "PositionSizingMode",
+    "PositionSizingRejected",
     "PositionStatus",
+    "StaticFXRateProvider",
     "SystemEventRecord",
     "apply_migrations",
     "calculate_entry_cash",
+    "calculate_fixed_notional_size",
     "calculate_long_trade",
     "connect_database",
+    "fixed_notional_policy_from_product_policy",
+    "identity_fx_rate",
     "initialize_database",
     "money",
     "transaction",

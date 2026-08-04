@@ -17,7 +17,7 @@ from src.product_config import (
 def test_default_policy_matches_p4_direction() -> None:
     policy = load_product_policy()
 
-    assert policy["policy_version"] == "p4.0-1"
+    assert policy["policy_version"] == "p4.1-1"
 
     assert (
         policy["portfolio"][
@@ -38,6 +38,34 @@ def test_default_policy_matches_p4_direction() -> None:
             "maximum_order_value"
         ]
         == 100
+    )
+
+    assert (
+        policy["portfolio"][
+            "sizing_mode"
+        ]
+        == "FIXED_NOTIONAL_WITH_RISK_CAP"
+    )
+
+    assert (
+        policy["portfolio"][
+            "maximum_planned_loss"
+        ]
+        == 10
+    )
+
+    assert (
+        policy["portfolio"][
+            "maximum_open_positions"
+        ]
+        == 5
+    )
+
+    assert (
+        policy["portfolio"][
+            "maximum_invested_exposure"
+        ]
+        == 500
     )
 
     assert (

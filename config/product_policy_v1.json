@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "policy_version": "p4.0-1",
+  "policy_version": "p4.1-1",
   "product": {
     "name": "BSAVCI Smart Investment Bot",
     "autonomy": "always_on",
@@ -17,8 +17,12 @@
   "portfolio": {
     "currency": "EUR",
     "starting_balance": 2000,
+    "sizing_mode": "FIXED_NOTIONAL_WITH_RISK_CAP",
     "target_order_value": 100,
     "maximum_order_value": 100,
+    "maximum_planned_loss": 10,
+    "maximum_open_positions": 5,
+    "maximum_invested_exposure": 500,
     "historical_account": {
       "account_id": "ACC-495a2ae778834fc4a2c14d24e66ef41e",
       "currency": "USD",

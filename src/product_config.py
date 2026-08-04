@@ -172,7 +172,7 @@ def validate_product_policy(
     _expect(
         policy,
         "policy_version",
-        "p4.0-1",
+        "p4.1-1",
         "$",
     )
 
@@ -251,8 +251,12 @@ def validate_product_policy(
         {
             "currency",
             "starting_balance",
+            "sizing_mode",
             "target_order_value",
             "maximum_order_value",
+            "maximum_planned_loss",
+            "maximum_open_positions",
+            "maximum_invested_exposure",
             "historical_account",
         },
         "$.portfolio",
@@ -261,8 +265,15 @@ def validate_product_policy(
     for key, expected in (
         ("currency", "EUR"),
         ("starting_balance", 2000),
+        (
+            "sizing_mode",
+            "FIXED_NOTIONAL_WITH_RISK_CAP",
+        ),
         ("target_order_value", 100),
         ("maximum_order_value", 100),
+        ("maximum_planned_loss", 10),
+        ("maximum_open_positions", 5),
+        ("maximum_invested_exposure", 500),
     ):
         _expect(
             portfolio,
