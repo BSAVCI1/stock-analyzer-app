@@ -675,7 +675,22 @@ Make the new product direction explicit and versioned.
 - No setting enables live execution
 - Regression suite remains green
 
-**Status:** Planned  
+**Completion evidence**
+- Versioned product policy: `config/product_policy_v1.json`, policy version `p4.0-1`
+- Strict loader and validator: `src/product_config.py`
+- Database-independent safe-print command: `python -m src.jobs.cli product-config`
+- Exact-schema validation rejects unknown and sensitive configuration keys
+- Paper-only, live-execution-disabled and broker-API-disabled invariants are enforced
+- EUR 2,000 operational portfolio direction and EUR 100 hard order ceiling are versioned
+- Swing and medium-term horizons are enabled; intraday and day trading are prohibited
+- Leverage, shorts, options, CFDs and crypto remain prohibited
+- Historical P3 account `ACC-495a2ae778834fc4a2c14d24e66ef41e` is explicitly preserved
+- Secret-isolation validation passed
+- Full regression evidence: 394 tests passed
+- Diff integrity check passed
+
+**Status:** Complete
+
 **Dependencies:** P3 operational cycle  
 **Relative effort:** S  
 

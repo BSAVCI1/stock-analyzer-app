@@ -25,6 +25,12 @@ from src.release_gate import (
     evaluate_p3_release_gate,
 )
 
+from src.product_config import (
+    DEFAULT_PRODUCT_POLICY_PATH,
+    load_product_policy,
+    safe_product_policy_payload,
+)
+
 from src.execution_adapters import (
     BrokerReconciliationItemStatus,
     BrokerReconciliationRepository,
@@ -261,6 +267,25 @@ def build_parser() -> argparse.ArgumentParser:
             "Require a persisted matched external "
             "broker-paper reconciliation. Omit "
             "for the internal-only P3 profile."
+        ),
+    )
+
+    product_config = commands.add_parser(
+        "product-config",
+        help=(
+            "Print validated, secret-free "
+            "P4 product policy."
+        ),
+    )
+
+    product_config.add_argument(
+        "--config",
+        default=str(
+            DEFAULT_PRODUCT_POLICY_PATH
+        ),
+        help=(
+            "Versioned product policy JSON "
+            "path."
         ),
     )
 
@@ -732,6 +757,25 @@ def _run_p3_release_status(
     )
 
 
+def _run_product_config(
+    args,
+) -> int:
+    path = Path(args.config)
+
+    policy = load_product_policy(
+        path
+    )
+
+    _write_json(
+        safe_product_policy_payload(
+            policy,
+            source_path=path,
+        )
+    )
+
+    return 0
+
+
 def _run_status(
     runtime: PaperJobRuntime,
 ) -> int:
@@ -896,6 +940,11 @@ def main(
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "product-config":
+            return _run_product_config(
+                args
+            )
+
         runtime = _runtime_from_args(
             args
         )

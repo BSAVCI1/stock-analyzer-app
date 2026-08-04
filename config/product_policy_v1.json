@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "policy_version": "p4.0-1",
+  "product": {
+    "name": "BSAVCI Smart Investment Bot",
+    "autonomy": "always_on",
+    "mode": "paper_only",
+    "official_performance_source": "paper_portfolio",
+    "manual_ibkr_copy_allowed": true,
+    "decision_outputs": [
+      "ranked_watchlist",
+      "opportunity_tickets",
+      "rejection_reasons",
+      "near_qualifiers"
+    ]
+  },
+  "portfolio": {
+    "currency": "EUR",
+    "starting_balance": 2000,
+    "target_order_value": 100,
+    "maximum_order_value": 100,
+    "historical_account": {
+      "account_id": "ACC-495a2ae778834fc4a2c14d24e66ef41e",
+      "currency": "USD",
+      "starting_balance": 10000,
+      "preserve": true
+    }
+  },
+  "strategies": {
+    "enabled_horizons": [
+      "swing",
+      "medium_term"
+    ],
+    "prohibited_horizons": [
+      "intraday",
+      "day_trading"
+    ]
+  },
+  "instruments": {
+    "leverage": false,
+    "shorts": false,
+    "options": false,
+    "cfds": false,
+    "crypto": false
+  },
+  "cost_model": {
+    "reference_provider": "IBKR",
+    "api_connection_enabled": false
+  },
+  "scheduling": {
+    "always_on": true,
+    "deployment_target": "external_always_on",
+    "swing_cycle": "exchange_aware_windows",
+    "medium_term_cycle": "after_close"
+  },
+  "notifications": {
+    "channels": [
+      "email",
+      "telegram"
+    ],
+    "delivery_settings_source": "environment"
+  },
+  "execution": {
+    "paper_only": true,
+    "live_execution_enabled": false,
+    "deny_by_default": true,
+    "broker_api_connection_enabled": false
+  }
+}
