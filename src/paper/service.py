@@ -21,7 +21,16 @@ from .models import (
     ClosedPaperTrade,
     money,
 )
+from .fx import (
+    FXRateError,
+    FXRateProvider,
+    QuoteToPortfolioFXRate,
+    identity_fx_rate,
+)
 from .repository import PaperRepository
+from .valuation import (
+    calculate_entry_cash_portfolio,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +116,7 @@ class PaperTradingService:
         repository: PaperRepository,
         *,
         config: PaperPortfolioConfig | None = None,
+        fx_rate_provider: FXRateProvider | None = None,
         app_version: str = "v0.2.0-p2",
         threshold_version: str = "schema-1",
     ) -> None:
@@ -114,10 +124,68 @@ class PaperTradingService:
         self.config = (
             config or PaperPortfolioConfig()
         )
+        self.fx_rate_provider = (
+            fx_rate_provider
+        )
         self.app_version = app_version
         self.threshold_version = (
             threshold_version
         )
+
+    def _resolve_fx_rate(
+        self,
+        *,
+        quote_currency: str,
+        portfolio_currency: str,
+        as_of: datetime,
+    ) -> QuoteToPortfolioFXRate:
+        quote = (
+            quote_currency
+            .strip()
+            .upper()
+        )
+
+        portfolio = (
+            portfolio_currency
+            .strip()
+            .upper()
+        )
+
+        if quote == portfolio:
+            return identity_fx_rate(
+                quote,
+                as_of=as_of,
+            )
+
+        if self.fx_rate_provider is None:
+            raise FXRateError(
+                "No FX rate provider is "
+                f"configured for {quote}/"
+                f"{portfolio}."
+            )
+
+        rate = (
+            self.fx_rate_provider
+            .get_rate(
+                quote_currency=quote,
+                portfolio_currency=(
+                    portfolio
+                ),
+                as_of=as_of,
+            )
+        )
+
+        if (
+            rate.quote_currency != quote
+            or rate.portfolio_currency
+            != portfolio
+        ):
+            raise FXRateError(
+                "FX provider returned a rate "
+                "for the wrong currency pair."
+            )
+
+        return rate
 
     @staticmethod
     def _now() -> datetime:
@@ -254,6 +322,21 @@ class PaperTradingService:
                 "quantity must be positive."
             )
 
+        quote_currency = (
+            signal.quote_currency
+            or account.base_currency
+        )
+
+        reservation_fx = (
+            self._resolve_fx_rate(
+                quote_currency=quote_currency,
+                portfolio_currency=(
+                    account.base_currency
+                ),
+                as_of=at,
+            )
+        )
+
         open_positions = (
             self.repository.list_open_positions(
                 account_id
@@ -277,14 +360,17 @@ class PaperTradingService:
                 f"for {signal.symbol}."
             )
 
-        entry_notional = money(
-            signal.entry_high
-            * quantity_value
+        entry_cash = (
+            calculate_entry_cash_portfolio(
+                price_quote=signal.entry_high,
+                quantity=quantity_value,
+                fee_quote=estimated_fees,
+                fx_rate=reservation_fx,
+            )
         )
 
-        estimated_cash = money(
-            entry_notional
-            + money(estimated_fees)
+        estimated_cash = (
+            entry_cash.cash_required_portfolio
         )
 
         allocation_limit = money(
@@ -299,20 +385,25 @@ class PaperTradingService:
                 "per stock."
             )
 
-        risk_per_unit = money(
+        risk_per_unit_quote = money(
             signal.entry_high
             - signal.stop_price
         )
 
-        if risk_per_unit <= 0:
+        if risk_per_unit_quote <= 0:
             raise ValueError(
                 "BUY signal requires a stop "
                 "below the entry zone."
             )
 
-        new_trade_risk = money(
-            risk_per_unit
-            * quantity_value
+        new_trade_risk = (
+            reservation_fx
+            .convert_quote_to_portfolio(
+                money(
+                    risk_per_unit_quote
+                    * quantity_value
+                )
+            )
         )
 
         trade_risk_limit = money(
@@ -326,19 +417,49 @@ class PaperTradingService:
                 "Order exceeds maximum risk per trade."
             )
 
-        existing_open_risk = money(
-            sum(
+        existing_open_risk = Decimal("0")
+
+        for position in open_positions:
+            position_risk_quote = money(
                 (
-                    money(
-                        position.entry_price
-                        - position.stop_price
-                    )
-                    * position.quantity
-                    for position in open_positions
-                ),
-                Decimal("0"),
+                    position.entry_price
+                    - position.stop_price
+                )
+                * position.quantity
             )
-        )
+
+            if position.entry_fx_rate is not None:
+                position_risk = money(
+                    position_risk_quote
+                    * position.entry_fx_rate
+                )
+
+            elif (
+                position.quote_currency
+                in {
+                    None,
+                    account.base_currency,
+                }
+                and position.portfolio_currency
+                in {
+                    None,
+                    account.base_currency,
+                }
+            ):
+                position_risk = (
+                    position_risk_quote
+                )
+
+            else:
+                raise ValueError(
+                    "Open position is missing "
+                    "entry FX provenance."
+                )
+
+            existing_open_risk = money(
+                existing_open_risk
+                + position_risk
+            )
 
         combined_open_risk = money(
             existing_open_risk
@@ -372,6 +493,9 @@ class PaperTradingService:
                 estimated_cash
             ),
             reserved_cash=estimated_cash,
+            reservation_fx_rate=(
+                reservation_fx
+            ),
             created_at=at,
             expires_at=signal.expires_at,
         )
@@ -390,6 +514,27 @@ class PaperTradingService:
     ]:
         at = filled_at or self._now()
 
+        order = self.repository.get_order(
+            order_id
+        )
+
+        account = self.repository.get_account(
+            order.account_id
+        )
+
+        quote_currency = (
+            order.quote_currency
+            or account.base_currency
+        )
+
+        entry_fx = self._resolve_fx_rate(
+            quote_currency=quote_currency,
+            portfolio_currency=(
+                account.base_currency
+            ),
+            as_of=at,
+        )
+
         fill, position = (
             self.repository
             .record_fill_and_open_position(
@@ -397,12 +542,9 @@ class PaperTradingService:
                 fill_price=fill_price,
                 fees=fees,
                 slippage=slippage,
+                entry_fx_rate=entry_fx,
                 filled_at=at,
             )
-        )
-
-        order = self.repository.get_order(
-            order_id
         )
 
         self.repository.queue_notification(
@@ -417,6 +559,16 @@ class PaperTradingService:
                     position.quantity
                 ),
                 "fill_price": str(fill.price),
+                "quote_currency":
+                fill.quote_currency,
+                "portfolio_currency":
+                fill.portfolio_currency,
+                "entry_fx_rate": (
+                    str(fill.entry_fx_rate)
+                    if fill.entry_fx_rate
+                    is not None
+                    else None
+                ),
                 "filled_at":
                 fill.filled_at.isoformat(),
                 "stop_price": str(
@@ -447,11 +599,33 @@ class PaperTradingService:
     ) -> ClosedPaperTrade:
         at = closed_at or self._now()
 
+        position = self.repository.get_position(
+            position_id
+        )
+
+        account = self.repository.get_account(
+            position.account_id
+        )
+
+        quote_currency = (
+            position.quote_currency
+            or account.base_currency
+        )
+
+        exit_fx = self._resolve_fx_rate(
+            quote_currency=quote_currency,
+            portfolio_currency=(
+                account.base_currency
+            ),
+            as_of=at,
+        )
+
         trade = self.repository.close_position(
             position_id,
             exit_price=exit_price,
             exit_fees=exit_fees,
             exit_slippage=exit_slippage,
+            exit_fx_rate=exit_fx,
             exit_reason=exit_reason,
             closed_at=at,
         )
@@ -465,6 +639,10 @@ class PaperTradingService:
             payload={
                 "symbol": trade.symbol,
                 "quantity": str(trade.quantity),
+                "quote_currency":
+                trade.quote_currency,
+                "portfolio_currency":
+                trade.portfolio_currency,
                 "entry_price": str(
                     trade.entry_price
                 ),

@@ -17,9 +17,17 @@ from .database import (
     connect_database,
     transaction,
 )
+from .fx import (
+    QuoteToPortfolioFXRate,
+    identity_fx_rate,
+)
 from .ledger import (
     calculate_entry_cash,
     calculate_long_trade,
+)
+from .valuation import (
+    calculate_entry_cash_portfolio,
+    calculate_long_trade_portfolio,
 )
 from .migrations import initialize_database
 from .models import (
@@ -803,6 +811,9 @@ class PaperRepository:
         reserved_cash: object,
         created_at: datetime,
         expires_at: datetime,
+        reservation_fx_rate: (
+            QuoteToPortfolioFXRate | None
+        ) = None,
         order_id: str | None = None,
     ) -> tuple[PaperOrderRecord, bool]:
         existing = self._read_one(
@@ -832,6 +843,22 @@ class PaperRepository:
             for value in targets
         )
 
+        reservation_fx = (
+            reservation_fx_rate
+        )
+
+        quote_currency = (
+            reservation_fx.quote_currency
+            if reservation_fx is not None
+            else None
+        )
+
+        portfolio_currency = (
+            reservation_fx.portfolio_currency
+            if reservation_fx is not None
+            else None
+        )
+
         with transaction(
             self.database_path
         ) as connection:
@@ -858,6 +885,17 @@ class PaperRepository:
                     "Paper account is not active."
                 )
 
+            if (
+                reservation_fx is not None
+                and reservation_fx.portfolio_currency
+                != account.base_currency
+            ):
+                raise ValueError(
+                    "Reservation FX portfolio "
+                    "currency does not match "
+                    "account base currency."
+                )
+
             if reserve_value > account.available_cash:
                 raise ValueError(
                     "Insufficient available cash "
@@ -872,6 +910,8 @@ class PaperRepository:
                     signal_id,
                     idempotency_key,
                     symbol,
+                    quote_currency,
+                    portfolio_currency,
                     side,
                     quantity,
                     entry_low,
@@ -880,6 +920,9 @@ class PaperRepository:
                     targets_json,
                     estimated_cash_required,
                     reserved_cash,
+                    reservation_fx_rate,
+                    reservation_fx_as_of,
+                    reservation_fx_source,
                     status,
                     created_at,
                     expires_at,
@@ -888,7 +931,8 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, NULL, NULL
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    NULL, NULL
                 )
                 """,
                 (
@@ -897,6 +941,8 @@ class PaperRepository:
                     signal_id,
                     idempotency_key,
                     symbol.upper(),
+                    quote_currency,
+                    portfolio_currency,
                     side.value,
                     str(quantity_value),
                     str(money(entry_low)),
@@ -915,6 +961,23 @@ class PaperRepository:
                         )
                     ),
                     str(reserve_value),
+                    (
+                        str(reservation_fx.rate)
+                        if reservation_fx is not None
+                        else None
+                    ),
+                    (
+                        _timestamp(
+                            reservation_fx.as_of
+                        )
+                        if reservation_fx is not None
+                        else None
+                    ),
+                    (
+                        reservation_fx.source
+                        if reservation_fx is not None
+                        else None
+                    ),
                     OrderStatus.PENDING.value,
                     _timestamp(created_at),
                     _timestamp(expires_at),
@@ -1089,6 +1152,9 @@ class PaperRepository:
         fees: object,
         slippage: object,
         filled_at: datetime,
+        entry_fx_rate: (
+            QuoteToPortfolioFXRate | None
+        ) = None,
         fill_id: str | None = None,
         position_id: str | None = None,
     ) -> tuple[
@@ -1170,12 +1236,6 @@ class PaperRepository:
             fee_value = money(fees)
             slippage_value = money(slippage)
 
-            cash_required = calculate_entry_cash(
-                price,
-                order.quantity,
-                fee_value,
-            )
-
             account = self._account_from_row(
                 connection.execute(
                     """
@@ -1187,7 +1247,71 @@ class PaperRepository:
                 ).fetchone()
             )
 
-            if cash_required > account.cash_balance:
+            entry_fx = entry_fx_rate
+
+            if entry_fx is None:
+                cash_required = calculate_entry_cash(
+                    price,
+                    order.quantity,
+                    fee_value,
+                )
+
+                quote_currency = (
+                    order.quote_currency
+                )
+
+                portfolio_currency = (
+                    order.portfolio_currency
+                )
+
+            else:
+                if (
+                    entry_fx.portfolio_currency
+                    != account.base_currency
+                ):
+                    raise ValueError(
+                        "Entry FX portfolio currency "
+                        "does not match account base "
+                        "currency."
+                    )
+
+                if (
+                    order.quote_currency is not None
+                    and order.quote_currency
+                    != entry_fx.quote_currency
+                ):
+                    raise ValueError(
+                        "Entry FX quote currency "
+                        "does not match order."
+                    )
+
+                entry_cash = (
+                    calculate_entry_cash_portfolio(
+                        price_quote=price,
+                        quantity=order.quantity,
+                        fee_quote=fee_value,
+                        fx_rate=entry_fx,
+                    )
+                )
+
+                cash_required = (
+                    entry_cash.cash_required_portfolio
+                )
+
+                quote_currency = (
+                    entry_fx.quote_currency
+                )
+
+                portfolio_currency = (
+                    entry_fx.portfolio_currency
+                )
+
+            cash_available_for_order = money(
+                account.available_cash
+                + order.reserved_cash
+            )
+
+            if cash_required > cash_available_for_order:
                 raise ValueError(
                     "Insufficient cash for fill."
                 )
@@ -1218,21 +1342,48 @@ class PaperRepository:
                 INSERT INTO paper_fills(
                     fill_id,
                     order_id,
+                    quote_currency,
+                    portfolio_currency,
                     price,
                     quantity,
                     fees,
                     slippage,
+                    entry_fx_rate,
+                    entry_fx_as_of,
+                    entry_fx_source,
+                    cash_required_portfolio,
                     filled_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?
+                )
                 """,
                 (
                     fill_id,
                     order_id,
+                    quote_currency,
+                    portfolio_currency,
                     str(price),
                     str(order.quantity),
                     str(fee_value),
                     str(slippage_value),
+                    (
+                        str(entry_fx.rate)
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        _timestamp(entry_fx.as_of)
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        entry_fx.source
+                        if entry_fx is not None
+                        else None
+                    ),
+                    str(cash_required),
                     _timestamp(filled_at),
                 ),
             )
@@ -1245,11 +1396,17 @@ class PaperRepository:
                     order_id,
                     fill_id,
                     symbol,
+                    quote_currency,
+                    portfolio_currency,
                     side,
                     quantity,
                     entry_price,
                     stop_price,
                     targets_json,
+                    entry_fx_rate,
+                    entry_fx_as_of,
+                    entry_fx_source,
+                    entry_cash_portfolio,
                     opened_at,
                     expires_at,
                     status,
@@ -1257,7 +1414,7 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, NULL
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
                 )
                 """,
                 (
@@ -1266,6 +1423,8 @@ class PaperRepository:
                     order.order_id,
                     fill_id,
                     order.symbol,
+                    quote_currency,
+                    portfolio_currency,
                     order.side.value,
                     str(order.quantity),
                     str(price),
@@ -1277,6 +1436,22 @@ class PaperRepository:
                             in order.targets
                         ]
                     ),
+                    (
+                        str(entry_fx.rate)
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        _timestamp(entry_fx.as_of)
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        entry_fx.source
+                        if entry_fx is not None
+                        else None
+                    ),
+                    str(cash_required),
                     _timestamp(filled_at),
                     _timestamp(order.expires_at),
                     PositionStatus.OPEN.value,
@@ -1488,6 +1663,9 @@ class PaperRepository:
         exit_slippage: object,
         exit_reason: PaperExitReason,
         closed_at: datetime,
+        exit_fx_rate: (
+            QuoteToPortfolioFXRate | None
+        ) = None,
         trade_id: str | None = None,
     ) -> ClosedPaperTrade:
         with transaction(
@@ -1584,19 +1762,174 @@ class PaperRepository:
                 ).fetchone()
             )
 
-            calculation = calculate_long_trade(
-                entry_price=position.entry_price,
-                exit_price=exit_price,
-                quantity=position.quantity,
-                entry_fees=fill.fees,
-                exit_fees=exit_fees,
-                entry_slippage=fill.slippage,
-                exit_slippage=exit_slippage,
-            )
+            exit_fx = exit_fx_rate
+
+            if exit_fx is None:
+                if (
+                    position.quote_currency is not None
+                    and position.portfolio_currency is not None
+                    and position.quote_currency
+                    != position.portfolio_currency
+                ):
+                    raise ValueError(
+                        "Cross-currency close requires "
+                        "an exit FX rate."
+                    )
+
+                calculation = calculate_long_trade(
+                    entry_price=position.entry_price,
+                    exit_price=exit_price,
+                    quantity=position.quantity,
+                    entry_fees=fill.fees,
+                    exit_fees=exit_fees,
+                    entry_slippage=fill.slippage,
+                    exit_slippage=exit_slippage,
+                )
+
+                trade_quote_currency = (
+                    position.quote_currency
+                )
+
+                trade_portfolio_currency = (
+                    position.portfolio_currency
+                )
+
+                entry_fx = None
+                gross_pnl = (
+                    calculation.gross_pnl
+                )
+                total_fees = (
+                    calculation.total_fees
+                )
+                total_slippage = (
+                    calculation.total_slippage
+                )
+                net_pnl = calculation.net_pnl
+                cash_proceeds = (
+                    calculation.cash_proceeds
+                )
+                return_pct = (
+                    calculation.return_pct
+                )
+
+            else:
+                trade_quote_currency = (
+                    position.quote_currency
+                    or signal.quote_currency
+                    or account.base_currency
+                )
+
+                trade_portfolio_currency = (
+                    position.portfolio_currency
+                    or account.base_currency
+                )
+
+                if (
+                    exit_fx.quote_currency
+                    != trade_quote_currency
+                    or exit_fx.portfolio_currency
+                    != trade_portfolio_currency
+                ):
+                    raise ValueError(
+                        "Exit FX rate does not match "
+                        "position currencies."
+                    )
+
+                if (
+                    position.entry_fx_rate
+                    is not None
+                    and position.entry_fx_as_of
+                    is not None
+                    and position.entry_fx_source
+                    is not None
+                ):
+                    entry_fx = (
+                        QuoteToPortfolioFXRate(
+                            quote_currency=(
+                                trade_quote_currency
+                            ),
+                            portfolio_currency=(
+                                trade_portfolio_currency
+                            ),
+                            rate=(
+                                position.entry_fx_rate
+                            ),
+                            as_of=(
+                                position.entry_fx_as_of
+                            ),
+                            source=(
+                                position.entry_fx_source
+                            ),
+                        )
+                    )
+
+                elif (
+                    trade_quote_currency
+                    == trade_portfolio_currency
+                ):
+                    entry_fx = identity_fx_rate(
+                        trade_quote_currency,
+                        as_of=position.opened_at,
+                    )
+
+                else:
+                    raise ValueError(
+                        "Cross-currency position "
+                        "is missing entry FX "
+                        "provenance."
+                    )
+
+                calculation = (
+                    calculate_long_trade_portfolio(
+                        entry_price_quote=(
+                            position.entry_price
+                        ),
+                        exit_price_quote=(
+                            exit_price
+                        ),
+                        quantity=(
+                            position.quantity
+                        ),
+                        entry_fee_quote=fill.fees,
+                        exit_fee_quote=exit_fees,
+                        entry_slippage_quote=(
+                            fill.slippage
+                        ),
+                        exit_slippage_quote=(
+                            exit_slippage
+                        ),
+                        entry_fx_rate=entry_fx,
+                        exit_fx_rate=exit_fx,
+                    )
+                )
+
+                gross_pnl = (
+                    calculation.gross_pnl_portfolio
+                )
+
+                total_fees = (
+                    calculation.total_fees_portfolio
+                )
+
+                total_slippage = (
+                    calculation.total_slippage_portfolio
+                )
+
+                net_pnl = (
+                    calculation.net_pnl_portfolio
+                )
+
+                cash_proceeds = (
+                    calculation.cash_proceeds_portfolio
+                )
+
+                return_pct = (
+                    calculation.return_pct
+                )
 
             new_cash = money(
                 account.cash_balance
-                + calculation.cash_proceeds
+                + cash_proceeds
             )
 
             trade_id = trade_id or _new_id(
@@ -1620,6 +1953,8 @@ class PaperRepository:
                     fill_id,
                     signal_id,
                     symbol,
+                    quote_currency,
+                    portfolio_currency,
                     strategy,
                     market_regime,
                     entry_time,
@@ -1628,6 +1963,12 @@ class PaperRepository:
                     exit_price,
                     exit_reason,
                     quantity,
+                    entry_fx_rate,
+                    entry_fx_as_of,
+                    entry_fx_source,
+                    exit_fx_rate,
+                    exit_fx_as_of,
+                    exit_fx_source,
                     gross_pnl,
                     fees,
                     slippage,
@@ -1637,7 +1978,8 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -1648,6 +1990,8 @@ class PaperRepository:
                     position.fill_id,
                     order.signal_id,
                     position.symbol,
+                    trade_quote_currency,
+                    trade_portfolio_currency,
                     signal.strategy,
                     signal.market_regime,
                     _timestamp(position.opened_at),
@@ -1656,13 +2000,41 @@ class PaperRepository:
                     str(money(exit_price)),
                     exit_reason.value,
                     str(position.quantity),
-                    str(calculation.gross_pnl),
-                    str(calculation.total_fees),
-                    str(
-                        calculation.total_slippage
+                    (
+                        str(entry_fx.rate)
+                        if entry_fx is not None
+                        else None
                     ),
-                    str(calculation.net_pnl),
-                    calculation.return_pct,
+                    (
+                        _timestamp(entry_fx.as_of)
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        entry_fx.source
+                        if entry_fx is not None
+                        else None
+                    ),
+                    (
+                        str(exit_fx.rate)
+                        if exit_fx is not None
+                        else None
+                    ),
+                    (
+                        _timestamp(exit_fx.as_of)
+                        if exit_fx is not None
+                        else None
+                    ),
+                    (
+                        exit_fx.source
+                        if exit_fx is not None
+                        else None
+                    ),
+                    str(gross_pnl),
+                    str(total_fees),
+                    str(total_slippage),
+                    str(net_pnl),
+                    return_pct,
                     holding_seconds,
                 ),
             )
@@ -1729,7 +2101,7 @@ class PaperRepository:
                     position.account_id,
                     "PAPER_SELL",
                     str(
-                        calculation.cash_proceeds
+                        cash_proceeds
                     ),
                     str(new_cash),
                     "TRADE",
@@ -1756,11 +2128,15 @@ class PaperRepository:
                 ),
                 metadata={
                     "gross_pnl":
-                    str(calculation.gross_pnl),
+                    str(gross_pnl),
                     "net_pnl":
-                    str(calculation.net_pnl),
+                    str(net_pnl),
                     "return_pct":
-                    calculation.return_pct,
+                    return_pct,
+                    "quote_currency":
+                    trade_quote_currency,
+                    "portfolio_currency":
+                    trade_portfolio_currency,
                 },
                 created_at=closed_at,
             )
