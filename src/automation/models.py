@@ -12,6 +12,11 @@ from src.backtest import (
     ExecutionCostModel,
     FillRule,
 )
+from src.costs import (
+    IBKRFXMode,
+    IBKRPricingPlan,
+)
+
 from src.paper import (
     AccountReconciliation,
     FixedNotionalSizingPolicy,
@@ -271,6 +276,21 @@ class AutomatedExecutionConfig:
 
     enable_signal_reversal: bool = True
 
+
+    ibkr_cost_gate_enabled: bool = False
+
+    ibkr_pricing_plan: (
+        IBKRPricingPlan | None
+    ) = None
+
+    ibkr_fx_mode: (
+        IBKRFXMode | None
+    ) = None
+
+    ibkr_include_entry_fx_conversion: bool = False
+
+    ibkr_include_exit_fx_conversion: bool = False
+
     def __post_init__(self) -> None:
         if not isinstance(
             self.fill_rule,
@@ -286,6 +306,69 @@ class AutomatedExecutionConfig:
         ):
             raise ValueError(
                 "costs must be an ExecutionCostModel."
+            )
+
+        for name in (
+            "ibkr_cost_gate_enabled",
+            "ibkr_include_entry_fx_conversion",
+            "ibkr_include_exit_fx_conversion",
+        ):
+            if not isinstance(
+                getattr(self, name),
+                bool,
+            ):
+                raise ValueError(
+                    f"{name} must be boolean."
+                )
+
+        if (
+            self.ibkr_pricing_plan
+            is not None
+            and not isinstance(
+                self.ibkr_pricing_plan,
+                IBKRPricingPlan,
+            )
+        ):
+            raise ValueError(
+                "ibkr_pricing_plan must be an "
+                "IBKRPricingPlan or None."
+            )
+
+        if (
+            self.ibkr_fx_mode
+            is not None
+            and not isinstance(
+                self.ibkr_fx_mode,
+                IBKRFXMode,
+            )
+        ):
+            raise ValueError(
+                "ibkr_fx_mode must be an "
+                "IBKRFXMode or None."
+            )
+
+        if (
+            self.ibkr_cost_gate_enabled
+            and self.ibkr_pricing_plan
+            is None
+        ):
+            raise ValueError(
+                "ibkr_pricing_plan is required "
+                "when the IBKR cost gate is enabled."
+            )
+
+        if (
+            (
+                self
+                .ibkr_include_entry_fx_conversion
+                or self
+                .ibkr_include_exit_fx_conversion
+            )
+            and self.ibkr_fx_mode is None
+        ):
+            raise ValueError(
+                "ibkr_fx_mode is required when "
+                "IBKR FX conversion costs are enabled."
             )
 
 

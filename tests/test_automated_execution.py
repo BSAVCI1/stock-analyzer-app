@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import json
+import sqlite3
 
 import numpy as np
 import pandas as pd
@@ -14,6 +16,9 @@ from src.automation import (
     ExecutionRunStatus,
 )
 from src.backtest import ExecutionCostModel, FillRule
+from src.costs import (
+    IBKRPricingPlan,
+)
 from src.data import MarketSnapshot
 from src.paper import (
     PaperExitReason,
@@ -196,11 +201,18 @@ def create_candidate_scan(
     account_id,
     generated_at=T0,
     data_as_of=None,
+    reward_to_risk=2.5,
+    entry_low=99,
+    entry_high=101,
+    stop_price=95,
+    targets=(110, 120),
+    quote_currency=None,
 ):
     signal = paper_service.persist_signal(
         account_id=account_id,
         signal_id="SIG-AAPL-CANDIDATE",
         symbol="AAPL",
+        quote_currency=quote_currency,
         generated_at=generated_at,
         expires_at=(
             generated_at
@@ -211,11 +223,11 @@ def create_candidate_scan(
         market_regime="BULLISH",
         score=80,
         confidence=0.90,
-        reward_to_risk=2.5,
-        entry_low=99,
-        entry_high=101,
-        stop_price=95,
-        targets=(110, 120),
+        reward_to_risk=reward_to_risk,
+        entry_low=entry_low,
+        entry_high=entry_high,
+        stop_price=stop_price,
+        targets=targets,
         evidence=(
             "Approved deterministic signal.",
         ),
@@ -262,7 +274,7 @@ def create_candidate_scan(
             score=80,
             confidence=0.90,
             market_regime="BULLISH",
-            reward_to_risk=2.5,
+            reward_to_risk=reward_to_risk,
             release_eligible=True,
             rank_score=90,
             rank_position=1,
@@ -969,3 +981,235 @@ def test_empty_execution_run_reconciles(
 
     assert report.reconciliation.reconciled
     assert report.equity_snapshot is not None
+
+def test_ibkr_cost_gate_is_disabled_by_default() -> None:
+    config = AutomatedExecutionConfig()
+
+    assert (
+        config.ibkr_cost_gate_enabled
+        is False
+    )
+
+    assert config.ibkr_pricing_plan is None
+    assert config.ibkr_fx_mode is None
+
+
+def test_ibkr_cost_gate_rejects_candidate_before_order(
+    tmp_path,
+) -> None:
+    history = make_history(
+        [
+            (
+                T0,
+                10,
+                10.10,
+                9.90,
+                10,
+            ),
+        ]
+    )
+
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        _,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": history,
+        },
+    )
+
+    engine.config = AutomatedExecutionConfig(
+        fill_rule=FillRule.LIMIT,
+        costs=ExecutionCostModel(),
+        ibkr_cost_gate_enabled=True,
+        ibkr_pricing_plan=(
+            IBKRPricingPlan.FIXED
+        ),
+    )
+
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=(
+            scanner_repository
+        ),
+        account_id=account.account_id,
+        reward_to_risk=2.02,
+        entry_low=10,
+        entry_high=10,
+        stop_price=9.5,
+        targets=(11.01,),
+        quote_currency="USD",
+        data_as_of=T0,
+    )
+
+    report = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="ibkr-cost-reject",
+        run_at=T0,
+    )
+
+    assert report.run.created_orders == 0
+
+    assert (
+        report.run.rejected_entries
+        == 1
+    )
+
+    assert (
+        paper_repository
+        .list_pending_orders(
+            account.account_id
+        )
+        == ()
+    )
+
+    connection = sqlite3.connect(
+        paper_repository.database_path
+    )
+
+    try:
+        row = connection.execute(
+            """
+            SELECT metadata_json
+            FROM paper_system_events
+            WHERE account_id = ?
+              AND event_type =
+                  'AUTOMATIC_ENTRY_REJECTED'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (account.account_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert row is not None
+
+    metadata = json.loads(
+        row[0]
+    )
+
+    assert (
+        metadata["error_type"]
+        == "IBKRCostGateRejected"
+    )
+
+    assert (
+        "UNECONOMIC_AFTER_COSTS"
+        in metadata["reason"]
+    )
+
+    assert (
+        "net_rr="
+        in metadata["reason"]
+    )
+
+
+def test_ibkr_tiered_gate_fails_closed_without_route_cost(
+    tmp_path,
+) -> None:
+    history = make_history(
+        [
+            (
+                T0,
+                10,
+                10.10,
+                9.90,
+                10,
+            ),
+        ]
+    )
+
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        _,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": history,
+        },
+    )
+
+    engine.config = AutomatedExecutionConfig(
+        fill_rule=FillRule.LIMIT,
+        costs=ExecutionCostModel(),
+        ibkr_cost_gate_enabled=True,
+        ibkr_pricing_plan=(
+            IBKRPricingPlan.TIERED
+        ),
+    )
+
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=(
+            scanner_repository
+        ),
+        account_id=account.account_id,
+        reward_to_risk=3.0,
+        entry_low=10,
+        entry_high=10,
+        stop_price=9,
+        targets=(13,),
+        quote_currency="USD",
+        data_as_of=T0,
+    )
+
+    report = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="ibkr-tiered-incomplete",
+        run_at=T0,
+    )
+
+    assert report.run.created_orders == 0
+
+    assert (
+        report.run.rejected_entries
+        == 1
+    )
+
+    connection = sqlite3.connect(
+        paper_repository.database_path
+    )
+
+    try:
+        row = connection.execute(
+            """
+            SELECT metadata_json
+            FROM paper_system_events
+            WHERE account_id = ?
+              AND event_type =
+                  'AUTOMATIC_ENTRY_REJECTED'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (account.account_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert row is not None
+
+    metadata = json.loads(
+        row[0]
+    )
+
+    assert (
+        metadata["error_type"]
+        == "IBKRCostGateRejected"
+    )
+
+    assert (
+        "INCOMPLETE_COST_ESTIMATE"
+        in metadata["reason"]
+    )

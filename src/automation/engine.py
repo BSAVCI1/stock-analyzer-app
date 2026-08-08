@@ -26,6 +26,11 @@ from src.execution_adapters import (
     ExecutionAdapter,
     InternalPaperExecutionAdapter,
 )
+from src.costs import (
+    IBKREconomicDecision,
+    calculate_us_long_trade_economics,
+)
+
 from src.data import (
     MarketSnapshot,
     load_market_snapshot,
@@ -75,6 +80,11 @@ AnalysisRunner = Callable[
 
 class StaleMarketDataError(RuntimeError):
     """Market history is not fresh enough for automation."""
+
+
+class IBKRCostGateRejected(RuntimeError):
+    """Raised when P4.2 rejects a candidate after costs."""
+
 
 
 class AutomatedPaperExecutionEngine:
@@ -1592,6 +1602,131 @@ class AutomatedPaperExecutionEngine:
             error_count,
         )
 
+    def _apply_ibkr_cost_gate(
+        self,
+        *,
+        account_id: str,
+        signal_id: str,
+        quantity: Decimal,
+        run_at: datetime,
+    ) -> None:
+        """Reject a candidate when configured IBKR economics fail."""
+
+        if not self.config.ibkr_cost_gate_enabled:
+            return
+
+        pricing_plan = (
+            self.config.ibkr_pricing_plan
+        )
+
+        if pricing_plan is None:
+            raise IBKRCostGateRejected(
+                "INCOMPLETE_COST_ESTIMATE: "
+                "IBKR pricing plan is not configured."
+            )
+
+        account = (
+            self.paper_repository
+            .get_account(account_id)
+        )
+
+        signal = (
+            self.paper_repository
+            .get_signal(signal_id)
+        )
+
+        quote_currency = (
+            signal.quote_currency
+            or account.base_currency
+        ).strip().upper()
+
+        if quote_currency != "USD":
+            raise IBKRCostGateRejected(
+                "INCOMPLETE_COST_ESTIMATE: "
+                "P4.2 engine gate currently "
+                "supports USD-quoted instruments only; "
+                f"received {quote_currency}."
+            )
+
+        if not signal.targets:
+            raise IBKRCostGateRejected(
+                "INCOMPLETE_COST_ESTIMATE: "
+                "signal has no primary target."
+            )
+
+        fx_rate = (
+            self.paper_service
+            ._resolve_fx_rate(
+                quote_currency="USD",
+                portfolio_currency=(
+                    account.base_currency
+                ),
+                as_of=run_at,
+            )
+        )
+
+        economics = (
+            calculate_us_long_trade_economics(
+                quantity=quantity,
+                entry_price_usd=(
+                    signal.entry_high
+                ),
+                stop_price_usd=(
+                    signal.stop_price
+                ),
+                target_price_usd=(
+                    signal.targets[0]
+                ),
+                usd_to_portfolio_rate=(
+                    fx_rate.rate
+                ),
+                pricing_plan=pricing_plan,
+                minimum_net_reward_to_risk=(
+                    self.paper_service
+                    .config
+                    .minimum_reward_to_risk
+                ),
+                fractional=False,
+                fx_mode=(
+                    self.config
+                    .ibkr_fx_mode
+                ),
+                include_entry_fx_conversion=(
+                    self.config
+                    .ibkr_include_entry_fx_conversion
+                ),
+                include_exit_fx_conversion=(
+                    self.config
+                    .ibkr_include_exit_fx_conversion
+                ),
+            )
+        )
+
+        if (
+            economics.decision
+            is IBKREconomicDecision.ACCEPT
+        ):
+            return
+
+        raise IBKRCostGateRejected(
+            f"{economics.decision.value}: "
+            f"gross_rr="
+            f"{economics.gross_reward_to_risk}; "
+            f"net_rr="
+            f"{economics.net_reward_to_risk}; "
+            f"minimum_rr="
+            f"{economics.minimum_net_reward_to_risk}; "
+            f"complete={economics.complete}; "
+            f"pricing_plan="
+            f"{economics.pricing_plan.value}; "
+            f"entry_notional_usd="
+            f"{economics.entry_notional_usd}; "
+            f"reward_path_cost="
+            f"{economics.reward_path_cost_portfolio}; "
+            f"risk_path_cost="
+            f"{economics.risk_path_cost_portfolio}."
+        )
+
     def _create_candidate_orders(
         self,
         *,
@@ -1683,6 +1818,15 @@ class AutomatedPaperExecutionEngine:
                     .get_signal(
                         candidate.signal_id
                     )
+                )
+
+                self._apply_ibkr_cost_gate(
+                    account_id=account_id,
+                    signal_id=(
+                        candidate.signal_id
+                    ),
+                    quantity=quantity,
+                    run_at=run_at,
                 )
 
                 fee = calculate_fee(
