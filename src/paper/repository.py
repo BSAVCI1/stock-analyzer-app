@@ -238,6 +238,12 @@ class PaperRepository:
                 row["idempotency_key"]
             ),
             symbol=row["symbol"],
+            quote_currency=(
+                row["quote_currency"]
+            ),
+            portfolio_currency=(
+                row["portfolio_currency"]
+            ),
             side=PositionSide(row["side"]),
             quantity=money(row["quantity"]),
             entry_low=money(row["entry_low"]),
@@ -251,6 +257,25 @@ class PaperRepository:
             ),
             reserved_cash=money(
                 row["reserved_cash"]
+            ),
+            reservation_fx_rate=(
+                money(
+                    row["reservation_fx_rate"]
+                )
+                if row["reservation_fx_rate"]
+                is not None
+                else None
+            ),
+            reservation_fx_as_of=(
+                _datetime(
+                    row["reservation_fx_as_of"]
+                )
+                if row["reservation_fx_as_of"]
+                is not None
+                else None
+            ),
+            reservation_fx_source=(
+                row["reservation_fx_source"]
             ),
             status=OrderStatus(row["status"]),
             created_at=_datetime(
@@ -274,10 +299,43 @@ class PaperRepository:
         return PaperFillRecord(
             fill_id=row["fill_id"],
             order_id=row["order_id"],
+            quote_currency=(
+                row["quote_currency"]
+            ),
+            portfolio_currency=(
+                row["portfolio_currency"]
+            ),
             price=money(row["price"]),
             quantity=money(row["quantity"]),
             fees=money(row["fees"]),
             slippage=money(row["slippage"]),
+            entry_fx_rate=(
+                money(row["entry_fx_rate"])
+                if row["entry_fx_rate"]
+                is not None
+                else None
+            ),
+            entry_fx_as_of=(
+                _datetime(row["entry_fx_as_of"])
+                if row["entry_fx_as_of"]
+                is not None
+                else None
+            ),
+            entry_fx_source=(
+                row["entry_fx_source"]
+            ),
+            cash_required_portfolio=(
+                money(
+                    row[
+                        "cash_required_portfolio"
+                    ]
+                )
+                if row[
+                    "cash_required_portfolio"
+                ]
+                is not None
+                else None
+            ),
             filled_at=_datetime(
                 row["filled_at"]
             ),
@@ -293,6 +351,12 @@ class PaperRepository:
             order_id=row["order_id"],
             fill_id=row["fill_id"],
             symbol=row["symbol"],
+            quote_currency=(
+                row["quote_currency"]
+            ),
+            portfolio_currency=(
+                row["portfolio_currency"]
+            ),
             side=PositionSide(row["side"]),
             quantity=money(row["quantity"]),
             entry_price=money(
@@ -303,6 +367,29 @@ class PaperRepository:
             ),
             targets=_decimal_targets(
                 row["targets_json"]
+            ),
+            entry_fx_rate=(
+                money(row["entry_fx_rate"])
+                if row["entry_fx_rate"]
+                is not None
+                else None
+            ),
+            entry_fx_as_of=(
+                _datetime(row["entry_fx_as_of"])
+                if row["entry_fx_as_of"]
+                is not None
+                else None
+            ),
+            entry_fx_source=(
+                row["entry_fx_source"]
+            ),
+            entry_cash_portfolio=(
+                money(
+                    row["entry_cash_portfolio"]
+                )
+                if row["entry_cash_portfolio"]
+                is not None
+                else None
             ),
             opened_at=_datetime(
                 row["opened_at"]
@@ -330,6 +417,12 @@ class PaperRepository:
             fill_id=row["fill_id"],
             signal_id=row["signal_id"],
             symbol=row["symbol"],
+            quote_currency=(
+                row["quote_currency"]
+            ),
+            portfolio_currency=(
+                row["portfolio_currency"]
+            ),
             strategy=row["strategy"],
             market_regime=row["market_regime"],
             entry_time=_datetime(
@@ -348,6 +441,36 @@ class PaperRepository:
                 row["exit_reason"]
             ),
             quantity=money(row["quantity"]),
+            entry_fx_rate=(
+                money(row["entry_fx_rate"])
+                if row["entry_fx_rate"]
+                is not None
+                else None
+            ),
+            entry_fx_as_of=(
+                _datetime(row["entry_fx_as_of"])
+                if row["entry_fx_as_of"]
+                is not None
+                else None
+            ),
+            entry_fx_source=(
+                row["entry_fx_source"]
+            ),
+            exit_fx_rate=(
+                money(row["exit_fx_rate"])
+                if row["exit_fx_rate"]
+                is not None
+                else None
+            ),
+            exit_fx_as_of=(
+                _datetime(row["exit_fx_as_of"])
+                if row["exit_fx_as_of"]
+                is not None
+                else None
+            ),
+            exit_fx_source=(
+                row["exit_fx_source"]
+            ),
             gross_pnl=money(
                 row["gross_pnl"]
             ),

@@ -203,6 +203,8 @@ class PaperOrderRecord:
     idempotency_key: str
 
     symbol: str
+    quote_currency: str | None
+    portfolio_currency: str | None
     side: PositionSide
     quantity: Decimal
 
@@ -213,6 +215,10 @@ class PaperOrderRecord:
 
     estimated_cash_required: Decimal
     reserved_cash: Decimal
+
+    reservation_fx_rate: Decimal | None
+    reservation_fx_as_of: datetime | None
+    reservation_fx_source: str | None
 
     status: OrderStatus
     created_at: datetime
@@ -226,10 +232,18 @@ class PaperFillRecord:
     fill_id: str
     order_id: str
 
+    quote_currency: str | None
+    portfolio_currency: str | None
+
     price: Decimal
     quantity: Decimal
     fees: Decimal
     slippage: Decimal
+
+    entry_fx_rate: Decimal | None
+    entry_fx_as_of: datetime | None
+    entry_fx_source: str | None
+    cash_required_portfolio: Decimal | None
 
     filled_at: datetime
 
@@ -242,12 +256,19 @@ class PaperPositionRecord:
     fill_id: str
 
     symbol: str
+    quote_currency: str | None
+    portfolio_currency: str | None
     side: PositionSide
     quantity: Decimal
 
     entry_price: Decimal
     stop_price: Decimal
     targets: tuple[Decimal, ...]
+
+    entry_fx_rate: Decimal | None
+    entry_fx_as_of: datetime | None
+    entry_fx_source: str | None
+    entry_cash_portfolio: Decimal | None
 
     opened_at: datetime
     expires_at: datetime
@@ -265,6 +286,8 @@ class ClosedPaperTrade:
     signal_id: str
 
     symbol: str
+    quote_currency: str | None
+    portfolio_currency: str | None
     strategy: str
     market_regime: str
 
@@ -275,6 +298,15 @@ class ClosedPaperTrade:
     exit_reason: PaperExitReason
 
     quantity: Decimal
+
+    entry_fx_rate: Decimal | None
+    entry_fx_as_of: datetime | None
+    entry_fx_source: str | None
+
+    exit_fx_rate: Decimal | None
+    exit_fx_as_of: datetime | None
+    exit_fx_source: str | None
+
     gross_pnl: Decimal
     fees: Decimal
     slippage: Decimal

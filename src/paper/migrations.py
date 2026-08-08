@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 _SCHEMA_V1 = """
@@ -699,6 +699,89 @@ PRAGMA user_version = 7;
 """
 
 
+_SCHEMA_V8 = """
+ALTER TABLE paper_orders
+    ADD COLUMN quote_currency TEXT;
+
+ALTER TABLE paper_orders
+    ADD COLUMN portfolio_currency TEXT;
+
+ALTER TABLE paper_orders
+    ADD COLUMN reservation_fx_rate TEXT;
+
+ALTER TABLE paper_orders
+    ADD COLUMN reservation_fx_as_of TEXT;
+
+ALTER TABLE paper_orders
+    ADD COLUMN reservation_fx_source TEXT;
+
+
+ALTER TABLE paper_fills
+    ADD COLUMN quote_currency TEXT;
+
+ALTER TABLE paper_fills
+    ADD COLUMN portfolio_currency TEXT;
+
+ALTER TABLE paper_fills
+    ADD COLUMN entry_fx_rate TEXT;
+
+ALTER TABLE paper_fills
+    ADD COLUMN entry_fx_as_of TEXT;
+
+ALTER TABLE paper_fills
+    ADD COLUMN entry_fx_source TEXT;
+
+ALTER TABLE paper_fills
+    ADD COLUMN cash_required_portfolio TEXT;
+
+
+ALTER TABLE paper_positions
+    ADD COLUMN quote_currency TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN portfolio_currency TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN entry_fx_rate TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN entry_fx_as_of TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN entry_fx_source TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN entry_cash_portfolio TEXT;
+
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN quote_currency TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN portfolio_currency TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN entry_fx_rate TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN entry_fx_as_of TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN entry_fx_source TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN exit_fx_rate TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN exit_fx_as_of TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN exit_fx_source TEXT;
+
+PRAGMA user_version = 8;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -814,6 +897,12 @@ def apply_migrations(
             _SCHEMA_V7
         )
         current_version = 7
+
+    if current_version < 8:
+        connection.executescript(
+            _SCHEMA_V8
+        )
+        current_version = 8
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(
