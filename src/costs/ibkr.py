@@ -1272,3 +1272,503 @@ def calculate_net_reward_to_risk(
             ratio
         ),
     )
+
+class IBKREconomicDecision(str, Enum):
+    """Cost-aware P4.2 trade acceptance outcome."""
+
+    ACCEPT = "ACCEPT"
+
+    UNECONOMIC_AFTER_COSTS = (
+        "UNECONOMIC_AFTER_COSTS"
+    )
+
+    INCOMPLETE_COST_ESTIMATE = (
+        "INCOMPLETE_COST_ESTIMATE"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class IBKRLongTradeEconomics:
+    """Auditable economics for one proposed long trade."""
+
+    pricing_plan: IBKRPricingPlan
+    fx_mode: IBKRFXMode | None
+    decision: IBKREconomicDecision
+
+    quantity: Decimal
+    usd_to_portfolio_rate: Decimal
+
+    entry_notional_usd: Decimal
+    stop_notional_usd: Decimal
+    target_notional_usd: Decimal
+
+    entry_stock_cost_usd: Decimal
+    stop_exit_stock_cost_usd: Decimal
+    target_exit_stock_cost_usd: Decimal
+
+    entry_fx_cost_usd: Decimal
+    stop_exit_fx_cost_usd: Decimal
+    target_exit_fx_cost_usd: Decimal
+
+    gross_reward_portfolio: Decimal
+    gross_risk_portfolio: Decimal
+
+    reward_path_cost_portfolio: Decimal
+    risk_path_cost_portfolio: Decimal
+
+    net_reward_portfolio: Decimal
+    cost_adjusted_risk_portfolio: Decimal
+
+    gross_reward_to_risk: Decimal
+    net_reward_to_risk: Decimal
+    minimum_net_reward_to_risk: Decimal
+
+    complete: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.pricing_plan,
+            IBKRPricingPlan,
+        ):
+            raise ValueError(
+                "pricing_plan must be an "
+                "IBKRPricingPlan."
+            )
+
+        if (
+            self.fx_mode is not None
+            and not isinstance(
+                self.fx_mode,
+                IBKRFXMode,
+            )
+        ):
+            raise ValueError(
+                "fx_mode must be an "
+                "IBKRFXMode or None."
+            )
+
+        if not isinstance(
+            self.decision,
+            IBKREconomicDecision,
+        ):
+            raise ValueError(
+                "decision must be an "
+                "IBKREconomicDecision."
+            )
+
+        if not isinstance(
+            self.complete,
+            bool,
+        ):
+            raise ValueError(
+                "complete must be boolean."
+            )
+
+        for name in (
+            "quantity",
+            "usd_to_portfolio_rate",
+            "entry_notional_usd",
+            "stop_notional_usd",
+            "target_notional_usd",
+            "gross_reward_portfolio",
+            "gross_risk_portfolio",
+            "cost_adjusted_risk_portfolio",
+            "gross_reward_to_risk",
+            "minimum_net_reward_to_risk",
+        ):
+            object.__setattr__(
+                self,
+                name,
+                _money(
+                    _positive(
+                        name,
+                        getattr(self, name),
+                    )
+                ),
+            )
+
+        for name in (
+            "entry_stock_cost_usd",
+            "stop_exit_stock_cost_usd",
+            "target_exit_stock_cost_usd",
+            "entry_fx_cost_usd",
+            "stop_exit_fx_cost_usd",
+            "target_exit_fx_cost_usd",
+            "reward_path_cost_portfolio",
+            "risk_path_cost_portfolio",
+            "net_reward_portfolio",
+            "net_reward_to_risk",
+        ):
+            object.__setattr__(
+                self,
+                name,
+                _money(
+                    _non_negative(
+                        name,
+                        getattr(self, name),
+                    )
+                ),
+            )
+
+
+def calculate_us_long_trade_economics(
+    *,
+    quantity: object,
+    entry_price_usd: object,
+    stop_price_usd: object,
+    target_price_usd: object,
+    usd_to_portfolio_rate: object,
+    pricing_plan: IBKRPricingPlan | str,
+    minimum_net_reward_to_risk: object,
+    fractional: bool = False,
+    fx_mode: IBKRFXMode | str | None = None,
+    include_entry_fx_conversion: bool = False,
+    include_exit_fx_conversion: bool = False,
+    entry_route_dependent_fee_usd: (
+        object | None
+    ) = None,
+    stop_exit_route_dependent_fee_usd: (
+        object | None
+    ) = None,
+    target_exit_route_dependent_fee_usd: (
+        object | None
+    ) = None,
+    profile: (
+        Mapping[str, object] | None
+    ) = None,
+) -> IBKRLongTradeEconomics:
+    """Evaluate a US long trade after realistic IBKR costs.
+
+    FX conversion is deliberately explicit.  The function
+    never assumes whether an IBKR account converts currency
+    on entry, on exit, on both sides, or not at all.
+    """
+
+    quantity_value = _positive(
+        "quantity",
+        quantity,
+    )
+
+    entry_price = _positive(
+        "entry_price_usd",
+        entry_price_usd,
+    )
+
+    stop_price = _positive(
+        "stop_price_usd",
+        stop_price_usd,
+    )
+
+    target_price = _positive(
+        "target_price_usd",
+        target_price_usd,
+    )
+
+    rate = _positive(
+        "usd_to_portfolio_rate",
+        usd_to_portfolio_rate,
+    )
+
+    minimum_ratio = _positive(
+        "minimum_net_reward_to_risk",
+        minimum_net_reward_to_risk,
+    )
+
+    if not stop_price < entry_price:
+        raise ValueError(
+            "stop_price_usd must be below "
+            "entry_price_usd."
+        )
+
+    if not target_price > entry_price:
+        raise ValueError(
+            "target_price_usd must be above "
+            "entry_price_usd."
+        )
+
+    if not isinstance(
+        fractional,
+        bool,
+    ):
+        raise ValueError(
+            "fractional must be boolean."
+        )
+
+    for name, value in (
+        (
+            "include_entry_fx_conversion",
+            include_entry_fx_conversion,
+        ),
+        (
+            "include_exit_fx_conversion",
+            include_exit_fx_conversion,
+        ),
+    ):
+        if not isinstance(
+            value,
+            bool,
+        ):
+            raise ValueError(
+                f"{name} must be boolean."
+            )
+
+    plan = _enum(
+        IBKRPricingPlan,
+        pricing_plan,
+    )
+
+    resolved_fx_mode = (
+        None
+        if fx_mode is None
+        else _enum(
+            IBKRFXMode,
+            fx_mode,
+        )
+    )
+
+    if (
+        (
+            include_entry_fx_conversion
+            or include_exit_fx_conversion
+        )
+        and resolved_fx_mode is None
+    ):
+        raise ValueError(
+            "fx_mode is required when "
+            "FX conversion costs are included."
+        )
+
+    reference = _profile_or_default(
+        profile
+    )
+
+    entry_notional = _money(
+        entry_price
+        * quantity_value
+    )
+
+    stop_notional = _money(
+        stop_price
+        * quantity_value
+    )
+
+    target_notional = _money(
+        target_price
+        * quantity_value
+    )
+
+    entry_stock = (
+        calculate_us_stock_reference_fees(
+            quantity=quantity_value,
+            trade_value_usd=entry_notional,
+            pricing_plan=plan,
+            side=IBKRTradeSide.BUY,
+            fractional=fractional,
+            route_dependent_fee_usd=(
+                entry_route_dependent_fee_usd
+            ),
+            profile=reference,
+        )
+    )
+
+    stop_stock = (
+        calculate_us_stock_reference_fees(
+            quantity=quantity_value,
+            trade_value_usd=stop_notional,
+            pricing_plan=plan,
+            side=IBKRTradeSide.SELL,
+            fractional=fractional,
+            route_dependent_fee_usd=(
+                stop_exit_route_dependent_fee_usd
+            ),
+            profile=reference,
+        )
+    )
+
+    target_stock = (
+        calculate_us_stock_reference_fees(
+            quantity=quantity_value,
+            trade_value_usd=target_notional,
+            pricing_plan=plan,
+            side=IBKRTradeSide.SELL,
+            fractional=fractional,
+            route_dependent_fee_usd=(
+                target_exit_route_dependent_fee_usd
+            ),
+            profile=reference,
+        )
+    )
+
+    entry_fx_cost = Decimal("0")
+    stop_fx_cost = Decimal("0")
+    target_fx_cost = Decimal("0")
+
+    if include_entry_fx_conversion:
+        assert resolved_fx_mode is not None
+
+        entry_fx_cost = (
+            calculate_fx_reference_cost(
+                trade_value_usd=entry_notional,
+                mode=resolved_fx_mode,
+                profile=reference,
+            )
+            .estimated_cost
+        )
+
+    if include_exit_fx_conversion:
+        assert resolved_fx_mode is not None
+
+        stop_fx_cost = (
+            calculate_fx_reference_cost(
+                trade_value_usd=stop_notional,
+                mode=resolved_fx_mode,
+                profile=reference,
+            )
+            .estimated_cost
+        )
+
+        target_fx_cost = (
+            calculate_fx_reference_cost(
+                trade_value_usd=target_notional,
+                mode=resolved_fx_mode,
+                profile=reference,
+            )
+            .estimated_cost
+        )
+
+    gross_reward = _money(
+        (
+            target_price
+            - entry_price
+        )
+        * quantity_value
+        * rate
+    )
+
+    gross_risk = _money(
+        (
+            entry_price
+            - stop_price
+        )
+        * quantity_value
+        * rate
+    )
+
+    reward_path_cost = _money(
+        (
+            entry_stock.total_known_cost
+            + target_stock.total_known_cost
+            + entry_fx_cost
+            + target_fx_cost
+        )
+        * rate
+    )
+
+    risk_path_cost = _money(
+        (
+            entry_stock.total_known_cost
+            + stop_stock.total_known_cost
+            + entry_fx_cost
+            + stop_fx_cost
+        )
+        * rate
+    )
+
+    net_reward = _money(
+        max(
+            Decimal("0"),
+            gross_reward
+            - reward_path_cost,
+        )
+    )
+
+    cost_adjusted_risk = _money(
+        gross_risk
+        + risk_path_cost
+    )
+
+    gross_ratio = _money(
+        gross_reward
+        / gross_risk
+    )
+
+    net_ratio = _money(
+        net_reward
+        / cost_adjusted_risk
+    )
+
+    complete = (
+        entry_stock.complete
+        and stop_stock.complete
+        and target_stock.complete
+    )
+
+    if not complete:
+        decision = (
+            IBKREconomicDecision
+            .INCOMPLETE_COST_ESTIMATE
+        )
+
+    elif net_ratio < minimum_ratio:
+        decision = (
+            IBKREconomicDecision
+            .UNECONOMIC_AFTER_COSTS
+        )
+
+    else:
+        decision = (
+            IBKREconomicDecision.ACCEPT
+        )
+
+    return IBKRLongTradeEconomics(
+        pricing_plan=plan,
+        fx_mode=resolved_fx_mode,
+        decision=decision,
+        quantity=quantity_value,
+        usd_to_portfolio_rate=rate,
+        entry_notional_usd=entry_notional,
+        stop_notional_usd=stop_notional,
+        target_notional_usd=target_notional,
+        entry_stock_cost_usd=(
+            entry_stock.total_known_cost
+        ),
+        stop_exit_stock_cost_usd=(
+            stop_stock.total_known_cost
+        ),
+        target_exit_stock_cost_usd=(
+            target_stock.total_known_cost
+        ),
+        entry_fx_cost_usd=entry_fx_cost,
+        stop_exit_fx_cost_usd=stop_fx_cost,
+        target_exit_fx_cost_usd=(
+            target_fx_cost
+        ),
+        gross_reward_portfolio=(
+            gross_reward
+        ),
+        gross_risk_portfolio=(
+            gross_risk
+        ),
+        reward_path_cost_portfolio=(
+            reward_path_cost
+        ),
+        risk_path_cost_portfolio=(
+            risk_path_cost
+        ),
+        net_reward_portfolio=(
+            net_reward
+        ),
+        cost_adjusted_risk_portfolio=(
+            cost_adjusted_risk
+        ),
+        gross_reward_to_risk=(
+            gross_ratio
+        ),
+        net_reward_to_risk=(
+            net_ratio
+        ),
+        minimum_net_reward_to_risk=(
+            minimum_ratio
+        ),
+        complete=complete,
+    )

@@ -7,9 +7,11 @@ import pytest
 
 from src.costs import (
     IBKRCostProfileError,
+    IBKREconomicDecision,
     IBKRFXMode,
     IBKRPricingPlan,
     IBKRTradeSide,
+    calculate_us_long_trade_economics,
     calculate_europe_eur_reference_fees,
     calculate_fx_reference_cost,
     calculate_net_reward_to_risk,
@@ -288,3 +290,171 @@ def test_cost_adjusted_reward_to_risk_matches_hand_calculation() -> None:
         result.net_reward_to_risk
         == Decimal("1.50000000")
     )
+
+def test_cost_adjusted_trade_matches_hand_calculation() -> None:
+    result = (
+        calculate_us_long_trade_economics(
+            quantity="10",
+            entry_price_usd="10",
+            stop_price_usd="9",
+            target_price_usd="13",
+            usd_to_portfolio_rate="0.90",
+            pricing_plan="FIXED",
+            minimum_net_reward_to_risk="2",
+            fx_mode="AUTO_CONVERSION",
+            include_entry_fx_conversion=True,
+            include_exit_fx_conversion=True,
+        )
+    )
+
+    assert (
+        result.gross_reward_portfolio
+        == Decimal("27.00000000")
+    )
+
+    assert (
+        result.gross_risk_portfolio
+        == Decimal("9.00000000")
+    )
+
+    assert (
+        result.reward_path_cost_portfolio
+        == Decimal("1.86631920")
+    )
+
+    assert (
+        result.risk_path_cost_portfolio
+        == Decimal("1.76477760")
+    )
+
+    assert (
+        result.net_reward_portfolio
+        == Decimal("25.13368080")
+    )
+
+    assert (
+        result.cost_adjusted_risk_portfolio
+        == Decimal("10.76477760")
+    )
+
+    assert (
+        result.gross_reward_to_risk
+        == Decimal("3.00000000")
+    )
+
+    assert (
+        result.net_reward_to_risk
+        == Decimal("2.33480725")
+    )
+
+    assert (
+        result.decision
+        is IBKREconomicDecision.ACCEPT
+    )
+
+    assert result.complete is True
+
+
+def test_cost_adjusted_trade_rejects_grossly_good_but_net_uneconomic_trade() -> None:
+    result = (
+        calculate_us_long_trade_economics(
+            quantity="11",
+            entry_price_usd="10",
+            stop_price_usd="9.5",
+            target_price_usd="11.5",
+            usd_to_portfolio_rate="0.90",
+            pricing_plan="FIXED",
+            minimum_net_reward_to_risk="2",
+            fx_mode="AUTO_CONVERSION",
+            include_entry_fx_conversion=True,
+            include_exit_fx_conversion=True,
+        )
+    )
+
+    # Entry notional is USD 110 =
+    # EUR 99 at the supplied FX rate.
+    assert (
+        result.entry_notional_usd
+        == Decimal("110.00000000")
+    )
+
+    assert (
+        result.gross_reward_to_risk
+        == Decimal("3.00000000")
+    )
+
+    assert (
+        result.net_reward_to_risk
+        == Decimal("1.90577074")
+    )
+
+    assert (
+        result.decision
+        is IBKREconomicDecision
+        .UNECONOMIC_AFTER_COSTS
+    )
+
+    assert result.complete is True
+
+
+def test_tiered_trade_fails_closed_when_route_cost_is_unknown() -> None:
+    result = (
+        calculate_us_long_trade_economics(
+            quantity="10",
+            entry_price_usd="10",
+            stop_price_usd="9",
+            target_price_usd="13",
+            usd_to_portfolio_rate="0.90",
+            pricing_plan="TIERED",
+            minimum_net_reward_to_risk="2",
+        )
+    )
+
+    assert result.complete is False
+
+    assert (
+        result.decision
+        is IBKREconomicDecision
+        .INCOMPLETE_COST_ESTIMATE
+    )
+
+
+def test_tiered_trade_can_be_complete_with_explicit_route_costs() -> None:
+    result = (
+        calculate_us_long_trade_economics(
+            quantity="10",
+            entry_price_usd="10",
+            stop_price_usd="9",
+            target_price_usd="13",
+            usd_to_portfolio_rate="0.90",
+            pricing_plan="TIERED",
+            minimum_net_reward_to_risk="2",
+            entry_route_dependent_fee_usd="0.01",
+            stop_exit_route_dependent_fee_usd="0.01",
+            target_exit_route_dependent_fee_usd="0.01",
+        )
+    )
+
+    assert result.complete is True
+
+    assert (
+        result.decision
+        is IBKREconomicDecision.ACCEPT
+    )
+
+
+def test_fx_cost_cannot_be_silently_assumed() -> None:
+    with pytest.raises(
+        ValueError,
+        match="fx_mode is required",
+    ):
+        calculate_us_long_trade_economics(
+            quantity="10",
+            entry_price_usd="10",
+            stop_price_usd="9",
+            target_price_usd="13",
+            usd_to_portfolio_rate="0.90",
+            pricing_plan="FIXED",
+            minimum_net_reward_to_risk="2",
+            include_entry_fx_conversion=True,
+        )
