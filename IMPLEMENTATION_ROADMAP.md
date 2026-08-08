@@ -1,13 +1,13 @@
 # Smart Investment Bot — End-to-End Implementation Roadmap v3.1
 
-**Reviewed:** 4 August 2026  
-**Document type:** Consolidated governing roadmap from P0 through P7  
-**Current product mode:** Paper-only autonomous investment bot under development  
-**Operational portfolio target:** EUR 2,000  
-**Target and hard maximum order value:** EUR 100  
-**Primary strategies:** Swing and medium-term  
-**Notifications:** Email and Telegram  
-**Broker integration:** None in P0-P6; IBKR is a fee/execution reference and optional manual execution venue only  
+**Reviewed:** 4 August 2026
+**Document type:** Consolidated governing roadmap from P0 through P7
+**Current product mode:** Paper-only autonomous investment bot under development
+**Operational portfolio target:** EUR 2,000
+**Target and hard maximum order value:** EUR 100
+**Primary strategies:** Swing and medium-term
+**Notifications:** Email and Telegram
+**Broker integration:** None in P0-P6; IBKR is a fee/execution reference and optional manual execution venue only
 
 ## 1. Document purpose and roadmap governance
 
@@ -113,8 +113,8 @@ No IBKR API connection is planned during P0-P6. The user may manually copy selec
 
 ## P0 — Correctness and stability
 
-**Status:** Complete  
-**Purpose:** Establish a reliable market-data and analytical foundation before any strategy or automation is trusted.  
+**Status:** Complete
+**Purpose:** Establish a reliable market-data and analytical foundation before any strategy or automation is trusted.
 **Phase exit outcome:** The production application loads supported instruments safely, calculates indicators and fundamentals correctly, and passes a documented regression gate.
 
 ### P0.1 — Isolated market-data foundation
@@ -134,7 +134,7 @@ Create a validated, fault-tolerant market-data boundary.
 - Invalid symbols fail without a traceback
 - Initial unit-test gate passes
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P0.2 — Production data-layer integration
 
@@ -150,7 +150,7 @@ Replace repeated direct provider calls with one validated snapshot per ticker.
 - One ticker failure cannot crash the application
 - No repeated provider calls inside the cache window
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P0.3 — Technical history and indicator correctness
 
@@ -167,7 +167,7 @@ Ensure technical outputs are calculated from sufficient, correctly ordered histo
 - MA200 is never shown with fewer than 200 observations
 - No NaN-derived Golden/Death Cross classification
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P0.4 — Fundamentals and quarterly analysis
 
@@ -185,7 +185,7 @@ Make peer and quarterly analysis directionally and chronologically correct.
 - Latest quarter is correctly identified
 - ETFs do not receive invalid corporate-fundamental scores
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P0.5 — Charts, news and currency handling
 
@@ -203,7 +203,7 @@ Consolidate market context into one coherent, currency-aware presentation.
 - No hard-coded USD symbol for EUR instruments
 - Provider errors are warnings rather than crashes
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P0.6 — P0 regression gate
 
@@ -218,12 +218,12 @@ Prove the correctness baseline before strategy work advances.
 - P0 tests and GitHub Actions are green
 - All acceptance cases pass
 
-**Status:** Complete  
+**Status:** Complete
 
 ## P1 — Trading-expert signal engine
 
-**Status:** Complete  
-**Purpose:** Turn validated data into deterministic, traceable investment decisions and paper-order plans.  
+**Status:** Complete
+**Purpose:** Turn validated data into deterministic, traceable investment decisions and paper-order plans.
 **Phase exit outcome:** Every recommendation is reproducible, explains supporting and opposing evidence, and produces paper-only risk levels when an actionable setup survives all gates.
 
 ### P1.1 — Canonical analysis model
@@ -239,7 +239,7 @@ Define immutable, internally consistent objects for analysis and decisions.
 - Objects reject missing or inconsistent inputs
 - Identical inputs serialize consistently
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.2 — Market-regime classifier
 
@@ -253,7 +253,7 @@ Classify bullish, bearish, sideways and high-volatility environments.
 - Fixture-based classifications pass
 - Regime output is reproducible
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.3 — Trend-pullback setup
 
@@ -268,7 +268,7 @@ Detect pullbacks within eligible trends with explicit confirmation and invalidat
 **Gate**
 - Positive, negative and ambiguous fixtures pass
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.4 — Breakout setup
 
@@ -282,7 +282,7 @@ Detect confirmed range breakouts while filtering false breaks.
 **Gate**
 - No breakout is emitted without close and volume confirmation
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.5 — Mean-reversion setup
 
@@ -296,7 +296,7 @@ Allow reversal setups only in suitable regimes.
 **Gate**
 - Mean reversion is vetoed in a strong bearish trend
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.6 — Scoring and conflict resolution
 
@@ -311,7 +311,7 @@ Combine multiple analytical dimensions into one decision rather than contradicto
 - Identical inputs produce identical scores
 - Conflict cases resolve according to documented precedence
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.7 — Risk manager and paper-order generator
 
@@ -330,7 +330,7 @@ Translate an eligible signal into a bounded paper plan.
 - Every BUY/SELL has an invalidation point
 - Failed risk checks become vetoed HOLD
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P1.8 — Trading Expert dashboard
 
@@ -346,12 +346,12 @@ Expose the complete deterministic decision trace to the user.
 - All recommendations are traceable
 - No broker connection or live order submission
 
-**Status:** Complete  
+**Status:** Complete
 
 ## P2 — Backtesting and validation
 
-**Status:** Complete  
-**Purpose:** Prove that strategies and lifecycle assumptions work without future-data leakage and after realistic execution effects.  
+**Status:** Complete
+**Purpose:** Prove that strategies and lifecycle assumptions work without future-data leakage and after realistic execution effects.
 **Phase exit outcome:** Only strategies with accepted out-of-sample evidence and approved thresholds become eligible for later automated scanning and alerts.
 
 ### P2.1 — Backtest event and trade model
@@ -365,7 +365,7 @@ Represent the complete signal-to-closed-trade lifecycle.
 **Gate**
 - All lifecycle paths are fixture-tested
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.2 — Next-session execution engine
 
@@ -379,7 +379,7 @@ Prevent same-bar and look-ahead execution.
 - Signals cannot use future bars
 - Same-bar fills are prohibited
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.3 — Costs, slippage and position sizing
 
@@ -394,7 +394,7 @@ Model execution friction and capital constraints.
 - Cash and ledger reconcile after every test trade
 - Cost fixtures match hand calculations
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.4 — Performance and benchmark comparison
 
@@ -408,7 +408,7 @@ Measure strategy results consistently and against a relevant passive alternative
 **Gate**
 - Metrics match hand-calculated fixtures
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.5 — Train/test and walk-forward validation
 
@@ -422,7 +422,7 @@ Separate model development from evidence used for promotion.
 **Gate**
 - No strategy is promoted using only in-sample performance
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.6 — Strategy acceptance report
 
@@ -436,7 +436,7 @@ Produce a documented accept/reject decision with reasons.
 **Gate**
 - Strategy meets agreed return, drawdown, trade-count and stability criteria
 
-**Status:** Complete  
+**Status:** Complete
 
 ### P2.7 — P2 release gate
 
@@ -451,15 +451,15 @@ Control eligibility for future automation.
 - Only validated strategies receive alert-scheduling eligibility
 - Threshold changes require revalidation
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Release-gate baseline established
 - Approved deterministic threshold manifest
 
 ## P3 — Operational paper-trading platform
 
-**Status:** Complete — INTERNAL_ONLY release ready  
-**Purpose:** Convert validated strategies into a persistent, observable and safely operated paper-trading system.  
+**Status:** Complete — INTERNAL_ONLY release ready
+**Purpose:** Convert validated strategies into a persistent, observable and safely operated paper-trading system.
 **Phase exit outcome:** The system can persist accounts and orders, scan markets, run paper execution, schedule jobs, dispatch notifications, reconcile state and evaluate operational readiness. One genuine end-to-end operating cycle is still required to close the phase.
 
 ### P3.1 — Persistent automated paper portfolio
@@ -477,7 +477,7 @@ Create an auditable paper account with idempotent order and ledger lifecycle.
 - Cash and ledger reconcile exactly
 - Portfolio remains paper-only
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit 2c9f7a7 — Add persistent automated paper portfolio
 
@@ -497,7 +497,7 @@ Scan configured symbols and persist every candidate decision.
 - A completed scan may legitimately create zero orders
 - Duplicate scan keys are safe
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit e3522a3 — Add automatic deterministic market scanner
 
@@ -516,7 +516,7 @@ Advance eligible paper orders and positions through their lifecycle.
 - No future data is used
 - Every failure is persisted and observable
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit 359beb6 — Add automated paper execution and monitoring
 
@@ -536,7 +536,7 @@ Wrap the scanner and execution engine in repeatable operational jobs.
 - Notifications are deduplicated and persisted
 - Failed deliveries remain visible and retryable
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit 677bcbb — Add notifications and exchange-aware scheduled jobs
 
@@ -555,7 +555,7 @@ Provide a read-only operational view over persisted SQLite records.
 - Dashboard cannot create, modify or submit orders
 - Every displayed value is traceable to persisted records
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit 35cf3b5 — Add traceable paper portfolio dashboard
 - Commit 31cfb94 — Add integrated app navigation and user guide
@@ -576,7 +576,7 @@ Define an optional future integration boundary without making broker connectivit
 - Adapter layer has no direct network dependency
 - Reconciliation differences are explicit and auditable
 
-**Status:** Complete  
+**Status:** Complete
 **Evidence reviewed**
 - Commit 9cbb415 — Add broker-paper execution adapters and reconciliation
 - GitHub Actions #43 green; 360-test baseline at completion
@@ -597,7 +597,7 @@ Require genuine regression and operational evidence before promotion.
 - Actual broker differences always block
 - Release is READY only when all required operational evidence passes
 
-**Status:** Implemented — operational validation pending  
+**Status:** Implemented — operational validation pending
 **Evidence reviewed**
 - Commit 2c100c0 — Add P3 operational release gate
 - Commit 4cc89bb — Add internal-only P3 release profile
@@ -656,8 +656,8 @@ P3 is operationally complete under the `INTERNAL_ONLY` paper-trading profile. Th
 
 ## P4 — Autonomous smart investment bot
 
-**Status:** Planned  
-**Purpose:** Reconfigure and extend P3 into an always-on, paper-only investment bot focused on swing and medium-term opportunities.  
+**Status:** Planned
+**Purpose:** Reconfigure and extend P3 into an always-on, paper-only investment bot focused on swing and medium-term opportunities.
 **Phase exit outcome:** A production-like service automatically observes configured markets, maintains ranked watchlists, creates and manages EUR-denominated paper positions, and sends actionable email and Telegram alerts without any broker connection.
 
 ### P4.0 — Product charter and configuration reset
@@ -691,8 +691,8 @@ Make the new product direction explicit and versioned.
 
 **Status:** Complete
 
-**Dependencies:** P3 operational cycle  
-**Relative effort:** S  
+**Dependencies:** P3 operational cycle
+**Relative effort:** S
 
 ### P4.1 — EUR 2,000 account and fixed-notional sizing
 
@@ -713,9 +713,29 @@ Create the operational paper portfolio and enforce the approved order policy.
 - No whole-share rounding above the ceiling
 - Cash and ledger reconcile after every lifecycle
 
-**Status:** Planned  
-**Dependencies:** P4.0  
-**Relative effort:** M  
+**Completion evidence**
+- Operational account `ACC-749ca5703d214ef0b91f87b825e88849` created with EUR 2,000 starting and available cash
+- Operational account is ACTIVE with zero reserved cash, zero open positions and zero pending orders at the P4.1 baseline
+- Product policy version `p4.1-1` defines `FIXED_NOTIONAL_WITH_RISK_CAP`
+- EUR 100 target and hard maximum order value are persisted in account controls
+- EUR 10 maximum planned loss, five-position cap and EUR 500 invested-exposure cap are persisted
+- Deterministic sizing rejects quantities that breach notional, risk, cash, exposure or position limits
+- Whole-share sizing uses floor semantics and does not round above the EUR 100 ceiling
+- Multi-currency signal, order, fill, position and closed-trade provenance is persisted through schema version 8
+- Lifecycle cash, fees and P&L are converted into portfolio currency with explicit FX provenance
+- Execution-engine sizing and portfolio valuation operate in portfolio currency
+- Runtime uses `YahooFXRateProvider`, with direct-pair and inverse-pair handling and no silent cross-currency 1:1 fallback
+- Account cash and ledger reconcile exactly with zero difference
+- Lifecycle FX and reconciliation tests cover reservation, fill and close behavior
+- P4.1 regression reached 452 passing tests locally and in a clean CI-like environment
+- Latest runtime-FX checkpoint commit `a61ac29` was pushed to `main`; GitHub Automated tests #58 showed success
+- Operational bootstrap baseline database SHA256 was `45364e65e2f95bd4b016c8332ed37410fe8ed494d8ce9917546e21792401a22e`
+- The P4 operational database contains no reconstructed P3 scan, job, execution, notification or trading rows
+- Historical P3 account `ACC-495a2ae778834fc4a2c14d24e66ef41e` remains preserved in the versioned policy and immutable P3 release evidence
+
+**Status:** Complete
+**Dependencies:** P4.0
+**Relative effort:** M
 
 ### P4.2 — IBKR reference cost profile
 
@@ -734,9 +754,9 @@ Model the user’s actual IBKR economics without connecting the account.
 - Uneconomic EUR 100 trades are rejected
 - No credentials or connectivity code are required
 
-**Status:** Planned  
-**Dependencies:** IBKR meeting details; P4.1  
-**Relative effort:** M  
+**Status:** Planned
+**Dependencies:** IBKR meeting details; P4.1
+**Relative effort:** M
 
 ### P4.3 — Swing and medium-term strategy separation
 
@@ -754,9 +774,9 @@ Treat the two horizons as independent products with separate evidence.
 - Each horizon has independent fixtures
 - No intraday/day-trading strategy can create an order
 
-**Status:** Planned  
-**Dependencies:** P4.0  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.0
+**Relative effort:** L
 
 ### P4.4 — Eligible universe and ranked watchlist
 
@@ -776,9 +796,9 @@ Continuously identify the most actionable liquid instruments without forcing tra
 - Zero actionable candidates is a valid result
 - Ranking is deterministic
 
-**Status:** Planned  
-**Dependencies:** P4.2-P4.3  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.2-P4.3
+**Relative effort:** L
 
 ### P4.5 — Exchange-aware autonomous scheduler
 
@@ -800,9 +820,9 @@ Run the bot without manual terminal commands.
 - Missed jobs are visible and safely recoverable
 - Scheduler timezone and calendar tests pass
 
-**Status:** Planned  
-**Dependencies:** P4.4  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.4
+**Relative effort:** L
 
 ### P4.6 — Paper order and position management
 
@@ -822,9 +842,9 @@ Manage qualified swing and medium-term ideas through a realistic paper lifecycle
 - No position exceeds portfolio policy
 - Execution remains independent of manually copied IBKR trades
 
-**Status:** Planned  
-**Dependencies:** P4.1-P4.5  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.1-P4.5
+**Relative effort:** L
 
 ### P4.7 — Email and Telegram action channels
 
@@ -843,9 +863,9 @@ Deliver useful, non-duplicative and auditable notifications.
 - Notification failures are visible and retryable
 - Secrets never appear in logs or reports
 
-**Status:** Planned  
-**Dependencies:** P4.5-P4.6  
-**Relative effort:** M  
+**Status:** Planned
+**Dependencies:** P4.5-P4.6
+**Relative effort:** M
 
 ### P4.8 — Always-on deployment
 
@@ -865,9 +885,9 @@ Move runtime operation out of an interactive Codespace.
 - Backup and restore test succeeds
 - Deployment does not expose credentials
 
-**Status:** Planned  
-**Dependencies:** P4.5-P4.7  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.5-P4.7
+**Relative effort:** L
 
 ### P4.9 — Reliability, recovery and kill switch
 
@@ -889,9 +909,9 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Kill switch is tested end to end
 - Recovery steps are documented
 
-**Status:** Planned  
-**Dependencies:** P4.8  
-**Relative effort:** L  
+**Status:** Planned
+**Dependencies:** P4.8
+**Relative effort:** L
 
 ### P4.10 — Actionability and sustainability analytics
 
@@ -911,9 +931,9 @@ Measure whether the bot creates useful decisions, not merely activity.
 - Results are not mixed across strategy versions
 - No headline metric hides transaction costs
 
-**Status:** Planned  
-**Dependencies:** P4.2-P4.9  
-**Relative effort:** M  
+**Status:** Planned
+**Dependencies:** P4.2-P4.9
+**Relative effort:** M
 
 ### P4.11 — P4 release gate
 
@@ -933,14 +953,14 @@ Control entry into unattended paper validation.
 - Any live-execution capability blocks release
 - Operational failures remain visible and blocking
 
-**Status:** Planned  
-**Dependencies:** P4.0-P4.10  
-**Relative effort:** M  
+**Status:** Planned
+**Dependencies:** P4.0-P4.10
+**Relative effort:** M
 
 ## P5 — Unattended paper-validation pilot
 
-**Status:** Planned  
-**Purpose:** Run the autonomous bot for long enough to establish operational reliability, actionability and cost-adjusted performance.  
+**Status:** Planned
+**Purpose:** Run the autonomous bot for long enough to establish operational reliability, actionability and cost-adjusted performance.
 **Phase exit outcome:** The bot has a statistically and operationally credible paper record. Strategies are promoted, revised or retired independently; insufficient evidence does not become approval.
 
 ### P5.1 — Controlled pilot launch
@@ -956,8 +976,8 @@ Start the unattended pilot with frozen configuration versions.
 - No unreviewed parameter changes during an evaluation window
 - Every configuration change starts a new evidence cohort
 
-**Status:** Planned  
-**Dependencies:** P4.11 READY  
+**Status:** Planned
+**Dependencies:** P4.11 READY
 
 ### P5.2 — Operational-quality evidence
 
@@ -977,7 +997,7 @@ Demonstrate dependable scheduling, data and communications.
 - No silent missed session
 - Critical incidents are closed with root cause
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P5.3 — Strategy-performance evidence
 
@@ -996,7 +1016,7 @@ Evaluate both horizons after all realistic costs.
 - One exceptional trade cannot dominate the result
 - A strategy with insufficient sample remains probationary
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P5.4 — Actionability and recommendation quality
 
@@ -1014,7 +1034,7 @@ Measure whether alerts are clear and usable.
 - Actionable alerts include symbol, rationale, entry, stop, targets, expiry, costs and risk
 - Low-value noise is reduced without hiding failures
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P5.5 — Strategy promotion, revision or retirement
 
@@ -1029,7 +1049,7 @@ Make an explicit decision for each horizon.
 - Swing and medium-term are decided independently
 - No strategy is promoted on aggregate results alone
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P5.6 — P5 sustainability gate
 
@@ -1044,12 +1064,12 @@ Decide whether the product creates durable value in paper mode.
 - Gate can approve continued paper operation without approving broker integration
 - Any material integrity issue blocks progression
 
-**Status:** Planned  
+**Status:** Planned
 
 ## P6 — Manual IBKR decision-support pilot
 
-**Status:** Planned  
-**Purpose:** Compare selected paper recommendations with manually entered IBKR trades while keeping the official paper record independent.  
+**Status:** Planned
+**Purpose:** Compare selected paper recommendations with manually entered IBKR trades while keeping the official paper record independent.
 **Phase exit outcome:** The team understands real execution friction and whether action tickets remain valuable when manually applied. The platform still has no broker connection.
 
 ### P6.1 — Manual action-ticket workflow
@@ -1065,8 +1085,8 @@ Define how the user may copy selected ideas without implying automatic execution
 **Gate**
 - User decision does not alter the official paper strategy record
 
-**Status:** Planned  
-**Dependencies:** P5.6; user discretion  
+**Status:** Planned
+**Dependencies:** P5.6; user discretion
 
 ### P6.2 — Manual IBKR trade journal
 
@@ -1081,7 +1101,7 @@ Record real entries and exits entered outside the platform.
 - Manual records are separate from paper execution tables
 - No credentials or statements are required
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P6.3 — Paper-versus-manual execution comparison
 
@@ -1098,7 +1118,7 @@ Quantify the difference between modelled and observed execution.
 - Comparisons use matched signal IDs and timestamps
 - Differences do not rewrite paper history
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P6.4 — Decision-support value assessment
 
@@ -1113,7 +1133,7 @@ Assess whether the bot improves human investment decisions.
 - No conclusion relies only on copied winners
 - Skipped ideas remain part of the analysis
 
-**Status:** Planned  
+**Status:** Planned
 
 ### P6.5 — P6 release decision
 
@@ -1128,12 +1148,12 @@ Decide whether to continue as decision support, remain paper-only, or begin a se
 - No automatic broker integration is implied by good performance
 - A separate approval is mandatory for P7
 
-**Status:** Planned  
+**Status:** Planned
 
 ## P7 — Optional future broker integration
 
-**Status:** Deferred / optional  
-**Purpose:** Provide a guarded path only if paper sustainability and manual decision-support evidence justify a separate integration programme.  
+**Status:** Deferred / optional
+**Purpose:** Provide a guarded path only if paper sustainability and manual decision-support evidence justify a separate integration programme.
 **Phase exit outcome:** No P7 work begins without explicit approval. Any future live capability progresses from read-only shadow mode to manual approval and only then, potentially, to tightly capped autonomous execution.
 
 ### P7.0 — Formal go/no-go and scope approval
@@ -1151,7 +1171,7 @@ Open a separate programme rather than silently extending paper mode.
 - P5 and P6 evidence is accepted
 - Live budget and loss limits are explicitly approved
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.1 — Security and broker integration foundation
 
@@ -1168,7 +1188,7 @@ Build the broker boundary with least privilege and complete auditability.
 - Permission scope is independently reviewed
 - Failure defaults to no new order
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.2 — Read-only shadow reconciliation
 
@@ -1183,7 +1203,7 @@ Observe the broker without submitting orders.
 - No order endpoint is enabled
 - Differences are blocking and explained
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.3 — Manual-approval order mode
 
@@ -1200,7 +1220,7 @@ Prepare orders in the platform but require explicit user approval.
 - Maximum order remains capped by approved policy
 - Duplicate protection passes
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.4 — Guarded micro-live automation
 
@@ -1218,7 +1238,7 @@ Consider limited autonomous execution only after manual-approval evidence.
 - Independent release gate is READY
 - Rollback and incident drills pass
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.5 — Production operations and oversight
 
@@ -1235,7 +1255,7 @@ Operate with full monitoring and governance.
 - No unresolved cash or position difference
 - All live actions are fully auditable
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ### P7.6 — P7 release and continuation gate
 
@@ -1251,7 +1271,7 @@ Require periodic reapproval of live capability.
 - Any material breach disables live mode
 - Continued operation requires explicit renewal
 
-**Status:** Deferred / optional  
+**Status:** Deferred / optional
 
 ## 8. Autonomous daily operating cycle
 
