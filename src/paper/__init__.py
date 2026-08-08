@@ -12,6 +12,9 @@ from .fx import (
     StaticFXRateProvider,
     identity_fx_rate,
 )
+from .yahoo_fx import (
+    YahooFXRateProvider,
+)
 from .ledger import (
     LongTradeCalculation,
     calculate_entry_cash,
@@ -88,6 +91,7 @@ __all__ = [
     "PositionStatus",
     "StaticFXRateProvider",
     "SystemEventRecord",
+    "YahooFXRateProvider",
     "apply_migrations",
     "calculate_entry_cash",
     "calculate_fixed_notional_size",

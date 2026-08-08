@@ -27,6 +27,7 @@ from src.paper import (
     NotificationChannel,
     PaperRepository,
     PaperTradingService,
+    YahooFXRateProvider,
 )
 from src.scanner import (
     AutomaticMarketScanner,
@@ -259,8 +260,15 @@ def build_runtime(
         settings.database_path
     )
 
+    fx_rate_provider = (
+        YahooFXRateProvider()
+    )
+
     paper_service = PaperTradingService(
         paper_repository,
+        fx_rate_provider=(
+            fx_rate_provider
+        ),
         app_version=settings.app_version,
         threshold_version=(
             settings.threshold_version
