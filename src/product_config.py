@@ -172,7 +172,7 @@ def validate_product_policy(
     _expect(
         policy,
         "policy_version",
-        "p4.1-1",
+        "p4.2-1",
         "$",
     )
 
@@ -390,24 +390,67 @@ def validate_product_policy(
         cost_model,
         {
             "reference_provider",
+            "reference_profile_path",
+            "reference_profile_version",
             "api_connection_enabled",
+            "ibkr_cost_gate_enabled",
+            "ibkr_pricing_plan",
+            "ibkr_fx_mode",
+            "ibkr_include_entry_fx_conversion",
+            "ibkr_include_exit_fx_conversion",
+            "manual_update_workflow",
         },
         "$.cost_model",
     )
 
-    _expect(
-        cost_model,
-        "reference_provider",
-        "IBKR",
-        "$.cost_model",
-    )
-
-    _expect(
-        cost_model,
-        "api_connection_enabled",
-        False,
-        "$.cost_model",
-    )
+    for key, expected in (
+        (
+            "reference_provider",
+            "IBKR",
+        ),
+        (
+            "reference_profile_path",
+            "config/ibkr_reference_costs_v1.json",
+        ),
+        (
+            "reference_profile_version",
+            "ibkr-reference-2026-08-08-v1",
+        ),
+        (
+            "api_connection_enabled",
+            False,
+        ),
+        (
+            "ibkr_cost_gate_enabled",
+            False,
+        ),
+        (
+            "ibkr_pricing_plan",
+            None,
+        ),
+        (
+            "ibkr_fx_mode",
+            None,
+        ),
+        (
+            "ibkr_include_entry_fx_conversion",
+            False,
+        ),
+        (
+            "ibkr_include_exit_fx_conversion",
+            False,
+        ),
+        (
+            "manual_update_workflow",
+            "docs/P4_2_IBKR_COST_PROFILE.md",
+        ),
+    ):
+        _expect(
+            cost_model,
+            key,
+            expected,
+            "$.cost_model",
+        )
 
     scheduling = _mapping(
         policy.get("scheduling"),
