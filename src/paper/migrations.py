@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 _SCHEMA_V1 = """
@@ -665,6 +665,32 @@ PRAGMA user_version = 5;
 """
 
 
+_SCHEMA_V6 = """
+ALTER TABLE paper_account_controls
+    ADD COLUMN sizing_mode TEXT;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN portfolio_currency TEXT;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN target_order_value TEXT;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN maximum_order_value TEXT;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN maximum_planned_loss TEXT;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN maximum_open_positions INTEGER;
+
+ALTER TABLE paper_account_controls
+    ADD COLUMN maximum_invested_exposure TEXT;
+
+PRAGMA user_version = 6;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -768,6 +794,12 @@ def apply_migrations(
             _SCHEMA_V5
         )
         current_version = 5
+
+    if current_version < 6:
+        connection.executescript(
+            _SCHEMA_V6
+        )
+        current_version = 6
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

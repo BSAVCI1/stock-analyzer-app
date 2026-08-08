@@ -7,6 +7,7 @@ from datetime import (
 from decimal import Decimal
 from enum import Enum
 import sqlite3
+import src.paper.migrations as migrations
 from types import SimpleNamespace
 
 import pytest
@@ -322,7 +323,7 @@ def test_schema_version_five_and_tables(
     finally:
         connection.close()
 
-    assert version == 5
+    assert version == 6
 
     assert (
         "paper_broker_reconciliation_runs"
@@ -342,34 +343,20 @@ def test_version_four_database_upgrades(
         tmp_path / "upgrade.db"
     )
 
-    initialize_database(
-        database_path
-    )
-
     connection = sqlite3.connect(
         database_path
     )
 
     try:
-        connection.execute(
-            """
-            DROP TABLE
-            paper_broker_reconciliation_items
-            """
-        )
-
-        connection.execute(
-            """
-            DROP TABLE
-            paper_broker_reconciliation_runs
-            """
-        )
-
-        connection.execute(
-            "PRAGMA user_version = 4"
-        )
-
-        connection.commit()
+        for script in (
+            migrations._SCHEMA_V1,
+            migrations._SCHEMA_V2,
+            migrations._SCHEMA_V3,
+            migrations._SCHEMA_V4,
+        ):
+            connection.executescript(
+                script
+            )
     finally:
         connection.close()
 
@@ -397,7 +384,7 @@ def test_version_four_database_upgrades(
     finally:
         connection.close()
 
-    assert version == 5
+    assert version == 6
     assert run_table is not None
 
 

@@ -14,7 +14,9 @@ from src.backtest import (
 )
 from src.paper import (
     AccountReconciliation,
+    FixedNotionalSizingPolicy,
     PaperExitReason,
+    PositionSizingMode,
     money,
 )
 
@@ -52,6 +54,16 @@ class PortfolioControl:
     maximum_new_orders_per_run: int = 3
     maximum_stale_market_days: int = 7
 
+    sizing_mode: PositionSizingMode | None = None
+    portfolio_currency: str | None = None
+
+    target_order_value: Decimal | None = None
+    maximum_order_value: Decimal | None = None
+    maximum_planned_loss: Decimal | None = None
+
+    maximum_open_positions: int | None = None
+    maximum_invested_exposure: Decimal | None = None
+
     updated_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -88,6 +100,109 @@ class PortfolioControl:
                 raise ValueError(
                     f"{name} must be positive."
                 )
+
+        fixed_values = (
+            self.portfolio_currency,
+            self.target_order_value,
+            self.maximum_order_value,
+            self.maximum_planned_loss,
+            self.maximum_open_positions,
+            self.maximum_invested_exposure,
+        )
+
+        if self.sizing_mode is None:
+            if any(
+                value is not None
+                for value in fixed_values
+            ):
+                raise ValueError(
+                    "Fixed-notional controls require "
+                    "a sizing_mode."
+                )
+
+            return
+
+        try:
+            sizing_mode = PositionSizingMode(
+                self.sizing_mode
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "Unsupported portfolio sizing mode."
+            ) from exc
+
+        if any(
+            value is None
+            for value in fixed_values
+        ):
+            raise ValueError(
+                "Fixed-notional sizing controls "
+                "must be configured together."
+            )
+
+        policy = FixedNotionalSizingPolicy(
+            mode=sizing_mode,
+            portfolio_currency=str(
+                self.portfolio_currency
+            ),
+            target_order_value=(
+                self.target_order_value
+            ),
+            maximum_order_value=(
+                self.maximum_order_value
+            ),
+            maximum_planned_loss=(
+                self.maximum_planned_loss
+            ),
+            maximum_open_positions=(
+                self.maximum_open_positions
+            ),
+            maximum_invested_exposure=(
+                self.maximum_invested_exposure
+            ),
+        )
+
+        object.__setattr__(
+            self,
+            "sizing_mode",
+            policy.mode,
+        )
+
+        object.__setattr__(
+            self,
+            "portfolio_currency",
+            policy.portfolio_currency,
+        )
+
+        object.__setattr__(
+            self,
+            "target_order_value",
+            policy.target_order_value,
+        )
+
+        object.__setattr__(
+            self,
+            "maximum_order_value",
+            policy.maximum_order_value,
+        )
+
+        object.__setattr__(
+            self,
+            "maximum_planned_loss",
+            policy.maximum_planned_loss,
+        )
+
+        object.__setattr__(
+            self,
+            "maximum_open_positions",
+            policy.maximum_open_positions,
+        )
+
+        object.__setattr__(
+            self,
+            "maximum_invested_exposure",
+            policy.maximum_invested_exposure,
+        )
 
 
 @dataclass(frozen=True, slots=True)

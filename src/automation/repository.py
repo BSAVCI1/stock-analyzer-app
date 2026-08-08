@@ -13,7 +13,9 @@ from uuid import uuid4
 
 from src.paper import (
     DEFAULT_DATABASE_PATH,
+    FixedNotionalSizingPolicy,
     PaperExitReason,
+    PositionSizingMode,
     connect_database,
     initialize_database,
     money,
@@ -273,9 +275,174 @@ class AutomationRepository:
                     "maximum_stale_market_days"
                 ]
             ),
+            sizing_mode=(
+                PositionSizingMode(
+                    row["sizing_mode"]
+                )
+                if row["sizing_mode"]
+                is not None
+                else None
+            ),
+            portfolio_currency=(
+                row["portfolio_currency"]
+            ),
+            target_order_value=(
+                money(
+                    row[
+                        "target_order_value"
+                    ]
+                )
+                if row[
+                    "target_order_value"
+                ]
+                is not None
+                else None
+            ),
+            maximum_order_value=(
+                money(
+                    row[
+                        "maximum_order_value"
+                    ]
+                )
+                if row[
+                    "maximum_order_value"
+                ]
+                is not None
+                else None
+            ),
+            maximum_planned_loss=(
+                money(
+                    row[
+                        "maximum_planned_loss"
+                    ]
+                )
+                if row[
+                    "maximum_planned_loss"
+                ]
+                is not None
+                else None
+            ),
+            maximum_open_positions=(
+                int(
+                    row[
+                        "maximum_open_positions"
+                    ]
+                )
+                if row[
+                    "maximum_open_positions"
+                ]
+                is not None
+                else None
+            ),
+            maximum_invested_exposure=(
+                money(
+                    row[
+                        "maximum_invested_exposure"
+                    ]
+                )
+                if row[
+                    "maximum_invested_exposure"
+                ]
+                is not None
+                else None
+            ),
             updated_at=_datetime(
                 row["updated_at"]
             ),
+        )
+
+
+    def set_fixed_notional_sizing(
+        self,
+        account_id: str,
+        *,
+        policy: FixedNotionalSizingPolicy,
+        updated_at: datetime,
+    ) -> PortfolioControl:
+        """Persist the approved P4.1 sizing controls."""
+
+        if not isinstance(
+            policy,
+            FixedNotionalSizingPolicy,
+        ):
+            raise ValueError(
+                "policy must be a "
+                "FixedNotionalSizingPolicy."
+            )
+
+        self.get_control(
+            account_id,
+            at=updated_at,
+        )
+
+        with transaction(
+            self.database_path
+        ) as connection:
+            account = connection.execute(
+                """
+                SELECT base_currency
+                FROM paper_accounts
+                WHERE account_id = ?
+                """,
+                (account_id,),
+            ).fetchone()
+
+            if account is None:
+                raise ValueError(
+                    f"Unknown account: {account_id}."
+                )
+
+            account_currency = str(
+                account["base_currency"]
+            ).strip().upper()
+
+            if (
+                account_currency
+                != policy.portfolio_currency
+            ):
+                raise ValueError(
+                    "Sizing-policy currency must "
+                    "match account base currency."
+                )
+
+            connection.execute(
+                """
+                UPDATE paper_account_controls
+                SET sizing_mode = ?,
+                    portfolio_currency = ?,
+                    target_order_value = ?,
+                    maximum_order_value = ?,
+                    maximum_planned_loss = ?,
+                    maximum_open_positions = ?,
+                    maximum_invested_exposure = ?,
+                    updated_at = ?
+                WHERE account_id = ?
+                """,
+                (
+                    policy.mode.value,
+                    policy.portfolio_currency,
+                    str(
+                        policy.target_order_value
+                    ),
+                    str(
+                        policy.maximum_order_value
+                    ),
+                    str(
+                        policy.maximum_planned_loss
+                    ),
+                    policy.maximum_open_positions,
+                    str(
+                        policy
+                        .maximum_invested_exposure
+                    ),
+                    _timestamp(updated_at),
+                    account_id,
+                ),
+            )
+
+        return self.get_control(
+            account_id,
+            at=updated_at,
         )
 
     def set_kill_switch(
