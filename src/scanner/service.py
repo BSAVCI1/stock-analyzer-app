@@ -59,6 +59,29 @@ def _new_result_id() -> str:
     return f"RES-{uuid4().hex}"
 
 
+def _candidate_quote_currency(
+    result: ScanResult,
+) -> str:
+    value = str(
+        result.metadata.get(
+            "currency"
+        )
+        or ""
+    ).strip().upper()
+
+    if (
+        len(value) != 3
+        or not value.isalpha()
+    ):
+        raise ValueError(
+            f"{result.symbol} candidate "
+            "requires a valid three-letter "
+            "quote currency."
+        )
+
+    return value
+
+
 def _evidence_strings(
     evidence: tuple[
         dict[str, object],
@@ -685,6 +708,11 @@ class AutomaticMarketScanner:
                         scan_id=scan.scan_id,
                         signal_id=signal_id,
                         symbol=result.symbol,
+                        quote_currency=(
+                            _candidate_quote_currency(
+                                result
+                            )
+                        ),
                         generated_at=(
                             outcome.generated_at
                         ),

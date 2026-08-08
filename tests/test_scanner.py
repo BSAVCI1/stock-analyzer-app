@@ -572,6 +572,7 @@ def test_candidates_are_ranked_and_signals_persisted(
         )
 
         assert signal.recommendation == "BUY"
+        assert signal.quote_currency == "USD"
 
 
 def test_scan_key_prevents_duplicate_scan(
@@ -698,6 +699,161 @@ def test_symbol_failure_is_persisted_as_scan_error(
 
     assert len(errors) == 1
     assert errors[0].symbol == "MSFT"
+
+
+def test_candidate_without_valid_currency_is_not_persisted(
+    tmp_path,
+) -> None:
+    (
+        _,
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    def loader(symbol):
+        snapshot = make_snapshot(symbol)
+
+        snapshot.metadata.pop(
+            "currency",
+            None,
+        )
+
+        return snapshot
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=(
+            scanner_repository
+        ),
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("Approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=loader,
+        analysis_runner=make_outcome,
+    )
+
+    report = scanner.run_scan(
+        account_id=account.account_id,
+        universe=StockUniverse(
+            name="missing-currency",
+            symbols=("AAPL",),
+        ),
+        started_at=T0,
+    )
+
+    assert len(report.candidates) == 0
+
+    result = report.results[0]
+
+    assert (
+        result.status
+        is ScanResultStatus.SCAN_ERROR
+    )
+
+    assert result.signal_id is None
+
+    assert (
+        "valid three-letter quote currency"
+        in result.reasons[0]
+    )
+
+    expected_signal_id = (
+        f"SIG-{report.scan.scan_id}-AAPL"
+    )
+
+    try:
+        paper_repository.get_signal(
+            expected_signal_id
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(
+            "Invalid-currency candidate signal "
+            "was unexpectedly persisted."
+        )
+
+
+def test_watch_without_currency_remains_watch(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    def loader(symbol):
+        snapshot = make_snapshot(symbol)
+
+        snapshot.metadata.pop(
+            "currency",
+            None,
+        )
+
+        return snapshot
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=(
+            scanner_repository
+        ),
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("Approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=loader,
+        analysis_runner=(
+            lambda snapshot:
+            make_outcome(
+                snapshot,
+                signal=Signal.WATCH,
+                include_order=False,
+            )
+        ),
+    )
+
+    report = scanner.run_scan(
+        account_id=account.account_id,
+        universe=StockUniverse(
+            name="watch-missing-currency",
+            symbols=("AAPL",),
+        ),
+        started_at=T0,
+    )
+
+    result = report.results[0]
+
+    assert (
+        result.status
+        is ScanResultStatus.WATCH
+    )
+
+    assert result.signal_id is None
+
+    assert len(
+        [
+            item
+            for item in report.results
+            if item.status
+            is ScanResultStatus.SCAN_ERROR
+        ]
+    ) == 0
 
 
 def test_real_analysis_adapter_uses_existing_engine() -> None:
