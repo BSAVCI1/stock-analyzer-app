@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 _SCHEMA_V1 = """
@@ -691,6 +691,14 @@ PRAGMA user_version = 6;
 """
 
 
+_SCHEMA_V7 = """
+ALTER TABLE paper_signals
+    ADD COLUMN quote_currency TEXT;
+
+PRAGMA user_version = 7;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -800,6 +808,12 @@ def apply_migrations(
             _SCHEMA_V6
         )
         current_version = 6
+
+    if current_version < 7:
+        connection.executescript(
+            _SCHEMA_V7
+        )
+        current_version = 7
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

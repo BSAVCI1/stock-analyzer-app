@@ -161,6 +161,7 @@ class PaperTradingService:
         conflicts: Sequence[str] = (),
         signal_id: str | None = None,
         scan_id: str | None = None,
+        quote_currency: str | None = None,
     ) -> PersistedSignal:
         if not isfinite(float(score)):
             raise ValueError("score must be finite.")
@@ -174,6 +175,7 @@ class PaperTradingService:
             account_id=account_id,
             scan_id=scan_id,
             symbol=symbol,
+            quote_currency=quote_currency,
             generated_at=generated_at,
             expires_at=expires_at,
             strategy=strategy,

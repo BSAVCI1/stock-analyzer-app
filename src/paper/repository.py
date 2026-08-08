@@ -188,6 +188,9 @@ class PaperRepository:
             account_id=row["account_id"],
             scan_id=row["scan_id"],
             symbol=row["symbol"],
+            quote_currency=(
+                row["quote_currency"]
+            ),
             generated_at=_datetime(
                 row["generated_at"]
             ),
@@ -501,8 +504,26 @@ class PaperRepository:
         scan_id: str | None = None,
         signal_id: str | None = None,
         created_at: datetime | None = None,
+        quote_currency: str | None = None,
     ) -> PersistedSignal:
         at = created_at or _utc_now()
+
+        currency_value = None
+
+        if quote_currency is not None:
+            currency_value = str(
+                quote_currency
+            ).strip().upper()
+
+            if (
+                len(currency_value) != 3
+                or not currency_value.isalpha()
+            ):
+                raise ValueError(
+                    "quote_currency must be a "
+                    "three-letter currency code."
+                )
+
         signal_id = signal_id or _new_id(
             "SIG"
         )
@@ -539,6 +560,7 @@ class PaperRepository:
                     account_id,
                     scan_id,
                     symbol,
+                    quote_currency,
                     generated_at,
                     expires_at,
                     strategy,
@@ -559,7 +581,7 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -567,6 +589,7 @@ class PaperRepository:
                     account_id,
                     scan_id,
                     symbol.strip().upper(),
+                    currency_value,
                     _timestamp(generated_at),
                     _timestamp(expires_at),
                     strategy.strip(),
@@ -612,6 +635,8 @@ class PaperRepository:
                     float(confidence),
                     "reward_to_risk":
                     float(reward_to_risk),
+                    "quote_currency":
+                    currency_value,
                 },
                 created_at=at,
             )

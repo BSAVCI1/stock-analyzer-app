@@ -169,6 +169,8 @@ class PersistedSignal:
     scan_id: str | None
 
     symbol: str
+    quote_currency: str | None
+
     generated_at: datetime
     expires_at: datetime
 
