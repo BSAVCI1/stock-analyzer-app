@@ -39,6 +39,12 @@ from src.paper import (
     PositionStatus,
     money,
 )
+from src.paper.sizing import (
+    FixedNotionalSizingPolicy,
+    FixedNotionalSizingRequest,
+    PositionSizingMode,
+    calculate_fixed_notional_size,
+)
 from src.scanner import (
     ScanResultStatus,
     ScannerAnalysisOutcome,
@@ -299,7 +305,207 @@ class AutomatedPaperExecutionEngine:
 
         return cache[symbol]
 
-    def _calculate_quantity(
+    @staticmethod
+    def _fixed_notional_policy(
+        *,
+        control: PortfolioControl,
+        account_currency: str,
+    ) -> FixedNotionalSizingPolicy:
+        if (
+            control.sizing_mode
+            is not PositionSizingMode
+            .FIXED_NOTIONAL_WITH_RISK_CAP
+        ):
+            raise ValueError(
+                "Portfolio control is not using "
+                "fixed-notional sizing."
+            )
+
+        required = (
+            control.portfolio_currency,
+            control.target_order_value,
+            control.maximum_order_value,
+            control.maximum_planned_loss,
+            control.maximum_open_positions,
+            control.maximum_invested_exposure,
+        )
+
+        if any(
+            value is None
+            for value in required
+        ):
+            raise ValueError(
+                "Fixed-notional sizing control "
+                "is incomplete."
+            )
+
+        if (
+            control.portfolio_currency
+            != account_currency
+        ):
+            raise ValueError(
+                "Sizing portfolio currency "
+                "does not match account base "
+                "currency."
+            )
+
+        return FixedNotionalSizingPolicy(
+            portfolio_currency=(
+                control.portfolio_currency
+            ),
+            target_order_value=(
+                control.target_order_value
+            ),
+            maximum_order_value=(
+                control.maximum_order_value
+            ),
+            maximum_planned_loss=(
+                control.maximum_planned_loss
+            ),
+            maximum_open_positions=(
+                control.maximum_open_positions
+            ),
+            maximum_invested_exposure=(
+                control
+                .maximum_invested_exposure
+            ),
+        )
+
+    def _committed_exposure_portfolio(
+        self,
+        *,
+        account_id: str,
+    ) -> tuple[Decimal, int]:
+        account = (
+            self.paper_repository
+            .get_account(account_id)
+        )
+
+        positions = (
+            self.paper_repository
+            .list_open_positions(account_id)
+        )
+
+        pending_orders = (
+            self.paper_repository
+            .list_pending_orders(account_id)
+        )
+
+        exposure = Decimal("0")
+
+        for position in positions:
+            quote_currency = (
+                position.quote_currency
+                or account.base_currency
+            )
+
+            portfolio_currency = (
+                position.portfolio_currency
+                or account.base_currency
+            )
+
+            if (
+                portfolio_currency
+                != account.base_currency
+            ):
+                raise ValueError(
+                    "Position portfolio currency "
+                    "does not match account base "
+                    "currency."
+                )
+
+            if (
+                position.entry_fx_rate
+                is not None
+            ):
+                fx_rate = (
+                    position.entry_fx_rate
+                )
+
+            elif (
+                quote_currency
+                == account.base_currency
+            ):
+                fx_rate = Decimal("1")
+
+            else:
+                raise ValueError(
+                    "Cross-currency position "
+                    "is missing entry FX "
+                    "provenance."
+                )
+
+            exposure = money(
+                exposure
+                + (
+                    position.entry_price
+                    * position.quantity
+                    * fx_rate
+                )
+            )
+
+        for order in pending_orders:
+            quote_currency = (
+                order.quote_currency
+                or account.base_currency
+            )
+
+            portfolio_currency = (
+                order.portfolio_currency
+                or account.base_currency
+            )
+
+            if (
+                portfolio_currency
+                != account.base_currency
+            ):
+                raise ValueError(
+                    "Pending-order portfolio "
+                    "currency does not match "
+                    "account base currency."
+                )
+
+            if (
+                order.reservation_fx_rate
+                is not None
+            ):
+                fx_rate = (
+                    order.reservation_fx_rate
+                )
+
+            elif (
+                quote_currency
+                == account.base_currency
+            ):
+                fx_rate = Decimal("1")
+
+            else:
+                raise ValueError(
+                    "Cross-currency pending "
+                    "order is missing "
+                    "reservation FX provenance."
+                )
+
+            exposure = money(
+                exposure
+                + (
+                    order.entry_high
+                    * order.quantity
+                    * fx_rate
+                )
+            )
+
+        committed_count = (
+            len(positions)
+            + len(pending_orders)
+        )
+
+        return (
+            money(exposure),
+            committed_count,
+        )
+
+    def _calculate_legacy_quantity(
         self,
         *,
         account_id: str,
@@ -388,6 +594,157 @@ class AutomatedPaperExecutionEngine:
             )
 
         return money(quantity)
+
+    def _calculate_quantity(
+        self,
+        *,
+        account_id: str,
+        signal_id: str,
+        control: PortfolioControl | None = None,
+        run_at: datetime | None = None,
+    ) -> Decimal:
+        if (
+            control is None
+            or control.sizing_mode is None
+        ):
+            return (
+                self._calculate_legacy_quantity(
+                    account_id=account_id,
+                    signal_id=signal_id,
+                )
+            )
+
+        if (
+            control.sizing_mode
+            is not PositionSizingMode
+            .FIXED_NOTIONAL_WITH_RISK_CAP
+        ):
+            raise ValueError(
+                "Unsupported portfolio sizing "
+                f"mode: {control.sizing_mode}."
+            )
+
+        if run_at is None:
+            raise ValueError(
+                "run_at is required for "
+                "FX-aware fixed-notional "
+                "sizing."
+            )
+
+        account = (
+            self.paper_repository
+            .get_account(account_id)
+        )
+
+        signal = (
+            self.paper_repository
+            .get_signal(signal_id)
+        )
+
+        policy = self._fixed_notional_policy(
+            control=control,
+            account_currency=(
+                account.base_currency
+            ),
+        )
+
+        quote_currency = (
+            signal.quote_currency
+            or account.base_currency
+        )
+
+        fx_rate = (
+            self.paper_service
+            ._resolve_fx_rate(
+                quote_currency=quote_currency,
+                portfolio_currency=(
+                    account.base_currency
+                ),
+                as_of=run_at,
+            )
+        )
+
+        (
+            invested_exposure,
+            committed_position_count,
+        ) = (
+            self
+            ._committed_exposure_portfolio(
+                account_id=account_id,
+            )
+        )
+
+        fee_reference_portfolio = min(
+            policy.target_order_value,
+            policy.maximum_order_value,
+        )
+
+        fee_reference_quote = money(
+            fee_reference_portfolio
+            / fx_rate.rate
+        )
+
+        entry_fee_quote = calculate_fee(
+            fee_reference_quote,
+            self.config.costs,
+        )
+
+        exit_fee_quote = calculate_fee(
+            fee_reference_quote,
+            self.config.costs,
+        )
+
+        entry_fee_portfolio = (
+            fx_rate
+            .convert_quote_to_portfolio(
+                entry_fee_quote
+            )
+        )
+
+        exit_fee_portfolio = (
+            fx_rate
+            .convert_quote_to_portfolio(
+                exit_fee_quote
+            )
+        )
+
+        decision = (
+            calculate_fixed_notional_size(
+                FixedNotionalSizingRequest(
+                    quote_currency=(
+                        quote_currency
+                    ),
+                    entry_price_quote=(
+                        signal.entry_high
+                    ),
+                    stop_price_quote=(
+                        signal.stop_price
+                    ),
+                    quote_to_portfolio_rate=(
+                        fx_rate.rate
+                    ),
+                    available_cash_portfolio=(
+                        account.available_cash
+                    ),
+                    invested_exposure_portfolio=(
+                        invested_exposure
+                    ),
+                    current_position_count=(
+                        committed_position_count
+                    ),
+                    estimated_entry_fee_portfolio=(
+                        entry_fee_portfolio
+                    ),
+                    estimated_exit_fee_portfolio=(
+                        exit_fee_portfolio
+                    ),
+                    quantity_step=Decimal("1"),
+                ),
+                policy=policy,
+            )
+        )
+
+        return decision.quantity
 
     @staticmethod
     def _execution_records(
@@ -887,6 +1244,11 @@ class AutomatedPaperExecutionEngine:
         control: PortfolioControl,
         cache,
     ) -> Decimal:
+        account = (
+            self.paper_repository
+            .get_account(account_id)
+        )
+
         value = Decimal("0")
 
         for position in (
@@ -904,9 +1266,50 @@ class AutomatedPaperExecutionEngine:
                 history["Close"].iloc[-1]
             )
 
-            value += money(
+            quote_currency = (
+                position.quote_currency
+                or account.base_currency
+            )
+
+            portfolio_currency = (
+                position.portfolio_currency
+                or account.base_currency
+            )
+
+            if (
+                portfolio_currency
+                != account.base_currency
+            ):
+                raise ValueError(
+                    "Position portfolio currency "
+                    "does not match account base "
+                    "currency."
+                )
+
+            fx_rate = (
+                self.paper_service
+                ._resolve_fx_rate(
+                    quote_currency=(
+                        quote_currency
+                    ),
+                    portfolio_currency=(
+                        account.base_currency
+                    ),
+                    as_of=run_at,
+                )
+            )
+
+            market_value_quote = money(
                 latest_close
                 * position.quantity
+            )
+
+            value = money(
+                value
+                + fx_rate
+                .convert_quote_to_portfolio(
+                    market_value_quote
+                )
             )
 
         return money(value)
@@ -1270,6 +1673,8 @@ class AutomatedPaperExecutionEngine:
                         signal_id=(
                             candidate.signal_id
                         ),
+                        control=control,
+                        run_at=run_at,
                     )
                 )
 
