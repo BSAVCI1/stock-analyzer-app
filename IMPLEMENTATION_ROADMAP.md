@@ -754,7 +754,27 @@ Model the user’s actual IBKR economics without connecting the account.
 - Uneconomic EUR 100 trades are rejected
 - No credentials or connectivity code are required
 
-**Status:** Planned
+**Completion evidence**
+- Reference profile `config/ibkr_reference_costs_v2.json` is versioned as `ibkr-reference-2026-08-09-v2`
+- Confirmed operational pricing plan is `FIXED`; historical profile v1 remains inactive
+- Product policy `p4.2-3` enables the IBKR cost gate and FIXED pricing while API connectivity remains disabled
+- US commission minimums, regulatory-cost components, fractional-share rules and FX reference costs are modeled
+- Round-trip economics calculate gross and cost-adjusted net reward-to-risk before order creation
+- Deterministic hand-calculated economics matched the implementation and demonstrated an uneconomic cost-adjusted trade
+- All paper lifecycle fee paths use the authoritative IBKR estimator when a pricing plan is selected
+- Runtime `build_runtime()` loads the validated active product-policy cost configuration
+- Per-trade FX conversion remains disabled; EUR/USD funding remains a manual portfolio-level activity and USD sale proceeds may remain in USD
+- Current operational execution is USD-quoted US equities; non-USD lifecycle execution remains fail-closed
+- Temporary EUR 2,000 / USD-quoted acceptance proof created a two-share USD 50 order with EUR 90 notional and EUR 5.40 planned loss
+- The accepted proof reserved and booked IBKR FIXED fees and reconciled successfully through close
+- An uneconomic candidate created zero orders and was rejected with `IBKRCostGateRejected`
+- Final full regression passed 488 tests
+- Lifecycle checkpoint `7bc7597` and runtime-activation checkpoint `b0c762d` were pushed to `main`
+- Operational database SHA256 remained `45364e65e2f95bd4b016c8332ed37410fe8ed494d8ce9917546e21792401a22e`
+- No credentials, IBKR API connectivity, broker execution or live trading capability were introduced
+- Formal closure evidence is recorded in `docs/P4_2_OPERATIONAL_CLOSURE.md`
+
+**Status:** Complete
 **Dependencies:** IBKR meeting details; P4.1
 **Relative effort:** M
 
