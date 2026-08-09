@@ -23,7 +23,7 @@ def test_p4_2_policy_pins_exact_ibkr_profile() -> None:
 
     assert (
         policy["policy_version"]
-        == "p4.2-2"
+        == "p4.2-3"
     )
 
     cost_model = policy["cost_model"]
@@ -64,14 +64,21 @@ def test_p4_2_policy_pins_exact_ibkr_profile() -> None:
         cost_model[
             "ibkr_pricing_plan"
         ]
-        is None
+        == "FIXED"
+    )
+
+    assert (
+        cost_model[
+            "ibkr_cost_gate_enabled"
+        ]
+        is True
     )
 
     assert (
         profile[
             "active_pricing_plan"
         ]
-        is None
+        == "FIXED"
     )
 
     assert (
@@ -110,71 +117,36 @@ def test_p4_2_profile_and_workflow_paths_exist() -> None:
     assert workflow_path.is_file()
 
 
-def test_p4_2_runtime_defaults_match_inactive_policy() -> None:
-    policy = load_product_policy()
-
-    cost_model = policy["cost_model"]
-
+def test_p4_2_runtime_defaults_remain_fail_safe(
+) -> None:
     runtime = AutomatedExecutionConfig()
 
     assert (
         runtime.ibkr_cost_gate_enabled
-        == cost_model[
-            "ibkr_cost_gate_enabled"
-        ]
         is False
     )
 
-    assert (
-        runtime.ibkr_pricing_plan
-        == cost_model[
-            "ibkr_pricing_plan"
-        ]
-        is None
-    )
-
-    assert (
-        runtime.ibkr_fx_mode
-        == cost_model[
-            "ibkr_fx_mode"
-        ]
-        is None
-    )
+    assert runtime.ibkr_pricing_plan is None
+    assert runtime.ibkr_fx_mode is None
 
     assert (
         runtime
         .ibkr_include_entry_fx_conversion
-        == cost_model[
-            "ibkr_include_entry_fx_conversion"
-        ]
         is False
     )
 
     assert (
         runtime
         .ibkr_include_exit_fx_conversion
-        == cost_model[
-            "ibkr_include_exit_fx_conversion"
-        ]
         is False
     )
-
 
 @pytest.mark.parametrize(
     ("key", "value"),
     [
-        (
-            "api_connection_enabled",
-            True,
-        ),
-        (
-            "ibkr_cost_gate_enabled",
-            True,
-        ),
-        (
-            "ibkr_pricing_plan",
-            "FIXED",
-        ),
+        ("api_connection_enabled", True),
+        ("ibkr_cost_gate_enabled", False),
+        ("ibkr_pricing_plan", None),
         (
             "ibkr_fx_mode",
             "AUTO_CONVERSION",
@@ -207,7 +179,6 @@ def test_p4_2_policy_rejects_unapproved_activation(
             policy
         )
 
-
 def test_p4_2_manual_update_workflow_has_safety_gates() -> None:
     policy = load_product_policy()
 
@@ -230,7 +201,7 @@ def test_p4_2_manual_update_workflow_has_safety_gates() -> None:
         "FX mode",
         "credentials",
         "API connection",
-        "cost gate remains disabled",
+        "cost gate is enabled",
     )
 
     for marker in required:

@@ -22,7 +22,8 @@ from src.costs import (
 )
 
 
-def test_reference_profile_is_disconnected_and_unselected() -> None:
+def test_reference_profile_is_disconnected_and_fixed_selected(
+) -> None:
     profile = (
         load_ibkr_reference_profile()
     )
@@ -32,6 +33,9 @@ def test_reference_profile_is_disconnected_and_unselected() -> None:
         == "IBKR"
     )
 
+    # The reference model is active for
+    # cost modelling only. There is still
+    # no broker/API connectivity.
     assert (
         profile[
             "api_connection_enabled"
@@ -43,16 +47,17 @@ def test_reference_profile_is_disconnected_and_unselected() -> None:
         profile[
             "active_pricing_plan"
         ]
-        is None
+        == "FIXED"
     )
 
+    # FX remains a manual portfolio-funding
+    # event rather than a per-trade mode.
     assert (
         profile[
             "active_fx_mode"
         ]
         is None
     )
-
 
 def test_profile_rejects_sensitive_keys() -> None:
     profile = deepcopy(
@@ -534,7 +539,7 @@ def test_v2_records_confirmed_fixed_assumptions_without_activation() -> None:
 
     # Confirmation must not silently activate
     # the execution gate or broker assumptions.
-    assert profile["active_pricing_plan"] is None
+    assert profile["active_pricing_plan"] == "FIXED"
     assert profile["active_fx_mode"] is None
 
 

@@ -172,7 +172,7 @@ def validate_product_policy(
     _expect(
         policy,
         "policy_version",
-        "p4.2-2",
+        "p4.2-3",
         "$",
     )
 
@@ -422,11 +422,11 @@ def validate_product_policy(
         ),
         (
             "ibkr_cost_gate_enabled",
-            False,
+            True,
         ),
         (
             "ibkr_pricing_plan",
-            None,
+            "FIXED",
         ),
         (
             "ibkr_fx_mode",

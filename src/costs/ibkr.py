@@ -462,19 +462,39 @@ def validate_ibkr_reference_profile(
             "remain disabled."
         )
 
-    # P4.2 must not silently assume the
-    # user's actual commission/FX modes.
-    for key in (
-        "active_pricing_plan",
-        "active_fx_mode",
-    ):
-        value = profile[key]
+    # Historical schema v1 remains
+    # reference-only and inactive.
+    if schema_version == 1:
+        for key in (
+            "active_pricing_plan",
+            "active_fx_mode",
+        ):
+            if profile[key] is not None:
+                raise IBKRCostProfileError(
+                    f"{key} must remain null "
+                    "for schema v1."
+                )
 
-        if value is not None:
+    # Schema v2 contains the confirmed
+    # operational pricing plan. FX remains a
+    # manual portfolio-funding event.
+    if schema_version == 2:
+        if (
+            profile["active_pricing_plan"]
+            != "FIXED"
+        ):
             raise IBKRCostProfileError(
-                f"{key} must remain null "
-                "until account settings "
-                "are explicitly confirmed."
+                "active_pricing_plan must be "
+                "FIXED for schema v2."
+            )
+
+        if (
+            profile["active_fx_mode"]
+            is not None
+        ):
+            raise IBKRCostProfileError(
+                "active_fx_mode must remain "
+                "null for manual FX funding."
             )
 
     if schema_version == 2:

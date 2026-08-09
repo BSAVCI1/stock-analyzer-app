@@ -8,8 +8,16 @@ from pathlib import Path
 from typing import Mapping
 
 from src.automation import (
+    AutomatedExecutionConfig,
     AutomatedPaperExecutionEngine,
     AutomationRepository,
+)
+from src.costs import (
+    IBKRFXMode,
+    IBKRPricingPlan,
+)
+from src.product_config import (
+    load_product_policy,
 )
 from src.execution_adapters import (
     ExecutionAdapter,
@@ -222,6 +230,59 @@ def make_release_gate_lookup(
     return lookup
 
 
+def load_automated_execution_config(
+) -> AutomatedExecutionConfig:
+    """Load execution settings from validated product policy."""
+
+    policy = load_product_policy()
+
+    cost_model = policy["cost_model"]
+
+    pricing_value = cost_model[
+        "ibkr_pricing_plan"
+    ]
+
+    fx_value = cost_model[
+        "ibkr_fx_mode"
+    ]
+
+    pricing_plan = (
+        None
+        if pricing_value is None
+        else IBKRPricingPlan(
+            pricing_value
+        )
+    )
+
+    fx_mode = (
+        None
+        if fx_value is None
+        else IBKRFXMode(
+            fx_value
+        )
+    )
+
+    return AutomatedExecutionConfig(
+        ibkr_cost_gate_enabled=(
+            cost_model[
+                "ibkr_cost_gate_enabled"
+            ]
+        ),
+        ibkr_pricing_plan=pricing_plan,
+        ibkr_fx_mode=fx_mode,
+        ibkr_include_entry_fx_conversion=(
+            cost_model[
+                "ibkr_include_entry_fx_conversion"
+            ]
+        ),
+        ibkr_include_exit_fx_conversion=(
+            cost_model[
+                "ibkr_include_exit_fx_conversion"
+            ]
+        ),
+    )
+
+
 def build_runtime(
     settings: RuntimeSettings,
     *,
@@ -312,6 +373,9 @@ def build_runtime(
             ),
             automation_repository=(
                 automation_repository
+            ),
+            config=(
+                load_automated_execution_config()
             ),
             app_version=(
                 settings.app_version

@@ -43,13 +43,13 @@ The account-specific pricing discovery completed on
 These are confirmed modelling assumptions, not broker
 connectivity settings.
 
-The runtime cost gate remains disabled until the same
+The runtime cost gate was kept disabled during verification until the same
 IBKR estimator is authoritative for sizing, reservation,
 entry fills, exits and cost-adjusted acceptance.
 
 ## Safety rule
 
-The cost gate remains disabled until the actual account
+The cost gate was kept disabled during verification until the actual account
 pricing plan and FX mode have been explicitly confirmed,
 encoded in a reviewed configuration change, and covered
 by deterministic tests.
@@ -235,3 +235,24 @@ the repository records:
 
 Any unresolved pricing assumption remains explicit and
 fail-closed.
+
+## Runtime activation — p4.2-3
+
+The IBKR cost gate is enabled for the confirmed **FIXED**
+pricing plan through the validated product policy.
+
+Broker connectivity remains disabled. Both the reference
+profile and product execution policy continue to prohibit an
+IBKR API connection.
+
+Per-trade FX conversion remains disabled. EUR/USD conversion
+is a manual portfolio-funding event, and USD sale proceeds
+may remain in USD for reuse.
+
+The current operational universe is USD-quoted US equities.
+Non-USD lifecycle execution remains fail-closed until a
+complete venue-specific execution-cost model is approved.
+
+`AutomatedExecutionConfig()` defaults remain inactive as a
+fail-safe. Production `build_runtime()` explicitly loads the
+validated product policy.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "policy_version": "p4.2-2",
+  "policy_version": "p4.2-3",
   "product": {
     "name": "BSAVCI Smart Investment Bot",
     "autonomy": "always_on",
@@ -52,8 +52,8 @@
     "reference_profile_path": "config/ibkr_reference_costs_v2.json",
     "reference_profile_version": "ibkr-reference-2026-08-09-v2",
     "api_connection_enabled": false,
-    "ibkr_cost_gate_enabled": false,
-    "ibkr_pricing_plan": null,
+    "ibkr_cost_gate_enabled": true,
+    "ibkr_pricing_plan": "FIXED",
     "ibkr_fx_mode": null,
     "ibkr_include_entry_fx_conversion": false,
     "ibkr_include_exit_fx_conversion": false,

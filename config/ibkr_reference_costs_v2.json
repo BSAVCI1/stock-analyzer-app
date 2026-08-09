@@ -1,6 +1,6 @@
 {
   "active_fx_mode": null,
-  "active_pricing_plan": null,
+  "active_pricing_plan": "FIXED",
   "api_connection_enabled": false,
   "europe_eur_reference": {
     "fixed_smartrouting": {

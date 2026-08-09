@@ -204,6 +204,42 @@ def test_runtime_without_delivery_configuration(
         is False
     )
 
+    assert (
+        runtime.execution_engine
+        .config
+        .ibkr_cost_gate_enabled
+        is True
+    )
+
+    assert (
+        runtime.execution_engine
+        .config
+        .ibkr_pricing_plan
+        .value
+        == "FIXED"
+    )
+
+    assert (
+        runtime.execution_engine
+        .config
+        .ibkr_fx_mode
+        is None
+    )
+
+    assert (
+        runtime.execution_engine
+        .config
+        .ibkr_include_entry_fx_conversion
+        is False
+    )
+
+    assert (
+        runtime.execution_engine
+        .config
+        .ibkr_include_exit_fx_conversion
+        is False
+    )
+
 
 def test_status_command_outputs_account_state(
     tmp_path,
