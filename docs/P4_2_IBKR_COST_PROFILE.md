@@ -15,12 +15,37 @@ account, or require credentials.
 Current pinned profile:
 
 - Provider: IBKR
-- Profile path: `config/ibkr_reference_costs_v1.json`
-- Profile version: `ibkr-reference-2026-08-08-v1`
+- Profile path: `config/ibkr_reference_costs_v2.json`
+- Profile version: `ibkr-reference-2026-08-09-v2`
 - API connection: disabled
 - Cost gate: disabled
-- Active pricing plan: unresolved
+- Confirmed pricing plan: Fixed
+- Active pricing plan: not yet enabled
 - Active FX mode: unresolved
+
+## Confirmed operational assumptions
+
+The account-specific pricing discovery completed on
+2026-08-09 established the following modelling inputs:
+
+- commission structure: Fixed;
+- intended broker routing: IBKR SmartRouting;
+- paper-order hard ceiling: EUR 100;
+- observed/current EUR Fixed minimum: EUR 3.00;
+- currency conversion is a manual portfolio-funding
+  action rather than a per-stock-trade action;
+- no entry FX conversion cost is allocated to each
+  USD stock trade;
+- no exit FX conversion cost is allocated to each
+  USD stock trade;
+- USD proceeds are retained in USD for reuse.
+
+These are confirmed modelling assumptions, not broker
+connectivity settings.
+
+The runtime cost gate remains disabled until the same
+IBKR estimator is authoritative for sizing, reservation,
+entry fills, exits and cost-adjusted acceptance.
 
 ## Safety rule
 

@@ -458,3 +458,103 @@ def test_fx_cost_cannot_be_silently_assumed() -> None:
             minimum_net_reward_to_risk="2",
             include_entry_fx_conversion=True,
         )
+
+def test_v1_profile_remains_loadable_and_inactive() -> None:
+    profile = load_ibkr_reference_profile(
+        "config/ibkr_reference_costs_v1.json"
+    )
+
+    assert profile["schema_version"] == 1
+
+    assert (
+        profile["profile_version"]
+        == "ibkr-reference-2026-08-08-v1"
+    )
+
+    assert profile["active_pricing_plan"] is None
+    assert profile["active_fx_mode"] is None
+
+
+def test_v2_records_confirmed_fixed_assumptions_without_activation() -> None:
+    profile = load_ibkr_reference_profile()
+
+    assert profile["schema_version"] == 2
+
+    assert (
+        profile["profile_version"]
+        == "ibkr-reference-2026-08-09-v2"
+    )
+
+    assumptions = profile[
+        "operational_assumptions"
+    ]
+
+    assert (
+        assumptions["confirmed_pricing_plan"]
+        == "FIXED"
+    )
+
+    assert (
+        assumptions["intended_routing"]
+        == "IBKR_SMARTROUTING"
+    )
+
+    assert (
+        assumptions["maximum_modeled_order_eur"]
+        == "100.00"
+    )
+
+    assert (
+        assumptions[
+            "eur_fixed_minimum_order_eur"
+        ]
+        == "3.00"
+    )
+
+    assert (
+        assumptions[
+            "entry_fx_conversion_per_trade"
+        ]
+        is False
+    )
+
+    assert (
+        assumptions[
+            "exit_fx_conversion_per_trade"
+        ]
+        is False
+    )
+
+    assert (
+        assumptions[
+            "usd_sale_proceeds_policy"
+        ]
+        == "RETAIN_USD"
+    )
+
+    # Confirmation must not silently activate
+    # the execution gate or broker assumptions.
+    assert profile["active_pricing_plan"] is None
+    assert profile["active_fx_mode"] is None
+
+
+def test_v2_eur_100_fixed_reference_is_three_euros_but_not_activated() -> None:
+    estimate = (
+        calculate_europe_eur_reference_fees(
+            trade_value_eur="100",
+            pricing_plan="FIXED",
+        )
+    )
+
+    assert estimate.commission == Decimal(
+        "3.00000000"
+    )
+
+    assert (
+        estimate.total_known_cost
+        == Decimal("3.00000000")
+    )
+
+    # Lifecycle activation is deliberately
+    # deferred to the authoritative-fee slice.
+    assert estimate.complete is False

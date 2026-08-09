@@ -23,7 +23,7 @@ def test_p4_2_policy_pins_exact_ibkr_profile() -> None:
 
     assert (
         policy["policy_version"]
-        == "p4.2-1"
+        == "p4.2-2"
     )
 
     cost_model = policy["cost_model"]
@@ -43,7 +43,7 @@ def test_p4_2_policy_pins_exact_ibkr_profile() -> None:
             "reference_profile_version"
         ]
         == profile["profile_version"]
-        == "ibkr-reference-2026-08-08-v1"
+        == "ibkr-reference-2026-08-09-v2"
     )
 
     assert (

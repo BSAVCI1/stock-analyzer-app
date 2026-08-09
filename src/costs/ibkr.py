@@ -25,7 +25,7 @@ BASIS_POINTS = Decimal("10000")
 DEFAULT_IBKR_REFERENCE_PROFILE = (
     Path(__file__).resolve().parents[2]
     / "config"
-    / "ibkr_reference_costs_v1.json"
+    / "ibkr_reference_costs_v2.json"
 )
 
 
@@ -412,30 +412,41 @@ def validate_ibkr_reference_profile(
 
     _reject_sensitive_keys(profile)
 
-    _expect_keys(
-        profile,
-        {
-            "schema_version",
-            "profile_version",
-            "provider",
-            "verified_at",
-            "api_connection_enabled",
-            "active_pricing_plan",
-            "active_fx_mode",
-            "us_stocks",
-            "us_fractional",
-            "us_regulatory",
-            "europe_eur_reference",
-            "fx",
-            "sources",
-        },
-        "$",
+    schema_version = profile.get(
+        "schema_version"
     )
 
-    if profile["schema_version"] != 1:
+    if schema_version not in (1, 2):
         raise IBKRCostProfileError(
-            "schema_version must be 1."
+            "schema_version must be 1 or 2."
         )
+
+    expected_keys = {
+        "schema_version",
+        "profile_version",
+        "provider",
+        "verified_at",
+        "api_connection_enabled",
+        "active_pricing_plan",
+        "active_fx_mode",
+        "us_stocks",
+        "us_fractional",
+        "us_regulatory",
+        "europe_eur_reference",
+        "fx",
+        "sources",
+    }
+
+    if schema_version == 2:
+        expected_keys.add(
+            "operational_assumptions"
+        )
+
+    _expect_keys(
+        profile,
+        expected_keys,
+        "$",
+    )
 
     if profile["provider"] != "IBKR":
         raise IBKRCostProfileError(
@@ -465,6 +476,90 @@ def validate_ibkr_reference_profile(
                 "until account settings "
                 "are explicitly confirmed."
             )
+
+    if schema_version == 2:
+        assumptions = _mapping(
+            profile[
+                "operational_assumptions"
+            ],
+            "$.operational_assumptions",
+        )
+
+        _expect_keys(
+            assumptions,
+            {
+                "confirmed_pricing_plan",
+                "intended_routing",
+                "maximum_modeled_order_eur",
+                "eur_fixed_minimum_order_eur",
+                "entry_fx_conversion_per_trade",
+                "exit_fx_conversion_per_trade",
+                "fx_conversion_control",
+                "usd_sale_proceeds_policy",
+                "confirmation_basis",
+            },
+            "$.operational_assumptions",
+        )
+
+        expected_values = {
+            "confirmed_pricing_plan":
+                "FIXED",
+            "intended_routing":
+                "IBKR_SMARTROUTING",
+            "fx_conversion_control":
+                "MANUAL_PORTFOLIO_FUNDING_EVENT",
+            "usd_sale_proceeds_policy":
+                "RETAIN_USD",
+            "confirmation_basis":
+                (
+                    "USER_CONFIRMED_ACCOUNT_HISTORY_"
+                    "AND_OFFICIAL_IBKR"
+                ),
+        }
+
+        for key, expected in (
+            expected_values.items()
+        ):
+            if assumptions[key] != expected:
+                raise IBKRCostProfileError(
+                    f"{key} must be "
+                    f"{expected!r}."
+                )
+
+        maximum_order = _positive(
+            "maximum_modeled_order_eur",
+            assumptions[
+                "maximum_modeled_order_eur"
+            ],
+        )
+
+        if maximum_order != Decimal("100.00"):
+            raise IBKRCostProfileError(
+                "maximum_modeled_order_eur "
+                "must be 100.00."
+            )
+
+        fixed_minimum = _positive(
+            "eur_fixed_minimum_order_eur",
+            assumptions[
+                "eur_fixed_minimum_order_eur"
+            ],
+        )
+
+        if fixed_minimum != Decimal("3.00"):
+            raise IBKRCostProfileError(
+                "eur_fixed_minimum_order_eur "
+                "must be 3.00."
+            )
+
+        for key in (
+            "entry_fx_conversion_per_trade",
+            "exit_fx_conversion_per_trade",
+        ):
+            if assumptions[key] is not False:
+                raise IBKRCostProfileError(
+                    f"{key} must remain false."
+                )
 
     us = _mapping(
         profile["us_stocks"],

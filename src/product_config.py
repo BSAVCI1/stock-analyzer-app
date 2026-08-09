@@ -172,7 +172,7 @@ def validate_product_policy(
     _expect(
         policy,
         "policy_version",
-        "p4.2-1",
+        "p4.2-2",
         "$",
     )
 
@@ -410,11 +410,11 @@ def validate_product_policy(
         ),
         (
             "reference_profile_path",
-            "config/ibkr_reference_costs_v1.json",
+            "config/ibkr_reference_costs_v2.json",
         ),
         (
             "reference_profile_version",
-            "ibkr-reference-2026-08-08-v1",
+            "ibkr-reference-2026-08-09-v2",
         ),
         (
             "api_connection_enabled",

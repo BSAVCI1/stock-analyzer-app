@@ -1,0 +1,78 @@
+{
+  "active_fx_mode": null,
+  "active_pricing_plan": null,
+  "api_connection_enabled": false,
+  "europe_eur_reference": {
+    "fixed_smartrouting": {
+      "minimum_order_eur": "3.00",
+      "route_dependent_fees": "MARKET_SPECIFIC",
+      "trade_value_fraction": "0.0005"
+    },
+    "scope": "REFERENCE_ONLY_MARKET_SPECIFIC",
+    "tiered": {
+      "maximum_order_eur": "29.00",
+      "minimum_order_eur": "1.25",
+      "route_dependent_fees": "EXPLICIT",
+      "trade_value_fraction": "0.0005"
+    }
+  },
+  "fx": {
+    "auto_conversion": {
+      "rate_adjustment_fraction": "0.0003",
+      "separate_commission": false
+    },
+    "spot_fx": {
+      "commission_bps": "0.20",
+      "minimum_commission_usd": "2.00"
+    }
+  },
+  "operational_assumptions": {
+    "confirmation_basis": "USER_CONFIRMED_ACCOUNT_HISTORY_AND_OFFICIAL_IBKR",
+    "confirmed_pricing_plan": "FIXED",
+    "entry_fx_conversion_per_trade": false,
+    "eur_fixed_minimum_order_eur": "3.00",
+    "exit_fx_conversion_per_trade": false,
+    "fx_conversion_control": "MANUAL_PORTFOLIO_FUNDING_EVENT",
+    "intended_routing": "IBKR_SMARTROUTING",
+    "maximum_modeled_order_eur": "100.00",
+    "usd_sale_proceeds_policy": "RETAIN_USD"
+  },
+  "profile_version": "ibkr-reference-2026-08-09-v2",
+  "provider": "IBKR",
+  "schema_version": 2,
+  "sources": {
+    "europe_stocks": "https://www.interactivebrokers.com/en/pricing/commissions-stocks-europe.php",
+    "fractional": "https://www.interactivebrokers.ie/en/trading/fractional-trading.php",
+    "spot_fx": "https://www.interactivebrokers.com/en/pricing/commissions-spot-currencies.php",
+    "us_stocks": "https://www.interactivebrokers.com/en/pricing/commissions-stocks.php"
+  },
+  "us_fractional": {
+    "commission_trade_value_fraction": "0.01",
+    "eligible_instruments_only": true,
+    "minimum_commission_usd": "0.01",
+    "published_minimum_order_value_usd": "1.00"
+  },
+  "us_regulatory": {
+    "cat_per_share": "0.000003",
+    "finra_taf_maximum_usd": "9.79",
+    "finra_taf_per_share_sale": "0.000195",
+    "sec_sale_value_rate": "0.0000206",
+    "tiered_clearing_maximum_trade_value_fraction": "0.005",
+    "tiered_clearing_per_share": "0.00020"
+  },
+  "us_stocks": {
+    "fixed": {
+      "maximum_trade_value_fraction": "0.01",
+      "minimum_order_usd": "1.00",
+      "per_share_usd": "0.005",
+      "route_dependent_fees": "NOT_REQUIRED"
+    },
+    "tiered": {
+      "maximum_trade_value_fraction": "0.01",
+      "minimum_order_usd": "0.35",
+      "per_share_usd": "0.0035",
+      "route_dependent_fees": "EXPLICIT"
+    }
+  },
+  "verified_at": "2026-08-09"
+}
