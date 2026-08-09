@@ -8,6 +8,8 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
+import pytest
+
 from src.analysis import Signal
 from src.automation import (
     AutomatedExecutionConfig,
@@ -18,6 +20,7 @@ from src.automation import (
 from src.backtest import ExecutionCostModel, FillRule
 from src.costs import (
     IBKRPricingPlan,
+    calculate_us_stock_reference_fees,
 )
 from src.data import MarketSnapshot
 from src.paper import (
@@ -1213,3 +1216,290 @@ def test_ibkr_tiered_gate_fails_closed_without_route_cost(
         "INCOMPLETE_COST_ESTIMATE"
         in metadata["reason"]
     )
+
+def test_ibkr_fixed_lifecycle_uses_reference_fees_end_to_end(
+    tmp_path,
+) -> None:
+    fill_session = T0 + timedelta(
+        days=1
+    )
+
+    target_session = T0 + timedelta(
+        days=2
+    )
+
+    history = make_history(
+        [
+            (
+                T0,
+                10,
+                10.10,
+                9.90,
+                10,
+            ),
+            (
+                fill_session,
+                10,
+                10.20,
+                9.80,
+                10,
+            ),
+            (
+                target_session,
+                13,
+                13.20,
+                12.80,
+                13,
+            ),
+        ]
+    )
+
+    generic_costs = ExecutionCostModel(
+        fixed_fee="9",
+    )
+
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        _,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": history,
+        },
+        costs=generic_costs,
+    )
+
+    engine.config = AutomatedExecutionConfig(
+        fill_rule=FillRule.LIMIT,
+        costs=generic_costs,
+        ibkr_pricing_plan=(
+            IBKRPricingPlan.FIXED
+        ),
+    )
+
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=(
+            scanner_repository
+        ),
+        account_id=account.account_id,
+        reward_to_risk=3.0,
+        entry_low=10,
+        entry_high=10,
+        stop_price=9,
+        targets=(13,),
+        quote_currency="USD",
+        data_as_of=T0,
+    )
+
+    created = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="ibkr-fixed-create",
+        run_at=T0,
+    )
+
+    assert (
+        created.run.created_orders
+        == 1
+    )
+
+    order = (
+        paper_repository
+        .list_pending_orders(
+            account.account_id
+        )[0]
+    )
+
+    reservation_fee = (
+        calculate_us_stock_reference_fees(
+            quantity=order.quantity,
+            trade_value_usd=(
+                order.entry_high
+                * order.quantity
+            ),
+            pricing_plan="FIXED",
+            side="BUY",
+        )
+        .total_known_cost
+    )
+
+    expected_reserved = (
+        order.entry_high
+        * order.quantity
+        + reservation_fee
+    ).quantize(
+        Decimal("0.00000001")
+    )
+
+    assert (
+        order.reserved_cash
+        == expected_reserved
+    )
+
+    filled = engine.run(
+        account_id=account.account_id,
+        run_key="ibkr-fixed-fill",
+        run_at=fill_session,
+    )
+
+    assert (
+        filled.run.filled_orders
+        == 1
+    )
+
+    closed = engine.run(
+        account_id=account.account_id,
+        run_key="ibkr-fixed-close",
+        run_at=target_session,
+    )
+
+    assert (
+        closed.run.closed_positions
+        == 1
+    )
+
+    trade = (
+        paper_repository
+        .list_closed_trades(
+            account.account_id
+        )[0]
+    )
+
+    entry_fee = (
+        calculate_us_stock_reference_fees(
+            quantity=trade.quantity,
+            trade_value_usd=(
+                trade.entry_price
+                * trade.quantity
+            ),
+            pricing_plan="FIXED",
+            side="BUY",
+        )
+        .total_known_cost
+    )
+
+    exit_fee = (
+        calculate_us_stock_reference_fees(
+            quantity=trade.quantity,
+            trade_value_usd=(
+                trade.exit_price
+                * trade.quantity
+            ),
+            pricing_plan="FIXED",
+            side="SELL",
+        )
+        .total_known_cost
+    )
+
+    assert trade.fees == (
+        entry_fee
+        + exit_fee
+    ).quantize(
+        Decimal("0.00000001")
+    )
+
+    # Prove the deliberately different generic
+    # $9 fee did not drive the lifecycle.
+    assert (
+        trade.fees
+        != Decimal("18.00000000")
+    )
+
+    assert (
+        closed.reconciliation.reconciled
+    )
+
+
+def test_ibkr_lifecycle_non_usd_fails_closed(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        _,
+        _,
+        engine,
+        _,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": make_history(
+                [
+                    (
+                        T0,
+                        100,
+                        101,
+                        99,
+                        100,
+                    ),
+                ]
+            ),
+        },
+    )
+
+    engine.config = AutomatedExecutionConfig(
+        ibkr_pricing_plan=(
+            IBKRPricingPlan.FIXED
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="INCOMPLETE_COST_ESTIMATE",
+    ):
+        engine._calculate_lifecycle_fee_quote(
+            quote_currency="EUR",
+            quantity="1",
+            trade_value_quote="100",
+            side="BUY",
+        )
+
+
+def test_ibkr_lifecycle_tiered_fails_closed_when_incomplete(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        _,
+        _,
+        engine,
+        _,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": make_history(
+                [
+                    (
+                        T0,
+                        100,
+                        101,
+                        99,
+                        100,
+                    ),
+                ]
+            ),
+        },
+    )
+
+    engine.config = AutomatedExecutionConfig(
+        ibkr_pricing_plan=(
+            IBKRPricingPlan.TIERED
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="INCOMPLETE_COST_ESTIMATE",
+    ):
+        engine._calculate_lifecycle_fee_quote(
+            quote_currency="USD",
+            quantity="10",
+            trade_value_quote="100",
+            side="BUY",
+        )

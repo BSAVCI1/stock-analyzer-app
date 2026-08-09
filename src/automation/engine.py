@@ -28,7 +28,9 @@ from src.execution_adapters import (
 )
 from src.costs import (
     IBKREconomicDecision,
+    IBKRTradeSide,
     calculate_us_long_trade_economics,
+    calculate_us_stock_reference_fees,
 )
 
 from src.data import (
@@ -584,10 +586,16 @@ class AutomatedPaperExecutionEngine:
                 * quantity
             )
 
-            fee = calculate_fee(
-                notional,
-                self.config.costs,
-            )
+            fee = self._calculate_lifecycle_fee_quote(
+                      quote_currency=(
+                          signal.quote_currency
+                          or account.base_currency
+                      ),
+                      quantity=quantity,
+                      trade_value_quote=notional,
+                      side=IBKRTradeSide.BUY,
+                      require_complete=False,
+                  )
 
             if money(
                 notional + fee
@@ -694,15 +702,37 @@ class AutomatedPaperExecutionEngine:
             / fx_rate.rate
         )
 
-        entry_fee_quote = calculate_fee(
-            fee_reference_quote,
-            self.config.costs,
-        )
+        entry_fee_quote = self._calculate_lifecycle_fee_quote(
+                              quote_currency=quote_currency,
+                              quantity=max(
+                                  Decimal("1"),
+                                  (
+                                      fee_reference_quote
+                                      // signal.entry_high
+                                  ),
+                              ),
+                              trade_value_quote=(
+                                  fee_reference_quote
+                              ),
+                              side=IBKRTradeSide.BUY,
+                              require_complete=False,
+                          )
 
-        exit_fee_quote = calculate_fee(
-            fee_reference_quote,
-            self.config.costs,
-        )
+        exit_fee_quote = self._calculate_lifecycle_fee_quote(
+                             quote_currency=quote_currency,
+                             quantity=max(
+                                 Decimal("1"),
+                                 (
+                                     fee_reference_quote
+                                     // signal.entry_high
+                                 ),
+                             ),
+                             trade_value_quote=(
+                                 fee_reference_quote
+                             ),
+                             side=IBKRTradeSide.SELL,
+                             require_complete=False,
+                         )
 
         entry_fee_portfolio = (
             fx_rate
@@ -837,13 +867,17 @@ class AutomatedPaperExecutionEngine:
             * position.quantity
         )
 
-        fee = calculate_fee(
-            money(
-                adjusted_price
-                * position.quantity
-            ),
-            self.config.costs,
-        )
+        fee = self._calculate_lifecycle_fee_quote(
+                  quote_currency=(
+                      position.quote_currency
+                  ),
+                  quantity=position.quantity,
+                  trade_value_quote=money(
+                      adjusted_price
+                      * position.quantity
+                  ),
+                  side=IBKRTradeSide.SELL,
+              )
 
         self.execution_adapter.close_position(
             position_id=(
@@ -1518,13 +1552,17 @@ class AutomatedPaperExecutionEngine:
                         * order.quantity
                     )
 
-                    fee = calculate_fee(
-                        money(
-                            adjusted_price
-                            * order.quantity
-                        ),
-                        self.config.costs,
-                    )
+                    fee = self._calculate_lifecycle_fee_quote(
+                              quote_currency=(
+                                  order.quote_currency
+                              ),
+                              quantity=order.quantity,
+                              trade_value_quote=money(
+                                  adjusted_price
+                                  * order.quantity
+                              ),
+                              side=IBKRTradeSide.BUY,
+                          )
 
                     self.execution_adapter.record_buy_fill(
                         order_id=order.order_id,
@@ -1600,6 +1638,69 @@ class AutomatedPaperExecutionEngine:
             filled_count,
             expired_count,
             error_count,
+        )
+
+    def _calculate_lifecycle_fee_quote(
+        self,
+        *,
+        quote_currency: str | None,
+        quantity: object,
+        trade_value_quote: object,
+        side: IBKRTradeSide | str,
+        require_complete: bool = True,
+    ) -> Decimal:
+        """Return the authoritative paper-lifecycle fee."""
+
+        trade_value = money(
+            trade_value_quote
+        )
+
+        if (
+            self.config.ibkr_pricing_plan
+            is None
+        ):
+            return calculate_fee(
+                trade_value,
+                self.config.costs,
+            )
+
+        currency = str(
+            quote_currency or ""
+        ).strip().upper()
+
+        if currency != "USD":
+            raise RuntimeError(
+                "INCOMPLETE_COST_ESTIMATE: "
+                "P4.2 authoritative lifecycle "
+                "fees currently support only "
+                "USD-quoted securities."
+            )
+
+        estimate = (
+            calculate_us_stock_reference_fees(
+                quantity=quantity,
+                trade_value_usd=trade_value,
+                pricing_plan=(
+                    self.config
+                    .ibkr_pricing_plan
+                ),
+                side=side,
+                fractional=False,
+            )
+        )
+
+        if (
+            not estimate.complete
+            and require_complete
+        ):
+            raise RuntimeError(
+                "INCOMPLETE_COST_ESTIMATE: "
+                "IBKR lifecycle cost estimate "
+                "is incomplete."
+            )
+
+        return money(
+            estimate.total_known_cost
         )
 
     def _apply_ibkr_cost_gate(
@@ -1829,13 +1930,17 @@ class AutomatedPaperExecutionEngine:
                     run_at=run_at,
                 )
 
-                fee = calculate_fee(
-                    money(
-                        signal.entry_high
-                        * quantity
-                    ),
-                    self.config.costs,
-                )
+                fee = self._calculate_lifecycle_fee_quote(
+                          quote_currency=(
+                              signal.quote_currency
+                          ),
+                          quantity=quantity,
+                          trade_value_quote=money(
+                              signal.entry_high
+                              * quantity
+                          ),
+                          side=IBKRTradeSide.BUY,
+                      )
 
                 _, created = (
                     self.paper_service
