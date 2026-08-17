@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.strategy import StrategyHorizon
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -230,6 +232,10 @@ class PaperTradingService:
         signal_id: str | None = None,
         scan_id: str | None = None,
         quote_currency: str | None = None,
+        strategy_horizon: (
+            StrategyHorizon | str | None
+        ) = None,
+        strategy_version: str | None = None,
     ) -> PersistedSignal:
         if not isfinite(float(score)):
             raise ValueError("score must be finite.")
@@ -247,6 +253,12 @@ class PaperTradingService:
             generated_at=generated_at,
             expires_at=expires_at,
             strategy=strategy,
+            strategy_horizon=(
+                strategy_horizon
+            ),
+            strategy_version=(
+                strategy_version
+            ),
             recommendation=recommendation,
             market_regime=market_regime,
             score=score,
@@ -483,6 +495,12 @@ class PaperTradingService:
             signal_id=signal_id,
             idempotency_key=idempotency_key,
             symbol=signal.symbol,
+            strategy_horizon=(
+                signal.strategy_horizon
+            ),
+            strategy_version=(
+                signal.strategy_version
+            ),
             side=PositionSide.LONG,
             quantity=quantity_value,
             entry_low=signal.entry_low,

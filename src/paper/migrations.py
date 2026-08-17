@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 _SCHEMA_V1 = """
@@ -782,6 +782,45 @@ PRAGMA user_version = 8;
 """
 
 
+
+_SCHEMA_V9 = """
+ALTER TABLE paper_scan_results
+    ADD COLUMN strategy_horizon TEXT;
+
+ALTER TABLE paper_scan_results
+    ADD COLUMN strategy_version TEXT;
+
+
+ALTER TABLE paper_signals
+    ADD COLUMN strategy_horizon TEXT;
+
+ALTER TABLE paper_signals
+    ADD COLUMN strategy_version TEXT;
+
+
+ALTER TABLE paper_orders
+    ADD COLUMN strategy_horizon TEXT;
+
+ALTER TABLE paper_orders
+    ADD COLUMN strategy_version TEXT;
+
+
+ALTER TABLE paper_positions
+    ADD COLUMN strategy_horizon TEXT;
+
+ALTER TABLE paper_positions
+    ADD COLUMN strategy_version TEXT;
+
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN strategy_horizon TEXT;
+
+ALTER TABLE paper_closed_trades
+    ADD COLUMN strategy_version TEXT;
+
+PRAGMA user_version = 9;
+"""
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -903,6 +942,12 @@ def apply_migrations(
             _SCHEMA_V8
         )
         current_version = 8
+
+    if current_version < 9:
+        connection.executescript(
+            _SCHEMA_V9
+        )
+        current_version = 9
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

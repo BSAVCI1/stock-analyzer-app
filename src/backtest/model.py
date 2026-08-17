@@ -7,6 +7,8 @@ records to implement next-session execution.
 
 from __future__ import annotations
 
+from src.strategy import StrategyHorizon
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -159,6 +161,8 @@ class SignalRecord:
     expires_at: datetime
     score: float
     confidence: float
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
     def __post_init__(self) -> None:
         signal_id = _required_text("signal_id", self.signal_id)

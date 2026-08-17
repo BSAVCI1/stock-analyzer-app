@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.strategy import StrategyHorizon
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -265,6 +267,8 @@ class ScannerAnalysisOutcome:
     ]
 
     warnings: tuple[str, ...] = ()
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -445,6 +449,8 @@ class ScanResult:
     metadata: Mapping[str, object] = field(
         default_factory=dict
     )
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

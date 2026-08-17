@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from src.strategy import (
+    coerce_strategy_horizon,
+    normalise_strategy_version,
+    strategy_horizon_value,
+)
+
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
@@ -185,6 +191,16 @@ class ScannerRepository:
                 row["recommendation"]
             ),
             strategy=row["strategy"],
+            strategy_horizon=(
+                coerce_strategy_horizon(
+                    row["strategy_horizon"]
+                )
+            ),
+            strategy_version=(
+                normalise_strategy_version(
+                    row["strategy_version"]
+                )
+            ),
             score=_optional_float(
                 row["score"]
             ),
@@ -373,6 +389,8 @@ class ScannerRepository:
                     average_dollar_volume,
                     recommendation,
                     strategy,
+                    strategy_horizon,
+                    strategy_version,
                     score,
                     confidence,
                     market_regime,
@@ -388,7 +406,7 @@ class ScannerRepository:
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?
+                    ?, ?, ?, ?
                 )
                 ON CONFLICT(scan_id, symbol)
                 DO UPDATE SET
@@ -403,6 +421,10 @@ class ScannerRepository:
                     recommendation =
                         excluded.recommendation,
                     strategy = excluded.strategy,
+                    strategy_horizon =
+                        excluded.strategy_horizon,
+                    strategy_version =
+                        excluded.strategy_version,
                     score = excluded.score,
                     confidence = excluded.confidence,
                     market_regime =
@@ -448,6 +470,12 @@ class ScannerRepository:
                     ),
                     result.recommendation,
                     result.strategy,
+                    strategy_horizon_value(
+                        result.strategy_horizon
+                    ),
+                    normalise_strategy_version(
+                        result.strategy_version
+                    ),
                     result.score,
                     result.confidence,
                     result.market_regime,

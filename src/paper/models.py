@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.strategy import StrategyHorizon
+
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
@@ -193,6 +195,8 @@ class PersistedSignal:
     threshold_version: str
     app_version: str
     created_at: datetime
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +229,8 @@ class PaperOrderRecord:
     expires_at: datetime
     filled_at: datetime | None
     closed_at: datetime | None
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,6 +280,8 @@ class PaperPositionRecord:
     expires_at: datetime
     status: PositionStatus
     closed_at: datetime | None
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,6 +321,8 @@ class ClosedPaperTrade:
     net_pnl: Decimal
     return_pct: float
     holding_seconds: int
+    strategy_horizon: StrategyHorizon | None = None
+    strategy_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

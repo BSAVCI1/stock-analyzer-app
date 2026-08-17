@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from src.strategy import (
+    StrategyHorizon,
+    coerce_strategy_horizon,
+    normalise_strategy_version,
+    strategy_horizon_value,
+)
+
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
@@ -206,6 +213,16 @@ class PaperRepository:
                 row["expires_at"]
             ),
             strategy=row["strategy"],
+            strategy_horizon=(
+                coerce_strategy_horizon(
+                    row["strategy_horizon"]
+                )
+            ),
+            strategy_version=(
+                normalise_strategy_version(
+                    row["strategy_version"]
+                )
+            ),
             recommendation=row["recommendation"],
             market_regime=row["market_regime"],
             score=float(row["score"]),
@@ -246,6 +263,16 @@ class PaperRepository:
                 row["idempotency_key"]
             ),
             symbol=row["symbol"],
+            strategy_horizon=(
+                coerce_strategy_horizon(
+                    row["strategy_horizon"]
+                )
+            ),
+            strategy_version=(
+                normalise_strategy_version(
+                    row["strategy_version"]
+                )
+            ),
             quote_currency=(
                 row["quote_currency"]
             ),
@@ -359,6 +386,16 @@ class PaperRepository:
             order_id=row["order_id"],
             fill_id=row["fill_id"],
             symbol=row["symbol"],
+            strategy_horizon=(
+                coerce_strategy_horizon(
+                    row["strategy_horizon"]
+                )
+            ),
+            strategy_version=(
+                normalise_strategy_version(
+                    row["strategy_version"]
+                )
+            ),
             quote_currency=(
                 row["quote_currency"]
             ),
@@ -432,6 +469,16 @@ class PaperRepository:
                 row["portfolio_currency"]
             ),
             strategy=row["strategy"],
+            strategy_horizon=(
+                coerce_strategy_horizon(
+                    row["strategy_horizon"]
+                )
+            ),
+            strategy_version=(
+                normalise_strategy_version(
+                    row["strategy_version"]
+                )
+            ),
             market_regime=row["market_regime"],
             entry_time=_datetime(
                 row["entry_time"]
@@ -636,6 +683,10 @@ class PaperRepository:
         signal_id: str | None = None,
         created_at: datetime | None = None,
         quote_currency: str | None = None,
+        strategy_horizon: (
+            StrategyHorizon | str | None
+        ) = None,
+        strategy_version: str | None = None,
     ) -> PersistedSignal:
         at = created_at or _utc_now()
 
@@ -695,6 +746,8 @@ class PaperRepository:
                     generated_at,
                     expires_at,
                     strategy,
+                    strategy_horizon,
+                    strategy_version,
                     recommendation,
                     market_regime,
                     score,
@@ -712,7 +765,7 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -724,6 +777,12 @@ class PaperRepository:
                     _timestamp(generated_at),
                     _timestamp(expires_at),
                     strategy.strip(),
+                    strategy_horizon_value(
+                        strategy_horizon
+                    ),
+                    normalise_strategy_version(
+                        strategy_version
+                    ),
                     recommendation.strip().upper(),
                     market_regime.strip().upper(),
                     float(score),
@@ -815,6 +874,10 @@ class PaperRepository:
             QuoteToPortfolioFXRate | None
         ) = None,
         order_id: str | None = None,
+        strategy_horizon: (
+            StrategyHorizon | str | None
+        ) = None,
+        strategy_version: str | None = None,
     ) -> tuple[PaperOrderRecord, bool]:
         existing = self._read_one(
             """
@@ -912,6 +975,8 @@ class PaperRepository:
                     symbol,
                     quote_currency,
                     portfolio_currency,
+                    strategy_horizon,
+                    strategy_version,
                     side,
                     quantity,
                     entry_low,
@@ -932,7 +997,7 @@ class PaperRepository:
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    NULL, NULL
+                    ?, ?, NULL, NULL
                 )
                 """,
                 (
@@ -943,6 +1008,12 @@ class PaperRepository:
                     symbol.upper(),
                     quote_currency,
                     portfolio_currency,
+                    strategy_horizon_value(
+                        strategy_horizon
+                    ),
+                    normalise_strategy_version(
+                        strategy_version
+                    ),
                     side.value,
                     str(quantity_value),
                     str(money(entry_low)),
@@ -1398,6 +1469,8 @@ class PaperRepository:
                     symbol,
                     quote_currency,
                     portfolio_currency,
+                    strategy_horizon,
+                    strategy_version,
                     side,
                     quantity,
                     entry_price,
@@ -1414,7 +1487,7 @@ class PaperRepository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
                 )
                 """,
                 (
@@ -1425,6 +1498,12 @@ class PaperRepository:
                     order.symbol,
                     quote_currency,
                     portfolio_currency,
+                    strategy_horizon_value(
+                        order.strategy_horizon
+                    ),
+                    normalise_strategy_version(
+                        order.strategy_version
+                    ),
                     order.side.value,
                     str(order.quantity),
                     str(price),
@@ -1956,6 +2035,8 @@ class PaperRepository:
                     quote_currency,
                     portfolio_currency,
                     strategy,
+                    strategy_horizon,
+                    strategy_version,
                     market_regime,
                     entry_time,
                     entry_price,
@@ -1979,7 +2060,7 @@ class PaperRepository:
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -1993,6 +2074,12 @@ class PaperRepository:
                     trade_quote_currency,
                     trade_portfolio_currency,
                     signal.strategy,
+                    strategy_horizon_value(
+                        position.strategy_horizon
+                    ),
+                    normalise_strategy_version(
+                        position.strategy_version
+                    ),
                     signal.market_regime,
                     _timestamp(position.opened_at),
                     str(position.entry_price),
