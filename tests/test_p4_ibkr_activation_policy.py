@@ -23,7 +23,7 @@ def test_p4_2_policy_pins_exact_ibkr_profile() -> None:
 
     assert (
         policy["policy_version"]
-        == "p4.2-3"
+        == "p4.3-1"
     )
 
     cost_model = policy["cost_model"]

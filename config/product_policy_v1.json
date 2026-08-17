@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "policy_version": "p4.2-3",
+  "policy_version": "p4.3-1",
   "product": {
     "name": "BSAVCI Smart Investment Bot",
     "autonomy": "always_on",
@@ -38,7 +38,46 @@
     "prohibited_horizons": [
       "intraday",
       "day_trading"
-    ]
+    ],
+    "horizon_policy_version": "horizon-policy-v1",
+    "horizon_policies": {
+      "swing": {
+        "strategy_version": "p4.3-swing-v1",
+        "market_data_period": "2y",
+        "market_data_interval": "1d",
+        "signal_validity_sessions": 5,
+        "maximum_holding_sessions": 20,
+        "confirmation_policy": "STRATEGY_CONFIRMATION",
+        "entry_timing": "NEXT_ELIGIBLE_SESSION",
+        "intraday_entries_allowed": false,
+        "exit_policies": [
+          "STOP_LOSS",
+          "TARGET",
+          "TIME_EXIT",
+          "SIGNAL_REVERSAL",
+          "REGIME_INVALIDATION",
+          "PORTFOLIO_RISK"
+        ]
+      },
+      "medium_term": {
+        "strategy_version": "p4.3-medium-term-v1",
+        "market_data_period": "5y",
+        "market_data_interval": "1wk",
+        "signal_validity_sessions": 10,
+        "maximum_holding_sessions": 65,
+        "confirmation_policy": "WEEKLY_CLOSE_PLUS_STRATEGY_CONFIRMATION",
+        "entry_timing": "NEXT_ELIGIBLE_SESSION",
+        "intraday_entries_allowed": false,
+        "exit_policies": [
+          "STOP_LOSS",
+          "TARGET",
+          "TIME_EXIT",
+          "SIGNAL_REVERSAL",
+          "REGIME_INVALIDATION",
+          "PORTFOLIO_RISK"
+        ]
+      }
+    }
   },
   "instruments": {
     "leverage": false,

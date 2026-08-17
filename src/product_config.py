@@ -172,7 +172,7 @@ def validate_product_policy(
     _expect(
         policy,
         "policy_version",
-        "p4.2-3",
+        "p4.3-1",
         "$",
     )
 
@@ -326,6 +326,8 @@ def validate_product_policy(
         {
             "enabled_horizons",
             "prohibited_horizons",
+            "horizon_policy_version",
+            "horizon_policies",
         },
         "$.strategies",
     )
@@ -349,6 +351,132 @@ def validate_product_policy(
         ],
         "$.strategies",
     )
+
+    _expect(
+        strategies,
+        "horizon_policy_version",
+        "horizon-policy-v1",
+        "$.strategies",
+    )
+
+    horizon_policies = _mapping(
+        strategies.get(
+            "horizon_policies"
+        ),
+        "$.strategies.horizon_policies",
+    )
+
+    _expect_keys(
+        horizon_policies,
+        {
+            "swing",
+            "medium_term",
+        },
+        "$.strategies.horizon_policies",
+    )
+
+    expected_horizon_policies = {
+        "swing": {
+            "strategy_version":
+            "p4.3-swing-v1",
+            "market_data_period":
+            "2y",
+            "market_data_interval":
+            "1d",
+            "signal_validity_sessions":
+            5,
+            "maximum_holding_sessions":
+            20,
+            "confirmation_policy":
+            "STRATEGY_CONFIRMATION",
+            "entry_timing":
+            "NEXT_ELIGIBLE_SESSION",
+            "intraday_entries_allowed":
+            False,
+            "exit_policies": [
+                "STOP_LOSS",
+                "TARGET",
+                "TIME_EXIT",
+                "SIGNAL_REVERSAL",
+                "REGIME_INVALIDATION",
+                "PORTFOLIO_RISK",
+            ],
+        },
+        "medium_term": {
+            "strategy_version":
+            "p4.3-medium-term-v1",
+            "market_data_period":
+            "5y",
+            "market_data_interval":
+            "1wk",
+            "signal_validity_sessions":
+            10,
+            "maximum_holding_sessions":
+            65,
+            "confirmation_policy":
+            (
+                "WEEKLY_CLOSE_PLUS_"
+                "STRATEGY_CONFIRMATION"
+            ),
+            "entry_timing":
+            "NEXT_ELIGIBLE_SESSION",
+            "intraday_entries_allowed":
+            False,
+            "exit_policies": [
+                "STOP_LOSS",
+                "TARGET",
+                "TIME_EXIT",
+                "SIGNAL_REVERSAL",
+                "REGIME_INVALIDATION",
+                "PORTFOLIO_RISK",
+            ],
+        },
+    }
+
+    expected_policy_keys = {
+        "strategy_version",
+        "market_data_period",
+        "market_data_interval",
+        "signal_validity_sessions",
+        "maximum_holding_sessions",
+        "confirmation_policy",
+        "entry_timing",
+        "intraday_entries_allowed",
+        "exit_policies",
+    }
+
+    for (
+        horizon_name,
+        expected_policy,
+    ) in expected_horizon_policies.items():
+        horizon_path = (
+            "$.strategies.horizon_policies."
+            f"{horizon_name}"
+        )
+
+        horizon_policy = _mapping(
+            horizon_policies.get(
+                horizon_name
+            ),
+            horizon_path,
+        )
+
+        _expect_keys(
+            horizon_policy,
+            expected_policy_keys,
+            horizon_path,
+        )
+
+        for (
+            key,
+            expected_value,
+        ) in expected_policy.items():
+            _expect(
+                horizon_policy,
+                key,
+                expected_value,
+                horizon_path,
+            )
 
     instruments = _mapping(
         policy.get("instruments"),

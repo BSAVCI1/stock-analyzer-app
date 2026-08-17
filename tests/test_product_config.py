@@ -17,7 +17,7 @@ from src.product_config import (
 def test_default_policy_matches_p4_direction() -> None:
     policy = load_product_policy()
 
-    assert policy["policy_version"] == "p4.2-3"
+    assert policy["policy_version"] == "p4.3-1"
 
     assert (
         policy["portfolio"][
