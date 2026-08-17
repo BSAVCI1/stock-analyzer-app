@@ -55,7 +55,7 @@ def test_strategy_horizon_domain_has_only_approved_values(
     }
 
 
-def test_genuine_v8_database_upgrades_to_v9(
+def test_genuine_v8_database_upgrades_to_v10(
     tmp_path,
 ) -> None:
     database = (
@@ -101,7 +101,7 @@ def test_genuine_v8_database_upgrades_to_v9(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 9
+            == 10
         )
 
         for table in EXPECTED_TABLES:
@@ -121,6 +121,12 @@ def test_genuine_v8_database_upgrades_to_v9(
                 "strategy_version"
                 in columns
             )
+
+            if table == "paper_positions":
+                assert (
+                    "maximum_holding_sessions"
+                    in columns
+                )
     finally:
         connection.close()
 
@@ -233,6 +239,14 @@ def test_paper_lifecycle_preserves_strategy_provenance(
     assert (
         position.strategy_version
         == "trend-pullback-swing-v1"
+    )
+    assert (
+        position.maximum_holding_sessions
+        == 20
+    )
+    assert (
+        position.expires_at
+        == order.expires_at
     )
 
     trade = (
