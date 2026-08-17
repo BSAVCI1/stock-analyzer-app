@@ -81,6 +81,18 @@ class InternalPaperExecutionAdapter:
         PaperFillRecord,
         PaperPositionRecord,
     ]:
+        if maximum_holding_sessions is None:
+            return (
+                self.paper_service
+                .record_automatic_buy_fill(
+                    order_id=order_id,
+                    fill_price=fill_price,
+                    fees=fees,
+                    slippage=slippage,
+                    filled_at=filled_at,
+                )
+            )
+
         return (
             self.paper_service
             .record_automatic_buy_fill(
