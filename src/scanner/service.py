@@ -857,6 +857,7 @@ class AutomaticMarketScanner:
                         release_eligible=False,
                         rank_score=None,
                         rank_position=None,
+                        score_components={},
                         reasons=(
                             "Candidate signal could "
                             "not be persisted: "
