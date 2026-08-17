@@ -99,33 +99,87 @@ class ScanResultStatus(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class StockUniverse:
-    """Named, deterministic collection of symbols."""
+    """Named, deterministic collection of governed symbols."""
 
     name: str
     symbols: tuple[str, ...]
     description: str = ""
+    policy_version: str = (
+        "legacy-universe-v1"
+    )
+    included_symbols: tuple[str, ...] = ()
+    excluded_symbols: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         name = _required_text(
             "name",
             self.name,
         )
+        policy_version = _required_text(
+            "policy_version",
+            self.policy_version,
+        )
 
-        normalised: list[str] = []
-        seen: set[str] = set()
+        def normalise(
+            values: tuple[str, ...],
+        ) -> tuple[str, ...]:
+            result: list[str] = []
+            seen: set[str] = set()
 
-        for raw_symbol in self.symbols:
-            symbol = normalise_symbol(raw_symbol)
+            for raw_symbol in values:
+                symbol = normalise_symbol(
+                    raw_symbol
+                )
 
-            if symbol in seen:
-                continue
+                if symbol in seen:
+                    continue
 
-            seen.add(symbol)
-            normalised.append(symbol)
+                seen.add(symbol)
+                result.append(symbol)
+
+            return tuple(result)
+
+        normalised = normalise(
+            self.symbols
+        )
+        included = normalise(
+            self.included_symbols
+        )
+        excluded = normalise(
+            self.excluded_symbols
+        )
 
         if not normalised:
             raise ValueError(
                 "Stock universe cannot be empty."
+            )
+
+        if len(normalised) > 100:
+            raise ValueError(
+                "Stock universe cannot exceed "
+                "100 symbols."
+            )
+
+        overlap = (
+            set(included)
+            & set(excluded)
+        )
+
+        if overlap:
+            raise ValueError(
+                "Included and excluded symbols "
+                "must be disjoint."
+            )
+
+        leaked = (
+            set(normalised)
+            & set(excluded)
+        )
+
+        if leaked:
+            raise ValueError(
+                "Excluded symbols cannot appear "
+                "in the effective universe."
             )
 
         object.__setattr__(
@@ -133,13 +187,26 @@ class StockUniverse:
             "name",
             name,
         )
-
+        object.__setattr__(
+            self,
+            "policy_version",
+            policy_version,
+        )
         object.__setattr__(
             self,
             "symbols",
-            tuple(normalised),
+            normalised,
         )
-
+        object.__setattr__(
+            self,
+            "included_symbols",
+            included,
+        )
+        object.__setattr__(
+            self,
+            "excluded_symbols",
+            excluded,
+        )
         object.__setattr__(
             self,
             "description",

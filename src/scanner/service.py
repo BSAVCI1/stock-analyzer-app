@@ -310,9 +310,25 @@ class AutomaticMarketScanner:
             .start_scan(
                 account_id=account_id,
                 universe=universe,
-                configuration=asdict(
-                    self.thresholds
-                ),
+                configuration={
+                    **asdict(
+                        self.thresholds
+                    ),
+                    "universe_policy": {
+                        "policy_version": (
+                            universe.policy_version
+                        ),
+                        "included_symbols": list(
+                            universe.included_symbols
+                        ),
+                        "excluded_symbols": list(
+                            universe.excluded_symbols
+                        ),
+                        "effective_count": len(
+                            universe.symbols
+                        ),
+                    },
+                },
                 app_version=(
                     self.app_version
                 ),

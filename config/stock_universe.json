@@ -1,8 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "policy_version": "p4.4-universe-v1",
   "name": "personal_us_large_cap_v1",
-  "description": "Editable personal universe of liquid US-listed equities.",
-  "symbols": [
+  "description": "Versioned personal universe of liquid US-listed equities with deterministic user inclusion and exclusion controls.",
+  "base_symbols": [
     "AAPL",
     "MSFT",
     "NVDA",
@@ -33,5 +34,7 @@
     "BA",
     "KO",
     "PEP"
-  ]
+  ],
+  "include_symbols": [],
+  "exclude_symbols": []
 }

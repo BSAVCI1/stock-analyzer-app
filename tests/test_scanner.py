@@ -7,10 +7,12 @@ from datetime import (
     timezone,
 )
 from decimal import Decimal
+import json
 import sqlite3
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.analysis import (
     PaperOrder,
@@ -243,6 +245,93 @@ def test_configured_universe_loads() -> None:
     assert "AAPL" in universe.symbols
     assert "MSFT" in universe.symbols
     assert len(universe.symbols) >= 20
+    assert (
+        universe.policy_version
+        == "p4.4-universe-v1"
+    )
+    assert universe.included_symbols == ()
+    assert universe.excluded_symbols == ()
+
+
+def test_versioned_universe_applies_curated_lists(
+    tmp_path,
+) -> None:
+    path = tmp_path / "universe.json"
+
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "policy_version":
+                "p4.4-universe-v1",
+                "name": "fixture",
+                "description": "fixture",
+                "base_symbols": [
+                    "AAPL",
+                    "MSFT",
+                ],
+                "include_symbols": [
+                    "SPY",
+                    "QQQ",
+                ],
+                "exclude_symbols": [
+                    "MSFT",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    universe = load_stock_universe(
+        path
+    )
+
+    assert universe.symbols == (
+        "AAPL",
+        "SPY",
+        "QQQ",
+    )
+    assert universe.included_symbols == (
+        "SPY",
+        "QQQ",
+    )
+    assert universe.excluded_symbols == (
+        "MSFT",
+    )
+
+
+def test_versioned_universe_rejects_list_conflict(
+    tmp_path,
+) -> None:
+    path = tmp_path / "universe.json"
+
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "policy_version":
+                "p4.4-universe-v1",
+                "name": "fixture",
+                "description": "fixture",
+                "base_symbols": [
+                    "AAPL",
+                ],
+                "include_symbols": [
+                    "SPY",
+                ],
+                "exclude_symbols": [
+                    "SPY",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be disjoint",
+    ):
+        load_stock_universe(path)
 
 
 def test_schema_migrates_to_latest_version(
@@ -542,6 +631,13 @@ def test_candidates_are_ranked_and_signals_persisted(
             ),
         ),
         started_at=T0,
+    )
+
+    assert (
+        report.scan.configuration[
+            "universe_policy"
+        ]["policy_version"]
+        == "legacy-universe-v1"
     )
 
     assert [
