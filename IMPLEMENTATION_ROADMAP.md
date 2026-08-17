@@ -794,7 +794,14 @@ Treat the two horizons as independent products with separate evidence.
 - Each horizon has independent fixtures
 - No intraday/day-trading strategy can create an order
 
-**Status:** Planned
+**Evidence**
+- Strategy-horizon provenance checkpoint: commit `039e860`
+- Versioned horizon-policy checkpoint: commit `cba94a7`
+- Independent runtime holding clocks: commit `32e1abf`
+- Independent acceptance and performance cohorts: PR #2
+- Full regression evidence: 503 tests passed in Automated tests #79
+
+**Status:** Complete
 **Dependencies:** P4.0
 **Relative effort:** L
 
