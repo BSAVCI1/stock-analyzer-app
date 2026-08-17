@@ -17,6 +17,8 @@ from src.backtest import (
     CandidateEvaluation,
     EquityPoint,
     FoldValidationResult,
+    HorizonAcceptanceEvidence,
+    IndependentHorizonAcceptanceReport,
     ParameterStabilityEntry,
     ParameterStabilityReport,
     PerformanceReport,
@@ -27,7 +29,9 @@ from src.backtest import (
     WalkForwardFold,
     WalkForwardValidationReport,
     build_strategy_acceptance_report,
+    build_independent_horizon_acceptance_report,
 )
+from src.strategy import StrategyHorizon
 
 
 T0 = datetime(
@@ -592,3 +596,110 @@ def test_invalid_acceptance_thresholds_are_rejected(
         StrategyAcceptanceThresholds(
             **kwargs
         )
+
+def test_horizon_acceptance_decisions_are_independent() -> None:
+    swing = build_strategy_acceptance_report(
+        "trend-pullback-swing",
+        instrument_performance={
+            "AAPL": make_performance(),
+        },
+        regime_performance={
+            "BULLISH": make_performance(),
+        },
+        validation_report=(
+            make_validation_report()
+        ),
+        promotion_decision=(
+            accepted_promotion()
+        ),
+        thresholds=thresholds(),
+    )
+
+    medium = build_strategy_acceptance_report(
+        "trend-pullback-medium",
+        instrument_performance={
+            "AAPL": make_performance(
+                trade_count=5,
+            ),
+        },
+        regime_performance={
+            "BULLISH": make_performance(),
+        },
+        validation_report=(
+            make_validation_report()
+        ),
+        promotion_decision=(
+            accepted_promotion()
+        ),
+        thresholds=thresholds(),
+    )
+
+    report = (
+        build_independent_horizon_acceptance_report(
+            swing_report=swing,
+            swing_strategy_version=(
+                "p4.3-swing-v1"
+            ),
+            medium_term_report=medium,
+            medium_term_strategy_version=(
+                "p4.3-medium-term-v1"
+            ),
+        )
+    )
+
+    assert report.accepted_horizons == (
+        StrategyHorizon.SWING,
+    )
+    assert report.rejected_horizons == (
+        StrategyHorizon.MEDIUM_TERM,
+    )
+    assert (
+        report.for_horizon(
+            StrategyHorizon.SWING
+        ).strategy_version
+        == "p4.3-swing-v1"
+    )
+    assert (
+        report.for_horizon(
+            StrategyHorizon.MEDIUM_TERM
+        ).accepted
+        is False
+    )
+
+
+def test_independent_evidence_rejects_duplicate_horizons(
+) -> None:
+    accepted = build_strategy_acceptance_report(
+        "trend-pullback",
+        instrument_performance={
+            "AAPL": make_performance(),
+        },
+        regime_performance={
+            "BULLISH": make_performance(),
+        },
+        validation_report=(
+            make_validation_report()
+        ),
+        promotion_decision=(
+            accepted_promotion()
+        ),
+        thresholds=thresholds(),
+    )
+
+    duplicate = HorizonAcceptanceEvidence(
+        horizon=StrategyHorizon.SWING,
+        strategy_version="p4.3-swing-v1",
+        acceptance_report=accepted,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="exactly one SWING",
+    ):
+        IndependentHorizonAcceptanceReport(
+            evidence=(
+                duplicate,
+                duplicate,
+            )
+        )
+
