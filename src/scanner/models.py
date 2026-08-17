@@ -86,6 +86,14 @@ class ScanStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class WatchlistState(str, Enum):
+    STALE = "STALE"
+    REJECT = "REJECT"
+    WATCH = "WATCH"
+    PREPARE = "PREPARE"
+    ACTIONABLE = "ACTIONABLE"
+
+
 class ScanResultStatus(str, Enum):
     DATA_REJECTED = "DATA_REJECTED"
     ANALYSIS_REJECTED = "ANALYSIS_REJECTED"
@@ -518,6 +526,90 @@ class ScanResult:
     )
     strategy_horizon: StrategyHorizon | None = None
     strategy_version: str | None = None
+    watchlist_state: WatchlistState | None = None
+    score_components: Mapping[
+        str,
+        float,
+    ] = field(
+        default_factory=dict
+    )
+
+    def __post_init__(self) -> None:
+        state = self.watchlist_state
+
+        if (
+            state is not None
+            and not isinstance(
+                state,
+                WatchlistState,
+            )
+        ):
+            try:
+                state = WatchlistState(
+                    state
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    "Unsupported watchlist_state."
+                ) from exc
+
+        components = {
+            str(key): _finite_number(
+                f"score_components.{key}",
+                value,
+            )
+            for key, value
+            in self.score_components.items()
+        }
+
+        if components:
+            expected = {
+                "analysis_score",
+                "confidence",
+                "reward_to_risk",
+                "regime_confidence",
+            }
+
+            if set(components) != expected:
+                raise ValueError(
+                    "score_components contains "
+                    "unexpected or missing keys."
+                )
+
+            if any(
+                value < 0
+                for value in components.values()
+            ):
+                raise ValueError(
+                    "score_components cannot "
+                    "be negative."
+                )
+
+            if self.rank_score is None:
+                raise ValueError(
+                    "score_components requires "
+                    "rank_score."
+                )
+
+            if abs(
+                sum(components.values())
+                - self.rank_score
+            ) > 0.000001:
+                raise ValueError(
+                    "score_components must sum "
+                    "to rank_score."
+                )
+
+        object.__setattr__(
+            self,
+            "watchlist_state",
+            state,
+        )
+        object.__setattr__(
+            self,
+            "score_components",
+            components,
+        )
 
 
 @dataclass(frozen=True, slots=True)

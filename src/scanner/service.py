@@ -32,9 +32,10 @@ from .models import (
     ScanResult,
     ScanResultStatus,
     StockUniverse,
+    WatchlistState,
 )
 from .ranking import (
-    calculate_candidate_rank_score,
+    calculate_candidate_rank,
 )
 from .repository import ScannerRepository
 
@@ -170,8 +171,8 @@ class AutomaticMarketScanner:
 
         self.app_version = app_version
 
-    @staticmethod
     def _result_from_metrics(
+        self,
         *,
         scan_id: str,
         account_id: str,
@@ -183,11 +184,54 @@ class AutomaticMarketScanner:
         release_eligible: bool,
         rank_score: float | None,
         reasons: tuple[str, ...],
+        score_components: (
+            dict[str, float] | None
+        ) = None,
     ) -> ScanResult:
         order = (
             outcome.order
             if outcome is not None
             else None
+        )
+
+        if (
+            status
+            is ScanResultStatus.ORDER_CANDIDATE
+        ):
+            watchlist_state = (
+                WatchlistState.ACTIONABLE
+            )
+        elif (
+            status
+            is ScanResultStatus.RELEASE_INELIGIBLE
+        ):
+            watchlist_state = (
+                WatchlistState.PREPARE
+            )
+        elif (
+            status is ScanResultStatus.WATCH
+        ):
+            watchlist_state = (
+                WatchlistState.WATCH
+            )
+        elif (
+            status
+            is ScanResultStatus.DATA_REJECTED
+            and metrics is not None
+            and metrics.staleness_days
+            > self.thresholds
+            .maximum_staleness_days
+        ):
+            watchlist_state = (
+                WatchlistState.STALE
+            )
+        else:
+            watchlist_state = (
+                WatchlistState.REJECT
+            )
+
+        components = dict(
+            score_components or {}
         )
 
         return ScanResult(
@@ -264,8 +308,14 @@ class AutomaticMarketScanner:
                 if outcome is not None
                 else ()
             ),
+            watchlist_state=watchlist_state,
+            score_components=components,
             metadata=(
                 {
+                    "watchlist_state":
+                    watchlist_state.value,
+                    "rank_score_components":
+                    components,
                     "quote_type":
                     metrics.quote_type,
                     "currency":
@@ -288,7 +338,12 @@ class AutomaticMarketScanner:
                     ),
                 }
                 if metrics is not None
-                else {}
+                else {
+                    "watchlist_state":
+                    watchlist_state.value,
+                    "rank_score_components":
+                    components,
+                }
             ),
         )
 
@@ -604,8 +659,8 @@ class AutomaticMarketScanner:
 
                     continue
 
-                rank_score = (
-                    calculate_candidate_rank_score(
+                rank = (
+                    calculate_candidate_rank(
                         outcome
                     )
                 )
@@ -625,7 +680,10 @@ class AutomaticMarketScanner:
                         metrics=metrics,
                         outcome=outcome,
                         release_eligible=True,
-                        rank_score=rank_score,
+                        rank_score=rank.total,
+                        score_components=(
+                            rank.as_dict()
+                        ),
                         reasons=tuple(
                             release_report.reasons
                         ),
@@ -799,6 +857,7 @@ class AutomaticMarketScanner:
                         release_eligible=False,
                         rank_score=None,
                         rank_position=None,
+                        score_components={},
                         reasons=(
                             "Candidate signal could "
                             "not be persisted: "
