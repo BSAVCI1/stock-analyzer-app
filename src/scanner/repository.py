@@ -33,6 +33,7 @@ from .models import (
     ScanResultStatus,
     ScanStatus,
     StockUniverse,
+    WatchlistState,
 )
 
 
@@ -157,6 +158,14 @@ class ScannerRepository:
     def _result_from_row(
         row: sqlite3.Row,
     ) -> ScanResult:
+        metadata = json.loads(
+            row["metadata_json"]
+        )
+
+        state_value = metadata.get(
+            "watchlist_state"
+        )
+
         return ScanResult(
             result_id=row["result_id"],
             scan_id=row["scan_id"],
@@ -238,8 +247,17 @@ class ScannerRepository:
                     row["evidence_json"]
                 )
             ),
-            metadata=json.loads(
-                row["metadata_json"]
+            metadata=metadata,
+            watchlist_state=(
+                WatchlistState(state_value)
+                if state_value is not None
+                else None
+            ),
+            score_components=(
+                metadata.get(
+                    "rank_score_components",
+                    {},
+                )
             ),
         )
 
@@ -370,6 +388,22 @@ class ScannerRepository:
         self,
         result: ScanResult,
     ) -> None:
+        metadata = dict(
+            result.metadata
+        )
+
+        if result.watchlist_state is not None:
+            metadata[
+                "watchlist_state"
+            ] = result.watchlist_state.value
+
+        if result.score_components:
+            metadata[
+                "rank_score_components"
+            ] = dict(
+                result.score_components
+            )
+
         with transaction(
             self.database_path
         ) as connection:
@@ -493,7 +527,7 @@ class ScannerRepository:
                         list(result.evidence)
                     ),
                     _json_dump(
-                        dict(result.metadata)
+                        metadata
                     ),
                 ),
             )
