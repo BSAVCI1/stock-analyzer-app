@@ -526,6 +526,7 @@ class PaperTradingService:
         fees: object = 0,
         slippage: object = 0,
         filled_at: datetime | None = None,
+        maximum_holding_sessions: int | None = None,
     ) -> tuple[
         PaperFillRecord,
         PaperPositionRecord,
@@ -562,6 +563,9 @@ class PaperTradingService:
                 slippage=slippage,
                 entry_fx_rate=entry_fx,
                 filled_at=at,
+                maximum_holding_sessions=(
+                    maximum_holding_sessions
+                ),
             )
         )
 
