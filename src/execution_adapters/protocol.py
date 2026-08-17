@@ -34,6 +34,7 @@ class ExecutionAdapter(Protocol):
         fees: object = 0,
         slippage: object = 0,
         filled_at: datetime | None = None,
+        maximum_holding_sessions: int | None = None,
     ) -> tuple[
         PaperFillRecord,
         PaperPositionRecord,
