@@ -17,8 +17,11 @@ from .models import (
     ScanResultStatus,
     ScanStatus,
     StockUniverse,
+    WatchlistState,
 )
 from .ranking import (
+    CandidateRankScore,
+    calculate_candidate_rank,
     calculate_candidate_rank_score,
 )
 from .repository import ScannerRepository
@@ -31,6 +34,7 @@ from .universe import (
 __all__ = [
     "DEFAULT_UNIVERSE_PATH",
     "AutomaticMarketScanner",
+    "CandidateRankScore",
     "DataQualityMetrics",
     "MarketScan",
     "MarketScanReport",
@@ -41,7 +45,9 @@ __all__ = [
     "ScanResultStatus",
     "ScanStatus",
     "StockUniverse",
+    "WatchlistState",
     "build_scanner_analysis_snapshot",
+    "calculate_candidate_rank",
     "calculate_candidate_rank_score",
     "evaluate_market_snapshot",
     "load_stock_universe",
