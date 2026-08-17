@@ -338,7 +338,12 @@ class AutomaticMarketScanner:
                     ),
                 }
                 if metrics is not None
-                else {}
+                else {
+                    "watchlist_state":
+                    watchlist_state.value,
+                    "rank_score_components":
+                    components,
+                }
             ),
         )
 
