@@ -26,6 +26,7 @@ from src.portfolio_dashboard import (
     PortfolioDashboardRepository,
     PortfolioDashboardService,
 )
+from src.strategy import StrategyHorizon
 from src.scanner import (
     ScannerRepository,
     StockUniverse,
@@ -120,6 +121,12 @@ def persist_signal(
             + timedelta(days=7)
         ),
         strategy="trend_pullback",
+        strategy_horizon=(
+            StrategyHorizon.SWING
+        ),
+        strategy_version=(
+            "p4.3-swing-v1"
+        ),
         recommendation="BUY",
         market_regime="BULLISH",
         score=82,
@@ -568,6 +575,27 @@ def test_strategy_and_threshold_breakdowns(
         )
     )
 
+    horizon = next(
+        row
+        for row in snapshot.breakdowns
+        if (
+            row.dimension
+            == "strategy_horizon"
+            and row.key == "SWING"
+        )
+    )
+
+    strategy_version = next(
+        row
+        for row in snapshot.breakdowns
+        if (
+            row.dimension
+            == "strategy_version"
+            and row.key
+            == "p4.3-swing-v1"
+        )
+    )
+
     threshold = next(
         row
         for row in snapshot.breakdowns
@@ -580,6 +608,8 @@ def test_strategy_and_threshold_breakdowns(
     )
 
     assert strategy.trade_count == 1
+    assert horizon.trade_count == 1
+    assert strategy_version.trade_count == 1
     assert threshold.trade_count == 1
 
     assert (

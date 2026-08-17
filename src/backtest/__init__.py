@@ -5,9 +5,12 @@ from .acceptance import (
     AcceptanceStatus,
     PerformanceScope,
     PerformanceSlice,
+    HorizonAcceptanceEvidence,
+    IndependentHorizonAcceptanceReport,
     StrategyAcceptanceReport,
     StrategyAcceptanceThresholds,
     build_strategy_acceptance_report,
+    build_independent_horizon_acceptance_report,
 )
 
 from .economics import (
@@ -102,9 +105,12 @@ __all__ = [
     "AcceptanceStatus",
     "PerformanceScope",
     "PerformanceSlice",
+    "HorizonAcceptanceEvidence",
+    "IndependentHorizonAcceptanceReport",
     "StrategyAcceptanceReport",
     "StrategyAcceptanceThresholds",
     "build_strategy_acceptance_report",
+    "build_independent_horizon_acceptance_report",
     "CandidateEvaluation",
     "ChronologicalSplit",
     "FoldValidationResult",

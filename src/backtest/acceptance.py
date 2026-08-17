@@ -17,6 +17,12 @@ from enum import Enum
 from math import isfinite
 from typing import Mapping, Sequence
 
+from src.strategy import (
+    StrategyHorizon,
+    coerce_strategy_horizon,
+    normalise_strategy_version,
+)
+
 from .performance import PerformanceReport
 from .validation import (
     PromotionDecision,
@@ -902,3 +908,183 @@ def build_strategy_acceptance_report(
         checks=checks_tuple,
         reasons=reasons,
     )
+
+@dataclass(frozen=True, slots=True)
+class HorizonAcceptanceEvidence:
+    """One horizon's versioned acceptance evidence."""
+
+    horizon: StrategyHorizon
+    strategy_version: str
+    acceptance_report: StrategyAcceptanceReport
+
+    def __post_init__(self) -> None:
+        horizon = coerce_strategy_horizon(
+            self.horizon
+        )
+
+        if horizon is None:
+            raise ValueError(
+                "horizon is required."
+            )
+
+        version = normalise_strategy_version(
+            self.strategy_version
+        )
+
+        if version is None:
+            raise ValueError(
+                "strategy_version is required."
+            )
+
+        if not isinstance(
+            self.acceptance_report,
+            StrategyAcceptanceReport,
+        ):
+            raise ValueError(
+                "acceptance_report must be a "
+                "StrategyAcceptanceReport."
+            )
+
+        object.__setattr__(
+            self,
+            "horizon",
+            horizon,
+        )
+        object.__setattr__(
+            self,
+            "strategy_version",
+            version,
+        )
+
+    @property
+    def accepted(self) -> bool:
+        return self.acceptance_report.accepted
+
+
+@dataclass(frozen=True, slots=True)
+class IndependentHorizonAcceptanceReport:
+    """Independent, non-aggregated P4.3 horizon decisions."""
+
+    evidence: tuple[
+        HorizonAcceptanceEvidence,
+        ...,
+    ]
+
+    def __post_init__(self) -> None:
+        evidence = tuple(self.evidence)
+
+        if not all(
+            isinstance(
+                item,
+                HorizonAcceptanceEvidence,
+            )
+            for item in evidence
+        ):
+            raise ValueError(
+                "evidence contains an invalid object."
+            )
+
+        expected = {
+            StrategyHorizon.SWING,
+            StrategyHorizon.MEDIUM_TERM,
+        }
+        actual = {
+            item.horizon
+            for item in evidence
+        }
+
+        if (
+            actual != expected
+            or len(evidence) != len(expected)
+        ):
+            raise ValueError(
+                "Independent horizon evidence must "
+                "contain exactly one SWING and one "
+                "MEDIUM_TERM decision."
+            )
+
+        ordered = tuple(
+            next(
+                item
+                for item in evidence
+                if item.horizon is horizon
+            )
+            for horizon in (
+                StrategyHorizon.SWING,
+                StrategyHorizon.MEDIUM_TERM,
+            )
+        )
+
+        object.__setattr__(
+            self,
+            "evidence",
+            ordered,
+        )
+
+    def for_horizon(
+        self,
+        horizon: StrategyHorizon | str,
+    ) -> HorizonAcceptanceEvidence:
+        requested = coerce_strategy_horizon(
+            horizon
+        )
+
+        return next(
+            item
+            for item in self.evidence
+            if item.horizon is requested
+        )
+
+    @property
+    def accepted_horizons(
+        self,
+    ) -> tuple[StrategyHorizon, ...]:
+        return tuple(
+            item.horizon
+            for item in self.evidence
+            if item.accepted
+        )
+
+    @property
+    def rejected_horizons(
+        self,
+    ) -> tuple[StrategyHorizon, ...]:
+        return tuple(
+            item.horizon
+            for item in self.evidence
+            if not item.accepted
+        )
+
+
+def build_independent_horizon_acceptance_report(
+    *,
+    swing_report: StrategyAcceptanceReport,
+    swing_strategy_version: str,
+    medium_term_report: StrategyAcceptanceReport,
+    medium_term_strategy_version: str,
+) -> IndependentHorizonAcceptanceReport:
+    """Build exact, independently decided horizon evidence."""
+
+    return IndependentHorizonAcceptanceReport(
+        evidence=(
+            HorizonAcceptanceEvidence(
+                horizon=StrategyHorizon.SWING,
+                strategy_version=(
+                    swing_strategy_version
+                ),
+                acceptance_report=swing_report,
+            ),
+            HorizonAcceptanceEvidence(
+                horizon=(
+                    StrategyHorizon.MEDIUM_TERM
+                ),
+                strategy_version=(
+                    medium_term_strategy_version
+                ),
+                acceptance_report=(
+                    medium_term_report
+                ),
+            ),
+        )
+    )
+

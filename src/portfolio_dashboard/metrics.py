@@ -467,6 +467,26 @@ def calculate_breakdowns(
         trade.strategy,
     )
 
+    horizon = _breakdown(
+        dimension="strategy_horizon",
+        trades=trades,
+        key_lookup=lambda trade: (
+            trade.strategy_horizon.value
+            if trade.strategy_horizon
+            is not None
+            else "UNKNOWN"
+        ),
+    )
+
+    strategy_version = _breakdown(
+        dimension="strategy_version",
+        trades=trades,
+        key_lookup=lambda trade: (
+            trade.strategy_version
+            or "UNKNOWN"
+        ),
+    )
+
     instrument = _breakdown(
         dimension="instrument",
         trades=trades,
@@ -495,6 +515,8 @@ def calculate_breakdowns(
 
     return (
         *strategy,
+        *horizon,
+        *strategy_version,
         *instrument,
         *regime,
         *threshold,
