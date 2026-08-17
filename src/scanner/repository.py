@@ -403,6 +403,11 @@ class ScannerRepository:
             ] = dict(
                 result.score_components
             )
+        else:
+            metadata.pop(
+                "rank_score_components",
+                None,
+            )
 
         with transaction(
             self.database_path
