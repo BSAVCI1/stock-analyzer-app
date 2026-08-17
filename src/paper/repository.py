@@ -448,6 +448,17 @@ class PaperRepository:
             closed_at=_datetime(
                 row["closed_at"]
             ),
+            maximum_holding_sessions=(
+                int(
+                    row[
+                        "maximum_holding_sessions"
+                    ]
+                )
+                if row[
+                    "maximum_holding_sessions"
+                ] is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -1226,12 +1237,32 @@ class PaperRepository:
         entry_fx_rate: (
             QuoteToPortfolioFXRate | None
         ) = None,
+        maximum_holding_sessions: int | None = None,
         fill_id: str | None = None,
         position_id: str | None = None,
     ) -> tuple[
         PaperFillRecord,
         PaperPositionRecord,
     ]:
+        if (
+            maximum_holding_sessions is not None
+            and (
+                isinstance(
+                    maximum_holding_sessions,
+                    bool,
+                )
+                or not isinstance(
+                    maximum_holding_sessions,
+                    int,
+                )
+                or maximum_holding_sessions < 1
+            )
+        ):
+            raise ValueError(
+                "maximum_holding_sessions must "
+                "be a positive integer or None."
+            )
+
         with transaction(
             self.database_path
         ) as connection:
@@ -1482,12 +1513,13 @@ class PaperRepository:
                     entry_cash_portfolio,
                     opened_at,
                     expires_at,
+                    maximum_holding_sessions,
                     status,
                     closed_at
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
                 )
                 """,
                 (
@@ -1533,6 +1565,7 @@ class PaperRepository:
                     str(cash_required),
                     _timestamp(filled_at),
                     _timestamp(order.expires_at),
+                    maximum_holding_sessions,
                     PositionStatus.OPEN.value,
                 ),
             )

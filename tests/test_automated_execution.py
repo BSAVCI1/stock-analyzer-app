@@ -29,6 +29,7 @@ from src.paper import (
     PaperRepository,
     PaperTradingService,
 )
+from src.strategy import StrategyHorizon
 from src.scanner import (
     ScannerAnalysisOutcome,
     ScannerRepository,
@@ -306,6 +307,7 @@ def open_position(
     paper_service,
     account_id,
     opened_at,
+    strategy_horizon=None,
 ):
     signal_id = (
         "SIG-OPEN-"
@@ -325,6 +327,12 @@ def open_position(
             + timedelta(days=5)
         ),
         strategy="trend_pullback",
+        strategy_horizon=strategy_horizon,
+        strategy_version=(
+            "p4.3-swing-v1"
+            if strategy_horizon is not None
+            else None
+        ),
         recommendation="BUY",
         market_regime="BULLISH",
         score=80,
@@ -420,7 +428,7 @@ def test_schema_version_three(
     finally:
         connection.close()
 
-    assert version == 9
+    assert version == 10
 
     assert {
         "paper_execution_runs",
@@ -1503,3 +1511,97 @@ def test_ibkr_lifecycle_tiered_fails_closed_when_incomplete(
             trade_value_quote="100",
             side="BUY",
         )
+
+def test_horizon_position_uses_independent_holding_sessions(
+    tmp_path,
+) -> None:
+    opened_at = T0 + timedelta(days=1)
+
+    history = make_history(
+        [
+            (
+                opened_at
+                + timedelta(days=session),
+                100,
+                101,
+                99,
+                100,
+            )
+            for session in range(0, 21)
+        ]
+    )
+
+    (
+        paper_repository,
+        paper_service,
+        _,
+        _,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": history,
+        },
+    )
+
+    position = open_position(
+        paper_service=paper_service,
+        account_id=account.account_id,
+        opened_at=opened_at,
+        strategy_horizon=(
+            StrategyHorizon.SWING
+        ),
+    )
+
+    assert (
+        position.maximum_holding_sessions
+        == 20
+    )
+
+    before_limit = (
+        opened_at + timedelta(days=19)
+    )
+
+    first = engine.run(
+        account_id=account.account_id,
+        run_key="holding-session-19",
+        run_at=before_limit,
+    )
+
+    assert first.run.closed_positions == 0
+    assert (
+        len(
+            paper_repository
+            .list_open_positions(
+                account.account_id
+            )
+        )
+        == 1
+    )
+
+    at_limit = (
+        opened_at + timedelta(days=20)
+    )
+
+    second = engine.run(
+        account_id=account.account_id,
+        run_key="holding-session-20",
+        run_at=at_limit,
+    )
+
+    assert second.run.closed_positions == 1
+
+    trade = (
+        paper_repository
+        .list_closed_trades(
+            account.account_id
+        )[0]
+    )
+
+    assert (
+        trade.exit_reason
+        is PaperExitReason.TIME_EXIT
+    )
+    assert trade.exit_time == at_limit
+

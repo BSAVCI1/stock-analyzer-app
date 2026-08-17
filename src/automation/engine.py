@@ -922,8 +922,15 @@ class AutomatedPaperExecutionEngine:
                     )
                 ]
 
-                for timestamp, row in (
-                    eligible.iterrows()
+                for (
+                    holding_session,
+                    (
+                        timestamp,
+                        row,
+                    ),
+                ) in enumerate(
+                    eligible.iterrows(),
+                    start=1,
                 ):
                     bar_at = (
                         timestamp.to_pydatetime()
@@ -993,10 +1000,29 @@ class AutomatedPaperExecutionEngine:
                                 .TARGET
                             )
 
-                    if (
-                        raw_exit is None
+                    holding_limit_reached = (
+                        position
+                        .maximum_holding_sessions
+                        is not None
+                        and holding_session
+                        >= position
+                        .maximum_holding_sessions
+                    )
+
+                    legacy_expiry_reached = (
+                        position
+                        .maximum_holding_sessions
+                        is None
                         and bar_at
                         >= position.expires_at
+                    )
+
+                    if (
+                        raw_exit is None
+                        and (
+                            holding_limit_reached
+                            or legacy_expiry_reached
+                        )
                     ):
                         raw_exit = open_price
                         reason = (

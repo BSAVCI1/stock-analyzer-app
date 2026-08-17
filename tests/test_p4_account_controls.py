@@ -92,7 +92,7 @@ def test_schema_version_six_adds_sizing_controls(
     finally:
         connection.close()
 
-    assert version == 9
+    assert version == 10
 
     assert EXPECTED_COLUMNS.issubset(
         columns
@@ -219,7 +219,7 @@ def test_version_five_control_upgrades_as_legacy(
     finally:
         connection.close()
 
-    assert version == 9
+    assert version == 10
 
 
 def test_fixed_notional_control_round_trip(

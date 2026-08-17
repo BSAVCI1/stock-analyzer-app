@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 _SCHEMA_V1 = """
@@ -821,6 +821,19 @@ ALTER TABLE paper_closed_trades
 PRAGMA user_version = 9;
 """
 
+
+_SCHEMA_V10 = """
+ALTER TABLE paper_positions
+    ADD COLUMN maximum_holding_sessions INTEGER
+        CHECK (
+            maximum_holding_sessions IS NULL
+            OR maximum_holding_sessions > 0
+        );
+
+PRAGMA user_version = 10;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -948,6 +961,12 @@ def apply_migrations(
             _SCHEMA_V9
         )
         current_version = 9
+
+    if current_version < 10:
+        connection.executescript(
+            _SCHEMA_V10
+        )
+        current_version = 10
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(
