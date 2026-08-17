@@ -955,6 +955,8 @@ def test_candidate_without_valid_currency_is_not_persisted(
     )
 
     assert result.signal_id is None
+    assert result.rank_score is None
+    assert result.score_components == {}
 
     assert (
         "valid three-letter quote currency"
