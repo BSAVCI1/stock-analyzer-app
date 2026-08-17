@@ -282,6 +282,23 @@ class PaperPositionRecord:
     closed_at: datetime | None
     strategy_horizon: StrategyHorizon | None = None
     strategy_version: str | None = None
+    maximum_holding_sessions: int | None = None
+
+    def __post_init__(self) -> None:
+        value = self.maximum_holding_sessions
+
+        if (
+            value is not None
+            and (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 1
+            )
+        ):
+            raise ValueError(
+                "maximum_holding_sessions must "
+                "be a positive integer or None."
+            )
 
 
 @dataclass(frozen=True, slots=True)
