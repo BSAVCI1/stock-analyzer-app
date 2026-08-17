@@ -32,6 +32,7 @@ from src.scanner import (
     ScanResultStatus,
     ScanStatus,
     StockUniverse,
+    WatchlistState,
     load_stock_universe,
     run_deterministic_scanner_analysis,
 )
@@ -424,7 +425,74 @@ def test_insufficient_history_is_rejected(
     )
 
     assert result.signal_id is None
+    assert (
+        result.watchlist_state
+        is WatchlistState.REJECT
+    )
     assert "at least 200" in result.reasons[0]
+
+
+
+def test_stale_history_has_explicit_stale_state(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=(
+            scanner_repository
+        ),
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("Approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=(
+            lambda symbol:
+            make_snapshot(
+                symbol,
+                end="2026-06-01",
+            )
+        ),
+        analysis_runner=make_outcome,
+    )
+
+    report = scanner.run_scan(
+        account_id=account.account_id,
+        universe=StockUniverse(
+            name="stale",
+            symbols=("AAPL",),
+        ),
+        started_at=T0,
+    )
+
+    result = report.results[0]
+
+    assert (
+        result.status
+        is ScanResultStatus.DATA_REJECTED
+    )
+    assert (
+        result.watchlist_state
+        is WatchlistState.STALE
+    )
+    assert (
+        result.metadata[
+            "watchlist_state"
+        ]
+        == "STALE"
+    )
 
 
 def test_watch_result_is_persisted_without_signal(
@@ -478,6 +546,10 @@ def test_watch_result_is_persisted_without_signal(
         is ScanResultStatus.WATCH
     )
 
+    assert (
+        result.watchlist_state
+        is WatchlistState.WATCH
+    )
     assert result.signal_id is None
 
 
@@ -524,6 +596,10 @@ def test_missing_release_report_is_ineligible(
     )
 
     assert result.release_eligible is False
+    assert (
+        result.watchlist_state
+        is WatchlistState.PREPARE
+    )
     assert result.signal_id is None
 
 
@@ -655,6 +731,30 @@ def test_candidates_are_ranked_and_signals_persisted(
 
     assert all(
         result.signal_id is not None
+        for result in report.candidates
+    )
+    assert all(
+        result.watchlist_state
+        is WatchlistState.ACTIONABLE
+        for result in report.candidates
+    )
+    assert all(
+        set(result.score_components)
+        == {
+            "analysis_score",
+            "confidence",
+            "reward_to_risk",
+            "regime_confidence",
+        }
+        for result in report.candidates
+    )
+    assert all(
+        sum(
+            result.score_components.values()
+        )
+        == pytest.approx(
+            result.rank_score
+        )
         for result in report.candidates
     )
 
