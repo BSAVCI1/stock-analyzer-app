@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from src.strategy import StrategyHorizon
+from src.product_config import load_product_policy
+from src.strategy import (
+    StrategyHorizon,
+    horizon_policies_from_product_policy,
+)
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -541,6 +545,25 @@ class PaperTradingService:
             order.account_id
         )
 
+        holding_sessions = (
+            maximum_holding_sessions
+        )
+
+        if (
+            holding_sessions is None
+            and order.strategy_horizon is not None
+        ):
+            policies = (
+                horizon_policies_from_product_policy(
+                    load_product_policy()
+                )
+            )
+            holding_sessions = (
+                policies[
+                    order.strategy_horizon
+                ].maximum_holding_sessions
+            )
+
         quote_currency = (
             order.quote_currency
             or account.base_currency
@@ -564,7 +587,7 @@ class PaperTradingService:
                 entry_fx_rate=entry_fx,
                 filled_at=at,
                 maximum_holding_sessions=(
-                    maximum_holding_sessions
+                    holding_sessions
                 ),
             )
         )
