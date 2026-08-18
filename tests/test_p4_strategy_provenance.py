@@ -101,8 +101,24 @@ def test_genuine_v8_database_upgrades_to_v10(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 10
+            == 11
         )
+
+        tables = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                """
+            )
+        }
+
+        assert {
+            "paper_orchestration_invocations",
+            "paper_orchestration_checkpoints",
+        }.issubset(tables)
 
         for table in EXPECTED_TABLES:
             columns = {

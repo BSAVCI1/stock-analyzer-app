@@ -47,6 +47,12 @@ from .calendar import ExchangeCalendar
 from .dispatcher import (
     AutonomousInvocationDispatcher,
 )
+from .orchestration_repository import (
+    OrchestrationRepository,
+)
+from .persistent_orchestrator import (
+    PersistentOrchestrationService,
+)
 from .repository import JobRepository
 from .service import ScheduledJobService
 
@@ -82,6 +88,9 @@ class PaperJobRuntime:
     scanner_repository: ScannerRepository
     automation_repository: AutomationRepository
     job_repository: JobRepository
+    orchestration_repository: (
+        OrchestrationRepository
+    )
 
     paper_service: PaperTradingService
     execution_adapter: ExecutionAdapter
@@ -95,6 +104,9 @@ class PaperJobRuntime:
     job_service: ScheduledJobService
     invocation_dispatcher: (
         AutonomousInvocationDispatcher
+    )
+    orchestration_service: (
+        PersistentOrchestrationService
     )
 
     notification_channels: tuple[
@@ -326,6 +338,11 @@ def build_runtime(
     job_repository = JobRepository(
         settings.database_path
     )
+    orchestration_repository = (
+        OrchestrationRepository(
+            settings.database_path
+        )
+    )
 
     fx_rate_provider = (
         YahooFXRateProvider()
@@ -481,6 +498,18 @@ def build_runtime(
         )
     )
 
+    orchestration_service = (
+        PersistentOrchestrationService(
+            account_id=settings.account_id,
+            repository=(
+                orchestration_repository
+            ),
+            executor=(
+                invocation_dispatcher
+            ),
+        )
+    )
+
     return PaperJobRuntime(
         settings=settings,
         paper_repository=paper_repository,
@@ -491,6 +520,9 @@ def build_runtime(
             automation_repository
         ),
         job_repository=job_repository,
+        orchestration_repository=(
+            orchestration_repository
+        ),
         paper_service=paper_service,
         execution_adapter=execution_adapter,
         scanner=scanner,
@@ -503,6 +535,9 @@ def build_runtime(
         job_service=job_service,
         invocation_dispatcher=(
             invocation_dispatcher
+        ),
+        orchestration_service=(
+            orchestration_service
         ),
         notification_channels=(
             notification_channels
