@@ -1198,3 +1198,254 @@ Assess whether the bot improves human investment decisions.
 
 **Deliverables**
 - Clarity, timing and confidence feedback
+- Copied versus skipped outcome analysis
+- Behavioural and operational observations
+
+**Gate**
+- No conclusion relies only on copied winners
+- Skipped ideas remain part of the analysis
+
+**Status:** Planned
+
+### P6.5 — P6 release decision
+
+Decide whether to continue as decision support, remain paper-only, or begin a separate P7 feasibility review.
+
+**Deliverables**
+- Consolidated evidence report
+- Security and risk recommendation
+- Explicit go/no-go owner decision
+
+**Gate**
+- No automatic broker integration is implied by good performance
+- A separate approval is mandatory for P7
+
+**Status:** Planned
+
+## P7 — Optional future broker integration
+
+**Status:** Deferred / optional
+**Purpose:** Provide a guarded path only if paper sustainability and manual decision-support evidence justify a separate integration programme.
+**Phase exit outcome:** No P7 work begins without explicit approval. Any future live capability progresses from read-only shadow mode to manual approval and only then, potentially, to tightly capped autonomous execution.
+
+### P7.0 — Formal go/no-go and scope approval
+
+Open a separate programme rather than silently extending paper mode.
+
+**Deliverables**
+- Business owner approval
+- Security, regulatory and account-control review
+- Defined broker, account type, markets and instruments
+- Updated risk appetite
+
+**Gate**
+- Written approval exists
+- P5 and P6 evidence is accepted
+- Live budget and loss limits are explicitly approved
+
+**Status:** Deferred / optional
+
+### P7.1 — Security and broker integration foundation
+
+Build the broker boundary with least privilege and complete auditability.
+
+**Deliverables**
+- Secret vault integration
+- Read-only and trading permission separation
+- Broker sandbox/paper environment
+- Rate limits, retries and audit logs
+
+**Gate**
+- No credentials in repository or logs
+- Permission scope is independently reviewed
+- Failure defaults to no new order
+
+**Status:** Deferred / optional
+
+### P7.2 — Read-only shadow reconciliation
+
+Observe the broker without submitting orders.
+
+**Deliverables**
+- Cash, positions and orders read-only
+- Internal-versus-broker reconciliation
+- Latency and data mismatch evidence
+
+**Gate**
+- No order endpoint is enabled
+- Differences are blocking and explained
+
+**Status:** Deferred / optional
+
+### P7.3 — Manual-approval order mode
+
+Prepare orders in the platform but require explicit user approval.
+
+**Deliverables**
+- Approval interface
+- Order preview with fees and risk
+- Expiry and cancellation
+- Post-fill reconciliation
+
+**Gate**
+- No order without fresh explicit approval
+- Maximum order remains capped by approved policy
+- Duplicate protection passes
+
+**Status:** Deferred / optional
+
+### P7.4 — Guarded micro-live automation
+
+Consider limited autonomous execution only after manual-approval evidence.
+
+**Deliverables**
+- Small fixed notional
+- Maximum open exposure
+- Daily and weekly loss stops
+- Allowed instruments only
+- Immediate kill switch
+
+**Gate**
+- Live execution is disabled by default
+- Independent release gate is READY
+- Rollback and incident drills pass
+
+**Status:** Deferred / optional
+
+### P7.5 — Production operations and oversight
+
+Operate with full monitoring and governance.
+
+**Deliverables**
+- 24/7 health monitoring
+- Broker outage procedures
+- Daily reconciliation
+- Incident management
+- Periodic access review
+
+**Gate**
+- No unresolved cash or position difference
+- All live actions are fully auditable
+
+**Status:** Deferred / optional
+
+### P7.6 — P7 release and continuation gate
+
+Require periodic reapproval of live capability.
+
+**Deliverables**
+- Live regression and operational evidence
+- Security review
+- Risk and performance review
+- Renewal or shutdown decision
+
+**Gate**
+- Any material breach disables live mode
+- Continued operation requires explicit renewal
+
+**Status:** Deferred / optional
+
+## 8. Autonomous daily operating cycle
+
+1. Service startup, configuration validation and health check.
+2. Paper-account and ledger reconciliation.
+3. Exchange calendar, timezone and market-data freshness validation.
+4. Pre-session universe refresh and watchlist ranking.
+5. Periodic swing scans during configured market windows.
+6. Medium-term scan after the relevant market close.
+7. Cost, liquidity, risk and portfolio gates.
+8. Paper-order creation, simulated fill and position monitoring.
+9. Email and Telegram event fan-out.
+10. Post-close reconciliation, daily report and weekly review.
+
+The system is expected to do nothing when no candidate passes. Inactivity is a valid risk-controlled outcome.
+
+## 9. Notification design
+
+| Event | Telegram | Email |
+|---|---|---|
+| Startup / heartbeat | Concise status | Optional detailed health summary |
+| Watchlist change | High-value changes only | Ranked watchlist summary |
+| Actionable opportunity | Concise action ticket | Full rationale, costs, risk and evidence |
+| Paper order / fill / exit | Yes | Yes |
+| Daily report | Optional summary | Full report |
+| Weekly report | Optional headline | Full performance and reliability report |
+| Critical failure / reconciliation difference | Immediate | Detailed context and recovery steps |
+
+Every notification is persisted, channel-specific, deduplicated, retryable and linked to its source event. A channel being configured is not considered proof of delivery; application-level sent evidence is required.
+
+## 10. Cost and manual IBKR policy
+
+- IBKR is not connected to the application through P6.
+- Fees, minimum commissions, fractional-share rules, FX and market-data details gathered from the user’s account are stored as a versioned reference profile.
+- Each order reports estimated entry cost, exit cost, FX cost, spread/slippage allowance, planned loss and net reward-to-risk.
+- A paper trade is rejected when realistic costs make it uneconomic.
+- Manual IBKR orders remain the user’s independent decision. The app records them only when the user chooses to journal them.
+- The official strategy scorecard always uses the autonomous paper portfolio, preventing selective manual execution from biasing the bot’s evaluation.
+
+## 11. Cross-phase quality, safety and governance requirements
+
+- Determinism: identical data and configuration produce the same decision.
+- Provenance: every displayed metric and recommendation links to persisted records and configuration versions.
+- No future-data leakage in analysis, backtesting or simulated execution.
+- Idempotency for scans, jobs, orders, dispatch and recovery.
+- Safe failure: stale data, reconciliation differences, missing configuration or critical provider failures block new orders.
+- Secrets remain outside the repository and are never printed.
+- No live-order code path is enabled through P6.
+- All phase gates include automated regression and manual operational acceptance.
+- Results are reported after fees, spread, slippage and FX.
+- Strategy promotion requires independent evidence by horizon and configuration version.
+
+## 12. Key risks and mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Small EUR 100 orders are consumed by fees | False profitability | Versioned IBKR cost profile and net reward-to-risk gate |
+| Codespace stops or terminal closes | Missed scans and alerts | Always-on deployment in P4.8 |
+| Delayed or stale market data | Invalid decisions | Freshness gate and circuit breaker |
+| Overfitting | Unsustainable results | Walk-forward validation, frozen cohorts and independent strategy gates |
+| Too many alerts | User ignores important events | Severity routing, deduplication and actionability metrics |
+| Duplicate jobs or orders | Incorrect portfolio | Idempotency keys, replay tests and reconciliation |
+| Manual IBKR copying biases evaluation | Misleading results | Independent paper source of truth and separate journal |
+| Premature broker integration | Financial and security risk | P7 deferred with separate written approval |
+
+## 13. Immediate execution plan
+
+### Close P3
+1. Run one genuine market cycle after a valid session.
+2. Dispatch application notifications through the configured channels.
+3. Confirm persisted jobs, scans, execution runs and sent notifications.
+4. Run the P3 release gate using the 389-test Automated tests #45 evidence.
+5. Do not tag the phase as ready unless the gate returns READY.
+
+### Start P4
+1. Commit this P0-P7 roadmap as the governing roadmap.
+2. Preserve the existing USD 10,000 account as test history.
+3. Create the new EUR 2,000 operational paper account.
+4. Implement EUR 100 fixed-notional-with-risk-cap sizing.
+5. Capture the user’s IBKR fee and account rules as a reference profile.
+6. Separate swing and medium-term strategy configuration and evidence.
+7. Restore and application-test Telegram alongside email.
+8. Build the autonomous scheduler, deployment, recovery and kill switch.
+9. Pass the P4 release gate before beginning the P5 pilot.
+
+## 14. Decision register
+
+| Decision | Approved position |
+|---|---|
+| Roadmap scope | Always maintained end to end from P0 through P7 |
+| Product identity | Smart autonomous investment bot, not only an analysis dashboard |
+| Strategy focus | Swing and medium-term; no day trading |
+| Paper budget | EUR 2,000 |
+| Order value | EUR 100 target and hard ceiling |
+| Real broker connection | None through P6 |
+| IBKR role | Fee reference and optional manual execution |
+| Notifications | Email and Telegram |
+| Proof standard | Operational reliability, actionability and cost-adjusted sustainability |
+| Live integration | Optional deferred P7 with separate approval |
+
+## 15. Definition of programme success
+
+The programme succeeds when the bot reliably produces a small number of clear, timely and economically sensible swing and medium-term actions; manages the EUR 2,000 paper portfolio without integrity failures; reports all decisions and costs transparently; and demonstrates sustainable cost-adjusted value over a meaningful unattended evidence period.
+
+Profit alone is insufficient. The system must also prove deterministic reasoning, low operational failure, controlled drawdown, useful notifications, realistic execution assumptions and safe inactivity when no opportunity qualifies.
