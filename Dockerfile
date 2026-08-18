@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     BSAVCI_DATABASE_PATH=/app/data/paper_trading.db \
     BSAVCI_HEARTBEAT_PATH=/app/data/worker-heartbeat.json \
+    BSAVCI_BACKUP_DIRECTORY=/app/data/backups \
+    BSAVCI_REQUIRE_SECRET_FILES=true \
     BSAVCI_HEALTH_PORT=8080
 
 WORKDIR /app
