@@ -912,7 +912,12 @@ Deliver useful, non-duplicative and auditable notifications.
 - Notification failures are visible and retryable
 - Secrets never appear in logs or reports
 
-**Status:** Planned
+**Evidence**
+- Versioned severity and purpose-based channel routing with idempotent fan-out: PR #15
+- Existing persistent deduplication, attempt and retry evidence retained
+- Full regression evidence: 566 tests passed in Automated tests #126
+
+**Status:** In progress
 **Dependencies:** P4.5-P4.6
 **Relative effort:** M
 
