@@ -14,12 +14,20 @@ from .models import (
     JobType,
     ScheduledJobReport,
 )
+from .orchestration_repository import (
+    OrchestrationRepository,
+    PersistedInvocation,
+)
 from .orchestrator import (
     InvocationResult,
     InvocationStatus,
     OrchestrationCycleReport,
     due_invocations,
     run_orchestration_cycle,
+)
+from .persistent_orchestrator import (
+    PersistentCycleReport,
+    PersistentOrchestrationService,
 )
 from .repository import JobRepository
 from .schedule import (
@@ -53,7 +61,11 @@ __all__ = [
     "InvocationResult",
     "InvocationStatus",
     "OrchestrationCycleReport",
+    "OrchestrationRepository",
     "PaperJobRuntime",
+    "PersistedInvocation",
+    "PersistentCycleReport",
+    "PersistentOrchestrationService",
     "RuntimeReleaseGateReport",
     "RuntimeSettings",
     "build_runtime",
