@@ -886,7 +886,8 @@ Manage qualified swing and medium-term ideas through a realistic paper lifecycle
 **Evidence**
 - Cost-aware, fractional US long paper-order proposal contract: PR #11
 - Proposal-backed persistent order creation and capital reservation: PR #12
-- Full regression evidence: 541 tests passed in Automated tests #115
+- Deterministic managed stop, target, thesis, regime and time-exit policy: PR #13
+- Full regression evidence: 549 tests passed in Automated tests #118
 
 **Status:** In progress
 **Dependencies:** P4.1-P4.5
