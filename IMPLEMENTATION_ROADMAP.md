@@ -914,8 +914,9 @@ Deliver useful, non-duplicative and auditable notifications.
 
 **Evidence**
 - Versioned severity and purpose-based channel routing with idempotent fan-out: PR #15
+- Channel-specific action templates, payload redaction and secret-safe health checks: PR #16
 - Existing persistent deduplication, attempt and retry evidence retained
-- Full regression evidence: 566 tests passed in Automated tests #126
+- Full regression evidence: 572 tests passed in Automated tests #129
 
 **Status:** In progress
 **Dependencies:** P4.5-P4.6
