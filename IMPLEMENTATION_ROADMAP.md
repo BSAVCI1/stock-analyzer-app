@@ -947,10 +947,13 @@ Move runtime operation out of an interactive Codespace.
 - Verified online SQLite backup, checksum manifest and controlled atomic restore: PR #21
 - File-mounted secret resolution with strict deployment mode and notification integration: PR #22
 - Health-gated promotion, automatic rollback contracts, hardened Compose and restart-persistence verification: PR #23
-- Full deployment evidence: 614 tests passed; image build, live health, Compose validation and database persistence across container recreation passed in Automated tests #152
+- Portable combined health/worker runtime and harmless local-PC validation profile: PR #24
+- Full deployment evidence: 618 tests passed; image build, health, Compose, restart persistence and complete local-profile smoke validation passed in Automated tests #155
 
-**Remaining external gate**
-- Provision the approved image and persistent volume on a user-selected always-on host, then capture real restart and rollback evidence
+**Remaining runtime gates**
+- Run and accept the validation profile on the user's device
+- Wire and validate the approved real paper-cycle adapter locally
+- Provision externally only if later selected, then capture real restart and rollback evidence
 
 **Status:** In progress
 **Dependencies:** P4.5-P4.7
