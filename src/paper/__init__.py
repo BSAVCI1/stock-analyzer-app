@@ -5,6 +5,16 @@ from .database import (
     connect_database,
     transaction,
 )
+from .event_risk import (
+    EVENT_RISK_POLICY_VERSION,
+    EventEvidenceStatus,
+    EventRiskAction,
+    EventRiskContext,
+    EventRiskDecision,
+    SecurityEvent,
+    SecurityEventType,
+    evaluate_event_risk,
+)
 from .exit_policy import (
     ManagedExitDecision,
     evaluate_managed_long_exit,
@@ -71,6 +81,7 @@ from .sizing import (
 
 __all__ = [
     "DEFAULT_DATABASE_PATH",
+    "EVENT_RISK_POLICY_VERSION",
     "SCHEMA_VERSION",
     "AccountReconciliation",
     "AccountStatus",
@@ -80,6 +91,10 @@ __all__ = [
     "FixedNotionalSizingDecision",
     "FixedNotionalSizingPolicy",
     "FixedNotionalSizingRequest",
+    "EventEvidenceStatus",
+    "EventRiskAction",
+    "EventRiskContext",
+    "EventRiskDecision",
     "FXRateError",
     "FXRateProvider",
     "LongTradeCalculation",
@@ -103,6 +118,8 @@ __all__ = [
     "PositionSizingMode",
     "PositionSizingRejected",
     "PositionStatus",
+    "SecurityEvent",
+    "SecurityEventType",
     "StaticFXRateProvider",
     "SystemEventRecord",
     "YahooFXRateProvider",
@@ -111,6 +128,7 @@ __all__ = [
     "calculate_fixed_notional_size",
     "calculate_long_trade",
     "connect_database",
+    "evaluate_event_risk",
     "evaluate_managed_long_exit",
     "fixed_notional_policy_from_product_policy",
     "identity_fx_rate",
