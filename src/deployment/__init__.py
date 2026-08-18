@@ -1,5 +1,9 @@
 """Container deployment health, worker and backup contracts."""
 
+from .combined import (
+    PortableRuntime,
+    build_portable_runtime,
+)
 from .backup import (
     BackupArtifact,
     DatabaseBackupService,
@@ -15,6 +19,7 @@ from .health import (
     HeartbeatStore,
     HealthEvaluator,
     HealthResult,
+    create_health_server,
 )
 from .worker import (
     ScheduledCycle,
@@ -25,6 +30,8 @@ from .worker import (
 )
 
 __all__ = [
+    "PortableRuntime",
+    "build_portable_runtime",
     "BackupArtifact",
     "DatabaseBackupService",
     "ControlledRelease",
@@ -35,6 +42,7 @@ __all__ = [
     "HeartbeatStore",
     "HealthEvaluator",
     "HealthResult",
+    "create_health_server",
     "ScheduledCycle",
     "ScheduledWorker",
     "ScheduledWorkerConfig",

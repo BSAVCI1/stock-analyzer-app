@@ -149,3 +149,68 @@ jobs:
           docker exec stock-analyzer-second python -c \
             "import os, sqlite3; connection = sqlite3.connect(os.environ['BSAVCI_DATABASE_PATH']); value = connection.execute('SELECT value FROM deployment_probe').fetchone()[0]; connection.close(); assert value == 'survived-restart'"
 
+      - name: Verify portable local profile
+        run: |
+          files="-f compose.yaml -f compose.local.yaml"
+          cleanup() {
+            docker compose $files down 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker compose $files up --detach --build
+
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(
+                      "http://127.0.0.1:8080/health/worker",
+                      timeout=2,
+                  ) as response:
+                      payload = json.load(response)
+
+                  if (
+                      response.status == 200
+                      and payload["status"] == "ok"
+                  ):
+                      break
+              except Exception:
+                  if attempt == 29:
+                      raise
+
+                  time.sleep(1)
+          PY
+
+          docker compose $files restart app
+
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(
+                      "http://127.0.0.1:8080/health/worker",
+                      timeout=2,
+                  ) as response:
+                      payload = json.load(response)
+
+                  if (
+                      response.status == 200
+                      and payload["status"] == "ok"
+                  ):
+                      break
+              except Exception:
+                  if attempt == 29:
+                      raise
+
+                  time.sleep(1)
+          PY
+
+          docker compose $files exec --no-TTY app \
+            python -c "import os, sqlite3; path = os.environ['BSAVCI_VALIDATION_DATABASE_PATH']; connection = sqlite3.connect(path); count = connection.execute('SELECT COUNT(*) FROM deployment_validation_cycles').fetchone()[0]; connection.close(); assert count >= 1"
+
