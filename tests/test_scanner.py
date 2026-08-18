@@ -36,6 +36,7 @@ from src.scanner import (
     load_stock_universe,
     run_deterministic_scanner_analysis,
 )
+from src.strategy import StrategyHorizon
 
 
 T0 = datetime(
@@ -707,8 +708,26 @@ def test_candidates_are_ranked_and_signals_persisted(
             ),
         ),
         started_at=T0,
+        strategy_horizon=(
+            StrategyHorizon.SWING
+        ),
+        strategy_version=(
+            "p4.3-swing-v1"
+        ),
     )
 
+    assert (
+        report.scan.configuration[
+            "strategy_horizon"
+        ]
+        == "SWING"
+    )
+    assert (
+        report.scan.configuration[
+            "strategy_version"
+        ]
+        == "p4.3-swing-v1"
+    )
     assert (
         report.scan.configuration[
             "universe_policy"
@@ -769,6 +788,159 @@ def test_candidates_are_ranked_and_signals_persisted(
 
         assert signal.recommendation == "BUY"
         assert signal.quote_currency == "USD"
+        assert (
+            signal.strategy_horizon
+            is StrategyHorizon.SWING
+        )
+        assert (
+            signal.strategy_version
+            == "p4.3-swing-v1"
+        )
+
+
+def test_horizon_watchlist_ranks_restart_independently(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    def analysis_runner(snapshot):
+        return make_outcome(
+            snapshot,
+            score=(
+                90
+                if snapshot.symbol == "MSFT"
+                else 75
+            ),
+        )
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("P2 release approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=make_snapshot,
+        analysis_runner=analysis_runner,
+    )
+    universe = StockUniverse(
+        name="horizon-watchlists",
+        symbols=("AAPL", "MSFT"),
+    )
+
+    reports = [
+        scanner.run_scan(
+            account_id=account.account_id,
+            universe=universe,
+            started_at=(
+                T0
+                + timedelta(days=index)
+            ),
+            scan_key=(
+                f"horizon-{horizon.value}"
+            ),
+            strategy_horizon=horizon,
+            strategy_version=version,
+        )
+        for index, (horizon, version)
+        in enumerate(
+            (
+                (
+                    StrategyHorizon.SWING,
+                    "p4.3-swing-v1",
+                ),
+                (
+                    StrategyHorizon.MEDIUM_TERM,
+                    "p4.3-medium-term-v1",
+                ),
+            )
+        )
+    ]
+
+    for report, expected_horizon in zip(
+        reports,
+        (
+            StrategyHorizon.SWING,
+            StrategyHorizon.MEDIUM_TERM,
+        ),
+        strict=True,
+    ):
+        assert [
+            result.rank_position
+            for result in report.candidates
+        ] == [1, 2]
+        assert all(
+            result.strategy_horizon
+            is expected_horizon
+            for result in report.results
+        )
+
+    assert (
+        reports[0].scan.configuration[
+            "strategy_horizon"
+        ]
+        == "SWING"
+    )
+    assert (
+        reports[1].scan.configuration[
+            "strategy_horizon"
+        ]
+        == "MEDIUM_TERM"
+    )
+
+
+def test_horizon_and_version_must_be_supplied_together(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy: None
+        ),
+        thresholds=thresholds,
+        snapshot_loader=make_snapshot,
+        analysis_runner=make_outcome,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "strategy_horizon and "
+            "strategy_version"
+        ),
+    ):
+        scanner.run_scan(
+            account_id=account.account_id,
+            universe=StockUniverse(
+                name="invalid-horizon-scope",
+                symbols=("AAPL",),
+            ),
+            started_at=T0,
+            strategy_horizon=(
+                StrategyHorizon.SWING
+            ),
+        )
 
 
 def test_scan_key_prevents_duplicate_scan(
