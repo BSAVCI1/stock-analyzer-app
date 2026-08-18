@@ -4,6 +4,11 @@ from .config import (
     load_email_config,
     load_telegram_config,
 )
+from .health import (
+    ChannelHealth,
+    ChannelHealthStatus,
+    notification_channel_health,
+)
 from .models import (
     DeliveryResult,
     DispatchReport,
@@ -28,6 +33,8 @@ from .service import NotificationService
 from .templates import render_notification
 
 __all__ = [
+    "ChannelHealth",
+    "ChannelHealthStatus",
     "DeliveryResult",
     "DispatchReport",
     "EmailConfig",
@@ -43,6 +50,7 @@ __all__ = [
     "TelegramConfig",
     "TelegramNotificationSender",
     "load_email_config",
+    "notification_channel_health",
     "load_telegram_config",
     "render_notification",
     "route_notification_event",
