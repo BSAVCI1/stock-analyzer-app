@@ -206,3 +206,26 @@ def test_event_requires_confirmed_evidence():
                 SecurityEventType.EARNINGS
             ),
         )
+
+
+def test_future_dated_evidence_is_rejected():
+    future_evidence = SecurityEvent(
+        symbol="AAPL",
+        event_type=SecurityEventType.EARNINGS,
+        effective_at=NOW + timedelta(days=2),
+        source="verified-test-feed",
+        source_as_of=NOW + timedelta(hours=1),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="after evaluated_at",
+    ):
+        evaluate_event_risk(
+            context=EventRiskContext.NEW_ENTRY,
+            evidence_status=(
+                EventEvidenceStatus.CONFIRMED
+            ),
+            evaluated_at=NOW,
+            event=future_evidence,
+        )
