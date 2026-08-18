@@ -33,6 +33,7 @@ from .fx import (
     QuoteToPortfolioFXRate,
     identity_fx_rate,
 )
+from .proposal import CostAwareOrderProposal
 from .repository import PaperRepository
 from .valuation import (
     calculate_entry_cash_portfolio,
@@ -520,6 +521,138 @@ class PaperTradingService:
             ),
             created_at=at,
             expires_at=signal.expires_at,
+        )
+
+    def create_cost_aware_buy(
+        self,
+        *,
+        account_id: str,
+        signal_id: str,
+        proposal: CostAwareOrderProposal,
+        idempotency_key: str,
+    ) -> tuple[PaperOrderRecord, bool]:
+        """Persist one approved proposal and reserve its cash."""
+
+        if not isinstance(
+            proposal,
+            CostAwareOrderProposal,
+        ):
+            raise ValueError(
+                "proposal must be a "
+                "CostAwareOrderProposal."
+            )
+
+        signal = self.repository.get_signal(
+            signal_id
+        )
+        account = self.repository.get_account(
+            account_id
+        )
+
+        if signal.account_id != account_id:
+            raise ValueError(
+                "Signal belongs to another account."
+            )
+
+        if proposal.symbol != signal.symbol:
+            raise ValueError(
+                "Proposal symbol does not match "
+                "the persisted signal."
+            )
+
+        quote_currency = (
+            signal.quote_currency
+            or account.base_currency
+        )
+
+        if (
+            proposal.quote_currency
+            != quote_currency
+        ):
+            raise ValueError(
+                "Proposal quote currency does "
+                "not match the persisted signal."
+            )
+
+        if (
+            proposal.portfolio_currency
+            != account.base_currency
+        ):
+            raise ValueError(
+                "Proposal portfolio currency "
+                "does not match the account."
+            )
+
+        if (
+            proposal.entry_price
+            != signal.entry_high
+        ):
+            raise ValueError(
+                "Proposal entry price must match "
+                "the signal entry ceiling."
+            )
+
+        if (
+            proposal.stop_price
+            != signal.stop_price
+        ):
+            raise ValueError(
+                "Proposal stop does not match "
+                "the persisted signal."
+            )
+
+        if (
+            proposal.target_price
+            not in signal.targets
+        ):
+            raise ValueError(
+                "Proposal target is not a "
+                "persisted signal target."
+            )
+
+        if (
+            proposal.expires_at
+            != signal.expires_at
+        ):
+            raise ValueError(
+                "Proposal and signal expiry "
+                "must use the same clock."
+            )
+
+        if (
+            proposal.proposed_at
+            >= proposal.expires_at
+        ):
+            raise ValueError(
+                "Proposal has already expired."
+            )
+
+        if (
+            proposal.net_reward_to_risk
+            < proposal.economics
+            .minimum_net_reward_to_risk
+        ):
+            raise ValueError(
+                "Proposal net reward-to-risk "
+                "is below its approved minimum."
+            )
+
+        estimated_entry_fees = money(
+            proposal.economics
+            .entry_stock_cost_usd
+            + proposal.economics
+            .entry_fx_cost_usd
+        )
+
+        return self.create_automatic_buy(
+            account_id=account_id,
+            signal_id=signal_id,
+            quantity=proposal.quantity,
+            idempotency_key=idempotency_key,
+            estimated_fees=(
+                estimated_entry_fees
+            ),
+            created_at=proposal.proposed_at,
         )
 
     def record_automatic_buy_fill(
