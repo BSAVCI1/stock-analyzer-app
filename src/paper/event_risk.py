@@ -79,12 +79,6 @@ class SecurityEvent:
             self.source_as_of,
         )
 
-        if source_as_of > effective_at:
-            raise ValueError(
-                "source_as_of cannot be after "
-                "effective_at."
-            )
-
         object.__setattr__(
             self,
             "symbol",
@@ -145,6 +139,15 @@ def evaluate_event_risk(
         "evaluated_at",
         evaluated_at,
     )
+
+    if (
+        event is not None
+        and event.source_as_of > at
+    ):
+        raise ValueError(
+            "Event evidence cannot be dated "
+            "after evaluated_at."
+        )
 
     if event is None:
         if (
