@@ -1,6 +1,10 @@
-"""Container deployment health and worker contracts."""
+"""Container deployment health, worker and backup contracts."""
 
-from .backup import (\n    BackupArtifact,\n    DatabaseBackupService,\n)\nfrom .health import (
+from .backup import (
+    BackupArtifact,
+    DatabaseBackupService,
+)
+from .health import (
     HeartbeatRecord,
     HeartbeatStore,
     HealthEvaluator,
@@ -15,7 +19,9 @@ from .worker import (
 )
 
 __all__ = [
-    "BackupArtifact",\n    "DatabaseBackupService",\n    "HeartbeatRecord",
+    "BackupArtifact",
+    "DatabaseBackupService",
+    "HeartbeatRecord",
     "HeartbeatStore",
     "HealthEvaluator",
     "HealthResult",
