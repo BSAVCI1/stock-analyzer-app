@@ -5,9 +5,53 @@ from __future__ import annotations
 import json
 from typing import Mapping
 
-from src.paper import NotificationRecord
+from src.paper import (
+    NotificationChannel,
+    NotificationRecord,
+)
 
 from .models import RenderedNotification
+
+
+_SENSITIVE_FRAGMENTS = (
+    "password",
+    "secret",
+    "token",
+    "credential",
+    "api_key",
+    "private_key",
+)
+
+
+def _redact(value):
+    if isinstance(value, Mapping):
+        result = {}
+
+        for key, nested in value.items():
+            normalised = (
+                str(key).strip().lower()
+            )
+
+            if any(
+                fragment in normalised
+                for fragment
+                in _SENSITIVE_FRAGMENTS
+            ):
+                result[str(key)] = "[REDACTED]"
+            else:
+                result[str(key)] = _redact(
+                    nested
+                )
+
+        return result
+
+    if isinstance(value, (list, tuple)):
+        return [
+            _redact(item)
+            for item in value
+        ]
+
+    return value
 
 
 def _value(
@@ -26,7 +70,9 @@ def _value(
 def render_notification(
     notification: NotificationRecord,
 ) -> RenderedNotification:
-    payload = notification.payload
+    payload = _redact(
+        notification.payload
+    )
 
     explicit_subject = payload.get(
         "subject"
@@ -61,6 +107,29 @@ def render_notification(
             "fill_price",
         )
 
+        if (
+            notification.channel
+            is NotificationChannel.TELEGRAM
+        ):
+            targets = ", ".join(
+                str(value)
+                for value
+                in payload.get("targets", [])
+            )
+
+            return RenderedNotification(
+                subject=(
+                    f"Paper buy executed: "
+                    f"{symbol}"
+                ),
+                text=(
+                    f"[PAPER BUY] {symbol} | "
+                    f"Qty {quantity} @ {fill_price} | "
+                    f"Stop {_value(payload, 'stop_price')} | "
+                    f"Targets {targets or 'unknown'}"
+                ),
+            )
+
         return RenderedNotification(
             subject=(
                 f"Paper buy executed: "
@@ -86,6 +155,24 @@ def render_notification(
             payload,
             "symbol",
         )
+
+        if (
+            notification.channel
+            is NotificationChannel.TELEGRAM
+        ):
+            return RenderedNotification(
+                subject=(
+                    f"Paper sell executed: "
+                    f"{symbol}"
+                ),
+                text=(
+                    f"[PAPER SELL] {symbol} | "
+                    f"Qty {_value(payload, 'quantity')} | "
+                    f"Exit {_value(payload, 'exit_price')} | "
+                    f"{_value(payload, 'exit_reason')} | "
+                    f"Net P&L {_value(payload, 'net_pnl')}"
+                ),
+            )
 
         return RenderedNotification(
             subject=(
@@ -113,6 +200,31 @@ def render_notification(
         .replace("_", " ")
         .title()
     )
+
+    if (
+        notification.channel
+        is NotificationChannel.TELEGRAM
+    ):
+        summary = _value(
+            payload,
+            "message",
+            _value(
+                payload,
+                "error",
+                _value(
+                    payload,
+                    "reason",
+                    "See persisted delivery evidence.",
+                ),
+            ),
+        )
+
+        return RenderedNotification(
+            subject=readable_event,
+            text=(
+                f"[{readable_event}] {summary}"
+            ),
+        )
 
     return RenderedNotification(
         subject=readable_event,
