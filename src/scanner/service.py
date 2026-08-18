@@ -329,6 +329,20 @@ class AutomaticMarketScanner:
                     metrics.exchange,
                     "staleness_days":
                     metrics.staleness_days,
+                    "fractional_eligible":
+                    metrics.fractional_eligible,
+                    "next_event_at": (
+                        metrics.next_event_at
+                        .isoformat()
+                        if metrics.next_event_at
+                        is not None
+                        else None
+                    ),
+                    "filter_reason_codes":
+                    list(
+                        metrics
+                        .filter_reason_codes
+                    ),
                     "provider_warnings":
                     list(
                         metrics

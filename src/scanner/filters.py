@@ -32,6 +32,110 @@ def _utc_datetime(
     return timestamp.to_pydatetime()
 
 
+def _fractional_eligibility(
+    metadata: dict[str, object],
+) -> bool | None:
+    for key in (
+        "fractionalTradingEligible",
+        "fractionalable",
+        "fractional_eligible",
+    ):
+        if key not in metadata:
+            continue
+
+        value = metadata[key]
+
+        if isinstance(value, bool):
+            return value
+
+        if (
+            isinstance(value, int)
+            and value in {0, 1}
+        ):
+            return bool(value)
+
+        if isinstance(value, str):
+            normalized = (
+                value.strip().lower()
+            )
+
+            if normalized in {
+                "true",
+                "yes",
+                "eligible",
+                "1",
+            }:
+                return True
+
+            if normalized in {
+                "false",
+                "no",
+                "ineligible",
+                "0",
+            }:
+                return False
+
+        return None
+
+    return None
+
+
+def _next_event_at(
+    metadata: dict[str, object],
+) -> tuple[datetime | None, bool]:
+    for key in (
+        "nextEventAt",
+        "earningsTimestamp",
+        "earningsTimestampStart",
+        "earningsDate",
+    ):
+        if key not in metadata:
+            continue
+
+        value = metadata[key]
+
+        try:
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+            ):
+                timestamp = pd.Timestamp(
+                    value,
+                    unit="s",
+                    tz="UTC",
+                )
+            else:
+                timestamp = pd.Timestamp(
+                    value
+                )
+
+                if timestamp.tzinfo is None:
+                    timestamp = (
+                        timestamp.tz_localize(
+                            "UTC"
+                        )
+                    )
+                else:
+                    timestamp = (
+                        timestamp.tz_convert(
+                            "UTC"
+                        )
+                    )
+
+            return (
+                timestamp.to_pydatetime(),
+                False,
+            )
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+        ):
+            return None, True
+
+    return None, False
+
+
 def evaluate_market_snapshot(
     snapshot: MarketSnapshot,
     *,
@@ -138,7 +242,9 @@ def evaluate_market_snapshot(
         ).mean()
     )
 
-    metadata = snapshot.metadata or {}
+    metadata = dict(
+        snapshot.metadata or {}
+    )
 
     quote_type = str(
         metadata.get("quoteType")
@@ -157,9 +263,22 @@ def evaluate_market_snapshot(
         or "UNKNOWN"
     ).strip().upper()
 
+    fractional_eligible = (
+        _fractional_eligibility(
+            metadata
+        )
+    )
+    next_event_at, event_date_invalid = (
+        _next_event_at(metadata)
+    )
+
     reasons: list[str] = []
+    reason_codes: list[str] = []
 
     if len(clean) < thresholds.minimum_history_rows:
+        reason_codes.append(
+            "INSUFFICIENT_HISTORY"
+        )
         reasons.append(
             f"History contains {len(clean)} rows; "
             f"at least "
@@ -168,6 +287,9 @@ def evaluate_market_snapshot(
         )
 
     if staleness_days < 0:
+        reason_codes.append(
+            "FUTURE_DATED_DATA"
+        )
         reasons.append(
             "Market history is dated after "
             "the scan timestamp."
@@ -176,6 +298,9 @@ def evaluate_market_snapshot(
         staleness_days
         > thresholds.maximum_staleness_days
     ):
+        reason_codes.append(
+            "STALE_DATA"
+        )
         reasons.append(
             f"Market history is {staleness_days} "
             "calendar days old; maximum permitted "
@@ -188,6 +313,9 @@ def evaluate_market_snapshot(
         or latest_price
         < thresholds.minimum_price
     ):
+        reason_codes.append(
+            "PRICE_BELOW_MINIMUM"
+        )
         reasons.append(
             f"Latest price is below the minimum "
             f"{thresholds.minimum_price:.2f}."
@@ -198,6 +326,9 @@ def evaluate_market_snapshot(
         or average_volume
         < thresholds.minimum_average_volume
     ):
+        reason_codes.append(
+            "VOLUME_BELOW_MINIMUM"
+        )
         reasons.append(
             "Average volume is below the configured "
             "liquidity minimum."
@@ -209,6 +340,9 @@ def evaluate_market_snapshot(
         < thresholds
         .minimum_average_dollar_volume
     ):
+        reason_codes.append(
+            "DOLLAR_VOLUME_BELOW_MINIMUM"
+        )
         reasons.append(
             "Average dollar volume is below the "
             "configured liquidity minimum."
@@ -218,10 +352,55 @@ def evaluate_market_snapshot(
         quote_type
         not in thresholds.allowed_quote_types
     ):
+        reason_codes.append(
+            "QUOTE_TYPE_NOT_ALLOWED"
+        )
         reasons.append(
             f"Quote type {quote_type} is not enabled "
             "for automatic scanning."
         )
+
+    if (
+        latest_price
+        > thresholds.maximum_order_value
+        and fractional_eligible is not True
+    ):
+        reason_codes.append(
+            "FRACTIONAL_ELIGIBILITY_REQUIRED"
+        )
+        reasons.append(
+            "Latest price exceeds the maximum "
+            "order value and verified fractional "
+            "eligibility is required."
+        )
+
+    if event_date_invalid:
+        reason_codes.append(
+            "EVENT_DATE_INVALID"
+        )
+        reasons.append(
+            "Known event metadata contains an "
+            "invalid date."
+        )
+    elif next_event_at is not None:
+        event_days = (
+            next_event_at.date()
+            - scan_utc.date()
+        ).days
+
+        if (
+            0 <= event_days
+            <= thresholds.event_blackout_days
+        ):
+            reason_codes.append(
+                "EVENT_RISK_BLACKOUT"
+            )
+            reasons.append(
+                "A known market event occurs "
+                f"within {event_days} days; "
+                "new candidates are blocked "
+                "during the configured blackout."
+            )
 
     metrics = DataQualityMetrics(
         symbol=snapshot.symbol,
@@ -238,6 +417,13 @@ def evaluate_market_snapshot(
         staleness_days=staleness_days,
         provider_warnings=tuple(
             snapshot.warnings
+        ),
+        fractional_eligible=(
+            fractional_eligible
+        ),
+        next_event_at=next_event_at,
+        filter_reason_codes=tuple(
+            reason_codes
         ),
     )
 

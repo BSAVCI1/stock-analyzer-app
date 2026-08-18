@@ -234,6 +234,8 @@ class ScannerThresholds:
     minimum_average_dollar_volume: float = (
         10_000_000.0
     )
+    maximum_order_value: float = 100.0
+    event_blackout_days: int = 5
 
     liquidity_lookback_sessions: int = 20
 
@@ -263,6 +265,7 @@ class ScannerThresholds:
             "minimum_price",
             "minimum_average_volume",
             "minimum_average_dollar_volume",
+            "maximum_order_value",
         ):
             value = _finite_number(
                 name,
@@ -278,6 +281,22 @@ class ScannerThresholds:
                 self,
                 name,
                 value,
+            )
+
+        if (
+            isinstance(
+                self.event_blackout_days,
+                bool,
+            )
+            or not isinstance(
+                self.event_blackout_days,
+                int,
+            )
+            or self.event_blackout_days < 0
+        ):
+            raise ValueError(
+                "event_blackout_days must be "
+                "a non-negative integer."
             )
 
         quote_types = tuple(
@@ -316,6 +335,9 @@ class DataQualityMetrics:
 
     staleness_days: int
     provider_warnings: tuple[str, ...] = ()
+    fractional_eligible: bool | None = None
+    next_event_at: datetime | None = None
+    filter_reason_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
