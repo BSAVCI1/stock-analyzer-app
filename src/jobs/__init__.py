@@ -12,6 +12,13 @@ from .models import (
     ScheduledJobReport,
 )
 from .repository import JobRepository
+from .schedule import (
+    AUTONOMOUS_SCHEDULE_VERSION,
+    AutonomousJobKind,
+    AutonomousSchedulePolicy,
+    ScheduledInvocation,
+    plan_exchange_session,
+)
 from .service import ScheduledJobService
 from .runtime import (
     PaperJobRuntime,
@@ -23,6 +30,9 @@ from .runtime import (
 )
 
 __all__ = [
+    "AUTONOMOUS_SCHEDULE_VERSION",
+    "AutonomousJobKind",
+    "AutonomousSchedulePolicy",
     "ExchangeCalendar",
     "ExchangeSession",
     "JobRepository",
@@ -36,6 +46,8 @@ __all__ = [
     "load_runtime_settings",
     "make_release_gate_lookup",
     "ScheduledJobReport",
+    "ScheduledInvocation",
     "ScheduledJobService",
     "nyse_regular_holidays",
+    "plan_exchange_session",
 ]
