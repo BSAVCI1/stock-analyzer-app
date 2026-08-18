@@ -5,6 +5,10 @@ from .database import (
     connect_database,
     transaction,
 )
+from .exit_policy import (
+    ManagedExitDecision,
+    evaluate_managed_long_exit,
+)
 from .fx import (
     FXRateError,
     FXRateProvider,
@@ -79,6 +83,7 @@ __all__ = [
     "FXRateError",
     "FXRateProvider",
     "LongTradeCalculation",
+    "ManagedExitDecision",
     "NotificationChannel",
     "NotificationRecord",
     "NotificationStatus",
@@ -106,6 +111,7 @@ __all__ = [
     "calculate_fixed_notional_size",
     "calculate_long_trade",
     "connect_database",
+    "evaluate_managed_long_exit",
     "fixed_notional_policy_from_product_policy",
     "identity_fx_rate",
     "initialize_database",

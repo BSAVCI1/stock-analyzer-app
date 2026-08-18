@@ -44,6 +44,7 @@ from src.paper import (
     PaperRepository,
     PaperTradingService,
     PositionStatus,
+    evaluate_managed_long_exit,
     money,
 )
 from src.paper.sizing import (
@@ -948,58 +949,6 @@ class AutomatedPaperExecutionEngine:
                         row["Low"]
                     )
 
-                    raw_exit = None
-                    reason = None
-
-                    # Conservative ordering:
-                    # stop wins if stop and target
-                    # occur in the same bar.
-                    if (
-                        open_price
-                        <= position.stop_price
-                    ):
-                        raw_exit = open_price
-                        reason = (
-                            PaperExitReason
-                            .STOP_LOSS
-                        )
-                    elif (
-                        low_price
-                        <= position.stop_price
-                    ):
-                        raw_exit = (
-                            position.stop_price
-                        )
-                        reason = (
-                            PaperExitReason
-                            .STOP_LOSS
-                        )
-                    else:
-                        primary_target = (
-                            position.targets[0]
-                        )
-
-                        if (
-                            open_price
-                            >= primary_target
-                        ):
-                            raw_exit = open_price
-                            reason = (
-                                PaperExitReason
-                                .TARGET
-                            )
-                        elif (
-                            high_price
-                            >= primary_target
-                        ):
-                            raw_exit = (
-                                primary_target
-                            )
-                            reason = (
-                                PaperExitReason
-                                .TARGET
-                            )
-
                     holding_limit_reached = (
                         position
                         .maximum_holding_sessions
@@ -1017,21 +966,33 @@ class AutomatedPaperExecutionEngine:
                         >= position.expires_at
                     )
 
-                    if (
-                        raw_exit is None
-                        and (
-                            holding_limit_reached
-                            or legacy_expiry_reached
+                    decision = (
+                        evaluate_managed_long_exit(
+                            open_price=open_price,
+                            high_price=high_price,
+                            low_price=low_price,
+                            stop_price=(
+                                position.stop_price
+                            ),
+                            target_price=(
+                                position.targets[0]
+                            ),
+                            holding_limit_reached=(
+                                holding_limit_reached
+                            ),
+                            legacy_expiry_reached=(
+                                legacy_expiry_reached
+                            ),
                         )
-                    ):
-                        raw_exit = open_price
-                        reason = (
-                            PaperExitReason
-                            .TIME_EXIT
-                        )
+                    )
 
-                    if raw_exit is None:
+                    if decision is None:
                         continue
+
+                    raw_exit = (
+                        decision.exit_price
+                    )
+                    reason = decision.reason
 
                     self._close_position(
                         position=position,
