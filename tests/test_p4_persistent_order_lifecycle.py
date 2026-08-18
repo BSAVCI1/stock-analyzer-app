@@ -11,6 +11,7 @@ import pytest
 
 from src.paper import (
     CostAwareOrderProposalRequest,
+    FixedNotionalSizingPolicy,
     OrderStatus,
     PaperPortfolioConfig,
     PaperRepository,
@@ -97,7 +98,10 @@ def lifecycle(tmp_path):
             minimum_net_reward_to_risk=(
                 Decimal("2")
             ),
-        )
+        ),
+        policy=FixedNotionalSizingPolicy(
+            portfolio_currency="USD"
+        ),
     )
 
     return repository, service, account, signal, proposal
@@ -257,7 +261,10 @@ def test_proposal_must_share_signal_expiry(
             minimum_net_reward_to_risk=(
                 Decimal("2")
             ),
-        )
+        ),
+        policy=FixedNotionalSizingPolicy(
+            portfolio_currency="USD"
+        ),
     )
 
     with pytest.raises(
