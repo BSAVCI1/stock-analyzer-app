@@ -303,6 +303,28 @@ def _handler_factory(
     return HealthHandler
 
 
+def create_health_server(
+    evaluator: HealthEvaluator,
+    *,
+    host: str = "0.0.0.0",
+    port: int = 8080,
+) -> ThreadingHTTPServer:
+    if (
+        isinstance(port, bool)
+        or not isinstance(port, int)
+        or not 1 <= port <= 65535
+    ):
+        raise ValueError(
+            "Health port must be between "
+            "1 and 65535."
+        )
+
+    return ThreadingHTTPServer(
+        (host, port),
+        _handler_factory(evaluator),
+    )
+
+
 def serve() -> None:
     host = os.getenv(
         "BSAVCI_HEALTH_HOST",
@@ -337,9 +359,10 @@ def serve() -> None:
         ),
         heartbeat_max_age_seconds=maximum_age,
     )
-    server = ThreadingHTTPServer(
-        (host, port),
-        _handler_factory(evaluator),
+    server = create_health_server(
+        evaluator,
+        host=host,
+        port=port,
     )
     server.serve_forever()
 
