@@ -1,9 +1,7 @@
 """Container deployment health, worker and backup contracts."""
 
-from .combined import (
-    PortableRuntime,
-    build_portable_runtime,
-)
+from typing import Any
+
 from .backup import (
     BackupArtifact,
     DatabaseBackupService,
@@ -28,6 +26,29 @@ from .worker import (
     load_scheduled_cycle,
     scheduled_run_key,
 )
+
+
+def __getattr__(name: str) -> Any:
+    """Load combined-runtime exports without preloading its CLI module."""
+    if name in {
+        "PortableRuntime",
+        "build_portable_runtime",
+    }:
+        from .combined import (
+            PortableRuntime,
+            build_portable_runtime,
+        )
+
+        exports = {
+            "PortableRuntime": PortableRuntime,
+            "build_portable_runtime": build_portable_runtime,
+        }
+        return exports[name]
+
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}"
+    )
+
 
 __all__ = [
     "PortableRuntime",
