@@ -59,39 +59,44 @@ class TelegramNotificationSender:
         if len(text) > 4096:
             text = text[:4093] + "..."
 
-        response = self.session.post(
-            (
-                "https://api.telegram.org/"
-                f"bot{self.config.bot_token}/"
-                "sendMessage"
-            ),
-            json={
-                "chat_id":
-                self.config.chat_id,
-                "text": text,
-                "disable_web_page_preview":
-                True,
-            },
-            timeout=(
-                self.config.timeout_seconds
-            ),
-        )
-
-        response.raise_for_status()
-
-        payload = response.json()
-
-        if not payload.get("ok"):
-            raise RuntimeError(
-                "Telegram rejected the "
-                "notification."
+        try:
+            response = self.session.post(
+                (
+                    "https://api.telegram.org/"
+                    f"bot{self.config.bot_token}/"
+                    "sendMessage"
+                ),
+                json={
+                    "chat_id":
+                    self.config.chat_id,
+                    "text": text,
+                    "disable_web_page_preview":
+                    True,
+                },
+                timeout=(
+                    self.config.timeout_seconds
+                ),
             )
 
-        result = payload.get("result") or {}
+            response.raise_for_status()
 
-        message_id = result.get(
-            "message_id"
-        )
+            payload = response.json()
+
+            if not payload.get("ok"):
+                raise RuntimeError(
+                    "Provider rejected request."
+                )
+
+            result = (
+                payload.get("result") or {}
+            )
+            message_id = result.get(
+                "message_id"
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Telegram delivery failed."
+            ) from exc
 
         return DeliveryResult(
             provider_message_id=(
@@ -155,24 +160,29 @@ class EmailNotificationSender:
             else self.smtp_factory
         )
 
-        with factory(
-            self.config.host,
-            self.config.port,
-            timeout=(
-                self.config
-                .timeout_seconds
-            ),
-        ) as client:
-            if self.config.use_starttls:
-                client.starttls()
+        try:
+            with factory(
+                self.config.host,
+                self.config.port,
+                timeout=(
+                    self.config
+                    .timeout_seconds
+                ),
+            ) as client:
+                if self.config.use_starttls:
+                    client.starttls()
 
-            if self.config.username:
-                client.login(
-                    self.config.username,
-                    self.config.password or "",
-                )
+                if self.config.username:
+                    client.login(
+                        self.config.username,
+                        self.config.password or "",
+                    )
 
-            client.send_message(message)
+                client.send_message(message)
+        except Exception as exc:
+            raise RuntimeError(
+                "Email delivery failed."
+            ) from exc
 
         return DeliveryResult(
             metadata={
