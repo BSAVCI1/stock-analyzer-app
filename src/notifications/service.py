@@ -12,6 +12,12 @@ from src.paper import (
 )
 
 from .models import DispatchReport
+from .retry import (
+    NOTIFICATION_RETRY_POLICY_VERSION,
+    NotificationRetryPolicy,
+    RetryEligibility,
+    evaluate_notification_retry,
+)
 from .routing import route_notification_event
 from .senders import NotificationSender
 from .templates import render_notification
@@ -26,9 +32,16 @@ class NotificationService:
             NotificationChannel,
             NotificationSender,
         ],
+        retry_policy: (
+            NotificationRetryPolicy | None
+        ) = None,
     ) -> None:
         self.repository = repository
         self.senders = dict(senders)
+        self.retry_policy = (
+            retry_policy
+            or NotificationRetryPolicy()
+        )
 
     def fan_out_internal(
         self,
@@ -217,6 +230,25 @@ class NotificationService:
         skipped = 0
 
         for notification in notifications:
+            if (
+                notification.status
+                is NotificationStatus.FAILED
+            ):
+                retry = (
+                    evaluate_notification_retry(
+                        notification,
+                        evaluated_at=at,
+                        policy=self.retry_policy,
+                    )
+                )
+
+                if (
+                    retry.eligibility
+                    is not RetryEligibility.ELIGIBLE
+                ):
+                    skipped += 1
+                    continue
+
             sender = self.senders.get(
                 notification.channel
             )
@@ -231,6 +263,15 @@ class NotificationService:
                         f"for "
                         f"{notification.channel.value}."
                     ),
+                    delivery_metadata={
+                        "retry_policy_version": (
+                            NOTIFICATION_RETRY_POLICY_VERSION
+                        ),
+                        "attempt_number": (
+                            notification.attempt_count
+                            + 1
+                        ),
+                    },
                 )
 
                 failed_ids.append(
@@ -259,9 +300,16 @@ class NotificationService:
                         result
                         .provider_message_id
                     ),
-                    delivery_metadata=(
-                        result.metadata
-                    ),
+                    delivery_metadata={
+                        **dict(result.metadata),
+                        "retry_policy_version": (
+                            NOTIFICATION_RETRY_POLICY_VERSION
+                        ),
+                        "attempt_number": (
+                            notification.attempt_count
+                            + 1
+                        ),
+                    },
                 )
 
                 sent_ids.append(
@@ -282,6 +330,13 @@ class NotificationService:
                         "channel":
                         notification
                         .channel.value,
+                        "retry_policy_version": (
+                            NOTIFICATION_RETRY_POLICY_VERSION
+                        ),
+                        "attempt_number": (
+                            notification.attempt_count
+                            + 1
+                        ),
                     },
                 )
 
