@@ -916,9 +916,10 @@ Deliver useful, non-duplicative and auditable notifications.
 - Versioned severity and purpose-based channel routing with idempotent fan-out: PR #15
 - Channel-specific action templates, payload redaction and secret-safe health checks: PR #16
 - Bounded exponential-backoff retries and complete delivery evidence: PR #17
-- Full regression evidence: 576 tests passed in Automated tests #132
+- Direct Telegram/SMTP and end-to-end application delivery contracts: PR #18
+- Full regression evidence: 580 tests passed in Automated tests #135
 
-**Status:** In progress
+**Status:** Complete
 **Dependencies:** P4.5-P4.6
 **Relative effort:** M
 
