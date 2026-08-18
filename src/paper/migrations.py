@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 _SCHEMA_V1 = """
@@ -834,6 +834,49 @@ PRAGMA user_version = 10;
 """
 
 
+_SCHEMA_V11 = """
+CREATE TABLE paper_orchestration_invocations (
+    idempotency_key TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    job_kind TEXT NOT NULL,
+    scheduled_for TEXT NOT NULL,
+    strategy_horizon TEXT,
+    status TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    completed_at TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+CREATE INDEX
+    idx_orchestration_account_status
+ON paper_orchestration_invocations(
+    account_id,
+    status,
+    scheduled_for
+);
+
+CREATE TABLE paper_orchestration_checkpoints (
+    account_id TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    last_window_ended_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(
+        account_id,
+        policy_version
+    ),
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+PRAGMA user_version = 11;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -967,6 +1010,12 @@ def apply_migrations(
             _SCHEMA_V10
         )
         current_version = 10
+
+    if current_version < 11:
+        connection.executescript(
+            _SCHEMA_V11
+        )
+        current_version = 11
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(
