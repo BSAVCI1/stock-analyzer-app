@@ -44,6 +44,9 @@ from src.scanner import (
 )
 
 from .calendar import ExchangeCalendar
+from .dispatcher import (
+    AutonomousInvocationDispatcher,
+)
 from .repository import JobRepository
 from .service import ScheduledJobService
 
@@ -90,6 +93,9 @@ class PaperJobRuntime:
         NotificationService
     )
     job_service: ScheduledJobService
+    invocation_dispatcher: (
+        AutonomousInvocationDispatcher
+    )
 
     notification_channels: tuple[
         NotificationChannel,
@@ -431,6 +437,12 @@ def build_runtime(
 
     calendar = ExchangeCalendar()
 
+    universe_loader = lambda: (
+        load_stock_universe(
+            settings.universe_path
+        )
+    )
+
     job_service = ScheduledJobService(
         job_repository=job_repository,
         paper_repository=paper_repository,
@@ -442,14 +454,31 @@ def build_runtime(
             notification_service
         ),
         calendar=calendar,
-        universe_loader=lambda: (
-            load_stock_universe(
-                settings.universe_path
-            )
-        ),
+        universe_loader=universe_loader,
         notification_channels=(
             notification_channels
         ),
+    )
+
+    invocation_dispatcher = (
+        AutonomousInvocationDispatcher(
+            account_id=settings.account_id,
+            paper_repository=(
+                paper_repository
+            ),
+            scanner=scanner,
+            execution_engine=(
+                execution_engine
+            ),
+            notification_service=(
+                notification_service
+            ),
+            job_service=job_service,
+            universe_loader=universe_loader,
+            notification_channels=(
+                notification_channels
+            ),
+        )
     )
 
     return PaperJobRuntime(
@@ -472,6 +501,9 @@ def build_runtime(
             notification_service
         ),
         job_service=job_service,
+        invocation_dispatcher=(
+            invocation_dispatcher
+        ),
         notification_channels=(
             notification_channels
         ),

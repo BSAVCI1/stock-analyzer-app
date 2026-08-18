@@ -4,6 +4,9 @@ from .calendar import (
     ExchangeCalendar,
     nyse_regular_holidays,
 )
+from .dispatcher import (
+    AutonomousInvocationDispatcher,
+)
 from .models import (
     ExchangeSession,
     JobRun,
@@ -38,6 +41,7 @@ from .runtime import (
 
 __all__ = [
     "AUTONOMOUS_SCHEDULE_VERSION",
+    "AutonomousInvocationDispatcher",
     "AutonomousJobKind",
     "AutonomousSchedulePolicy",
     "ExchangeCalendar",
