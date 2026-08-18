@@ -11,6 +11,13 @@ from .models import (
     JobType,
     ScheduledJobReport,
 )
+from .orchestrator import (
+    InvocationResult,
+    InvocationStatus,
+    OrchestrationCycleReport,
+    due_invocations,
+    run_orchestration_cycle,
+)
 from .repository import JobRepository
 from .schedule import (
     AUTONOMOUS_SCHEDULE_VERSION,
@@ -39,10 +46,14 @@ __all__ = [
     "JobRun",
     "JobStatus",
     "JobType",
+    "InvocationResult",
+    "InvocationStatus",
+    "OrchestrationCycleReport",
     "PaperJobRuntime",
     "RuntimeReleaseGateReport",
     "RuntimeSettings",
     "build_runtime",
+    "due_invocations",
     "load_runtime_settings",
     "make_release_gate_lookup",
     "ScheduledJobReport",
@@ -50,4 +61,5 @@ __all__ = [
     "ScheduledJobService",
     "nyse_regular_holidays",
     "plan_exchange_session",
+    "run_orchestration_cycle",
 ]
