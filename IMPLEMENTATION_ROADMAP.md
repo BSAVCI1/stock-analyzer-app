@@ -854,7 +854,14 @@ Run the bot without manual terminal commands.
 - Missed jobs are visible and safely recoverable
 - Scheduler timezone and calendar tests pass
 
-**Status:** Planned
+**Evidence**
+- Versioned exchange-aware autonomous schedule policy: PR #7
+- Replay-safe due-window orchestration and failure isolation: PR #8
+- Scanner, execution, notification and reporting service wiring: PR #9
+- Persistent checkpoints, bounded recovery and missed-job evidence: PR #10
+- Full regression evidence: 531 tests passed in Automated tests #107
+
+**Status:** Complete
 **Dependencies:** P4.4
 **Relative effort:** L
 
