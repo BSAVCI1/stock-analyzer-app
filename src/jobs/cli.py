@@ -312,6 +312,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_runtime_arguments(status)
 
+    kill_switch = commands.add_parser(
+        "kill-switch",
+        help="Inspect or change the global execution kill switch.",
+    )
+    _add_runtime_arguments(kill_switch)
+    kill_switch.add_argument(
+        "action",
+        choices=("status", "activate", "deactivate"),
+    )
+    kill_switch.add_argument(
+        "--reason",
+        help="Required reason for activate or deactivate.",
+    )
+    kill_switch.add_argument(
+        "--operator",
+        help="Required operator identity for a state change.",
+    )
+
     return parser
 
 
@@ -841,6 +859,11 @@ def _run_status(
         else None
     )
 
+    kill_switch = runtime.automation_repository.get_control(
+        account_id,
+        at=datetime.now(timezone.utc),
+    )
+
     _write_json(
         {
             "database_path":
@@ -927,9 +950,68 @@ def _run_status(
                     )
                 ),
             },
+            "kill_switch": {
+                "active": kill_switch.kill_switch_active,
+                "reason": kill_switch.kill_switch_reason,
+                "updated_at": kill_switch.updated_at,
+                "new_orders_allowed": (
+                    not kill_switch.kill_switch_active
+                ),
+            },
         }
     )
 
+    return 0
+
+
+def _run_kill_switch(
+    runtime: PaperJobRuntime,
+    args,
+) -> int:
+    account_id = runtime.settings.account_id
+
+    at = datetime.now(timezone.utc)
+    before = runtime.automation_repository.get_control(
+        account_id,
+        at=at,
+    )
+
+    if args.action == "status":
+        state = before
+        changed = False
+    else:
+        if not args.reason or not args.operator:
+            raise ValueError(
+                "--reason and --operator are required for "
+                "kill-switch state changes."
+            )
+        state = runtime.automation_repository.set_kill_switch(
+            account_id,
+            active=args.action == "activate",
+            reason=args.reason,
+            changed_by=args.operator,
+            updated_at=at,
+        )
+        changed = (
+            state.kill_switch_active
+            is not before.kill_switch_active
+        )
+
+    _write_json(
+        {
+            "account_id": state.account_id,
+            "active": state.kill_switch_active,
+            "reason": state.kill_switch_reason,
+            "changed_by": (
+                args.operator if changed else None
+            ),
+            "updated_at": state.updated_at,
+            "changed": changed,
+            "new_orders_allowed": (
+                not state.kill_switch_active
+            ),
+        }
+    )
     return 0
 
 
@@ -980,6 +1062,9 @@ def main(
 
         if args.command == "status":
             return _run_status(runtime)
+
+        if args.command == "kill-switch":
+            return _run_kill_switch(runtime, args)
 
         parser.error(
             f"Unsupported command: "
