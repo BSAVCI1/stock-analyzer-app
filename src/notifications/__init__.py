@@ -11,6 +11,13 @@ from .models import (
     RenderedNotification,
     TelegramConfig,
 )
+from .routing import (
+    NOTIFICATION_ROUTING_POLICY_VERSION,
+    NotificationPurpose,
+    NotificationRoute,
+    NotificationSeverity,
+    route_notification_event,
+)
 from .senders import (
     EmailNotificationSender,
     InternalNotificationSender,
@@ -26,12 +33,17 @@ __all__ = [
     "EmailConfig",
     "EmailNotificationSender",
     "InternalNotificationSender",
+    "NOTIFICATION_ROUTING_POLICY_VERSION",
+    "NotificationPurpose",
+    "NotificationRoute",
     "NotificationSender",
     "NotificationService",
+    "NotificationSeverity",
     "RenderedNotification",
     "TelegramConfig",
     "TelegramNotificationSender",
     "load_email_config",
     "load_telegram_config",
     "render_notification",
+    "route_notification_event",
 ]
