@@ -12,6 +12,7 @@ from src.paper import (
 )
 
 from .models import DispatchReport
+from .routing import route_notification_event
 from .senders import NotificationSender
 from .templates import render_notification
 
@@ -107,6 +108,82 @@ class NotificationService:
                         channel.value
                         for channel
                         in external_channels
+                    ],
+                },
+            )
+
+        return created_count
+
+    def fan_out_routed(
+        self,
+        account_id: str,
+        *,
+        created_at: datetime | None = None,
+    ) -> int:
+        """Fan out internal events using P4.7 routing."""
+
+        at = (
+            created_at
+            or datetime.now(timezone.utc)
+        )
+        created_count = 0
+        notifications = (
+            self.repository
+            .list_pending_notifications(
+                account_id,
+                channels=(
+                    NotificationChannel.INTERNAL,
+                ),
+            )
+        )
+
+        for notification in notifications:
+            route = route_notification_event(
+                notification.event_type
+            )
+
+            for channel in route.channels:
+                external = (
+                    self.repository
+                    .queue_notification(
+                        account_id=(
+                            notification.account_id
+                        ),
+                        event_type=(
+                            notification.event_type
+                        ),
+                        reference_type=(
+                            notification.reference_type
+                        ),
+                        reference_id=(
+                            notification.reference_id
+                        ),
+                        channel=channel,
+                        payload=notification.payload,
+                        created_at=at,
+                    )
+                )
+
+                if (
+                    external.status
+                    is NotificationStatus.PENDING
+                ):
+                    created_count += 1
+
+            self.repository.mark_notification_sent(
+                notification.notification_id,
+                sent_at=at,
+                delivery_metadata={
+                    "routing_policy_version":
+                        route.policy_version,
+                    "severity":
+                        route.severity.value,
+                    "purpose":
+                        route.purpose.value,
+                    "fanout_channels": [
+                        channel.value
+                        for channel
+                        in route.channels
                     ],
                 },
             )
