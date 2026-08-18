@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.strategy import StrategyHorizon
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
 from enum import Enum
@@ -357,6 +357,14 @@ class NotificationRecord:
     created_at: datetime
     sent_at: datetime | None
     error_message: str | None
+
+    attempt_count: int = 0
+    last_attempt_at: datetime | None = None
+    provider_message_id: str | None = None
+    delivery_metadata: Mapping[
+        str,
+        object,
+    ] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

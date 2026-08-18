@@ -16,6 +16,13 @@ from .models import (
     RenderedNotification,
     TelegramConfig,
 )
+from .retry import (
+    NOTIFICATION_RETRY_POLICY_VERSION,
+    NotificationRetryPolicy,
+    RetryDecision,
+    RetryEligibility,
+    evaluate_notification_retry,
+)
 from .routing import (
     NOTIFICATION_ROUTING_POLICY_VERSION,
     NotificationPurpose,
@@ -40,18 +47,23 @@ __all__ = [
     "EmailConfig",
     "EmailNotificationSender",
     "InternalNotificationSender",
+    "NOTIFICATION_RETRY_POLICY_VERSION",
     "NOTIFICATION_ROUTING_POLICY_VERSION",
     "NotificationPurpose",
+    "NotificationRetryPolicy",
     "NotificationRoute",
     "NotificationSender",
     "NotificationService",
     "NotificationSeverity",
     "RenderedNotification",
+    "RetryDecision",
+    "RetryEligibility",
     "TelegramConfig",
     "TelegramNotificationSender",
     "load_email_config",
     "notification_channel_health",
     "load_telegram_config",
+    "evaluate_notification_retry",
     "render_notification",
     "route_notification_event",
 ]

@@ -2440,6 +2440,31 @@ class PaperRepository:
             error_message=(
                 row["error_message"]
             ),
+            attempt_count=int(
+                row["attempt_count"]
+            ),
+            last_attempt_at=(
+                _datetime(
+                    row["last_attempt_at"]
+                )
+                if row["last_attempt_at"]
+                is not None
+                else None
+            ),
+            provider_message_id=(
+                row["provider_message_id"]
+            ),
+            delivery_metadata=(
+                json.loads(
+                    row[
+                        "delivery_metadata_json"
+                    ]
+                )
+                if row[
+                    "delivery_metadata_json"
+                ]
+                else {}
+            ),
         )
 
     def list_notifications(
