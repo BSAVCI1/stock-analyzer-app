@@ -308,7 +308,7 @@ def test_latest_schema_has_lifecycle_fx_columns(
     finally:
         connection.close()
 
-    assert version == 10
+    assert version == 11
 
     for table, expected in (
         EXPECTED_COLUMNS.items()
@@ -381,7 +381,7 @@ def test_genuine_v7_rows_upgrade_with_null_fx(
     finally:
         connection.close()
 
-    assert after == 10
+    assert after == 11
 
     assert order.quote_currency is None
     assert order.portfolio_currency is None
