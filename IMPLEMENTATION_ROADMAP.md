@@ -948,14 +948,15 @@ Move runtime operation out of an interactive Codespace.
 - File-mounted secret resolution with strict deployment mode and notification integration: PR #22
 - Health-gated promotion, automatic rollback contracts, hardened Compose and restart-persistence verification: PR #23
 - Portable combined health/worker runtime and harmless local-PC validation profile: PR #24
-- Full deployment evidence: 618 tests passed; image build, health, Compose, restart persistence and complete local-profile smoke validation passed in Automated tests #155
+- Warning-free Intel Mac/Monterey local validation path and verified operating guide: PR #25
+- Deny-by-default managed internal-paper adapter, isolated account bootstrap and local paper profile: PR #26
+- Full automated deployment evidence passed: unit tests, image build, health, Compose, restart persistence, harmless local profile and managed internal-paper adapter
+- User-device acceptance recorded in `P4_8_LOCAL_DEPLOYMENT_ACCEPTANCE.md`: health, heartbeat, persistence, duplicate protection, reconciled simulated account and controlled shutdown all passed
 
-**Remaining runtime gates**
-- Run and accept the validation profile on the user's device
-- Wire and validate the approved real paper-cycle adapter locally
-- Provision externally only if later selected, then capture real restart and rollback evidence
+**Optional future external-platform gate**
+- Provision externally only if later selected, then capture provider-specific restart, backup/restore, rollback and secret-mount evidence
 
-**Status:** In progress
+**Status:** Complete
 **Dependencies:** P4.5-P4.7
 **Relative effort:** L
 
