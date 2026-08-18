@@ -883,7 +883,11 @@ Manage qualified swing and medium-term ideas through a realistic paper lifecycle
 - No position exceeds portfolio policy
 - Execution remains independent of manually copied IBKR trades
 
-**Status:** Planned
+**Evidence**
+- Cost-aware, fractional US long paper-order proposal contract: PR #11
+- Full regression evidence: 536 tests passed in Automated tests #110
+
+**Status:** In progress
 **Dependencies:** P4.1-P4.5
 **Relative effort:** L
 

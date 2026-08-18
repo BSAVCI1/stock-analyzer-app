@@ -43,6 +43,12 @@ from .models import (
     SystemEventRecord,
     money,
 )
+from .proposal import (
+    CostAwareOrderProposal,
+    CostAwareOrderProposalRequest,
+    OrderProposalRejected,
+    propose_cost_aware_us_long_order,
+)
 from .repository import PaperRepository
 from .service import (
     PaperPortfolioConfig,
@@ -65,6 +71,8 @@ __all__ = [
     "AccountReconciliation",
     "AccountStatus",
     "ClosedPaperTrade",
+    "CostAwareOrderProposal",
+    "CostAwareOrderProposalRequest",
     "FixedNotionalSizingDecision",
     "FixedNotionalSizingPolicy",
     "FixedNotionalSizingRequest",
@@ -74,6 +82,7 @@ __all__ = [
     "NotificationChannel",
     "NotificationRecord",
     "NotificationStatus",
+    "OrderProposalRejected",
     "OrderStatus",
     "PaperAccount",
     "PaperExitReason",
@@ -101,5 +110,6 @@ __all__ = [
     "identity_fx_rate",
     "initialize_database",
     "money",
+    "propose_cost_aware_us_long_order",
     "transaction",
 ]
