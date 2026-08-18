@@ -214,3 +214,19 @@ jobs:
           docker compose $files exec --no-TTY app \
             python -c "import os, sqlite3; path = os.environ['BSAVCI_VALIDATION_DATABASE_PATH']; connection = sqlite3.connect(path); count = connection.execute('SELECT COUNT(*) FROM deployment_validation_cycles').fetchone()[0]; connection.close(); assert count >= 1"
 
+      - name: Verify managed internal-paper adapter
+        run: |
+          files="-f compose.yaml -f compose.paper-local.yaml"
+          cleanup() {
+            docker compose $files down --volumes \
+              2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker compose $files build
+          docker compose $files run --rm --no-deps app \
+            python -m src.deployment.bootstrap
+
+          docker compose $files run --rm --no-deps app \
+            python -c "from datetime import datetime, timezone; from src.deployment.paper_cycle import paper_cycle; report = paper_cycle(run_at=datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc), run_key='ci:paper-cycle'); assert report.cycle.failed_count == 0"
+
