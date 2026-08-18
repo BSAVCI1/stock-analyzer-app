@@ -941,7 +941,11 @@ Move runtime operation out of an interactive Codespace.
 - Backup and restore test succeeds
 - Deployment does not expose credentials
 
-**Status:** Planned
+**Implementation evidence**
+- Non-root container, persistent data boundary, health endpoints and disk-backed worker heartbeat contract: PR #19
+- Full regression and container smoke evidence: 587 tests passed; image build and live health checks passed in Automated tests #139
+
+**Status:** In progress
 **Dependencies:** P4.5-P4.7
 **Relative effort:** L
 

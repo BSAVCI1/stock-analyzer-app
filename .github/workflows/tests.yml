@@ -27,3 +27,56 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest -q
+
+      - name: Build deployment image
+        run: docker build --tag stock-analyzer:test .
+
+      - name: Smoke-test deployment health
+        run: |
+          docker run --detach \
+            --name stock-analyzer-test \
+            --publish 8080:8080 \
+            stock-analyzer:test
+          trap 'docker rm --force stock-analyzer-test' EXIT
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(
+                      "http://127.0.0.1:8080/health/live",
+                      timeout=2,
+                  ) as response:
+                      payload = json.load(response)
+
+                  if (
+                      response.status == 200
+                      and payload["status"] == "ok"
+                  ):
+                      break
+              except Exception:
+                  if attempt == 29:
+                      raise
+
+                  time.sleep(1)
+          else:
+              raise RuntimeError(
+                  "Container health endpoint did not start."
+              )
+
+          with urllib.request.urlopen(
+              "http://127.0.0.1:8080/health/ready",
+              timeout=2,
+          ) as response:
+              payload = json.load(response)
+
+          assert response.status == 200
+          assert payload == {
+              "checks": {
+                  "database": "available",
+              },
+              "status": "ok",
+          }
+          PY
