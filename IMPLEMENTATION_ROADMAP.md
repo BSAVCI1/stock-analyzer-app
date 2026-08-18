@@ -946,7 +946,11 @@ Move runtime operation out of an interactive Codespace.
 - Managed non-overlapping scheduler with deterministic run keys, graceful shutdown and lifecycle heartbeats: PR #20
 - Verified online SQLite backup, checksum manifest and controlled atomic restore: PR #21
 - File-mounted secret resolution with strict deployment mode and notification integration: PR #22
-- Full regression and container smoke evidence: 608 tests passed; image build and live health checks passed in Automated tests #149
+- Health-gated promotion, automatic rollback contracts, hardened Compose and restart-persistence verification: PR #23
+- Full deployment evidence: 614 tests passed; image build, live health, Compose validation and database persistence across container recreation passed in Automated tests #152
+
+**Remaining external gate**
+- Provision the approved image and persistent volume on a user-selected always-on host, then capture real restart and rollback evidence
 
 **Status:** In progress
 **Dependencies:** P4.5-P4.7
