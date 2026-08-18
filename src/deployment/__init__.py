@@ -4,6 +4,12 @@ from .backup import (
     BackupArtifact,
     DatabaseBackupService,
 )
+from .release import (
+    ControlledRelease,
+    ReleaseResult,
+    ReleaseRuntime,
+    ReleaseStatus,
+)
 from .health import (
     HeartbeatRecord,
     HeartbeatStore,
@@ -21,6 +27,10 @@ from .worker import (
 __all__ = [
     "BackupArtifact",
     "DatabaseBackupService",
+    "ControlledRelease",
+    "ReleaseResult",
+    "ReleaseRuntime",
+    "ReleaseStatus",
     "HeartbeatRecord",
     "HeartbeatStore",
     "HealthEvaluator",
