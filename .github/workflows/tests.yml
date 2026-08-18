@@ -80,3 +80,72 @@ jobs:
               "status": "ok",
           }
           PY
+
+      - name: Validate deployment composition
+        env:
+          BSAVCI_IMAGE: stock-analyzer:test
+          BSAVCI_WORKER_CYCLE: approved.module:paper_cycle
+        run: docker compose config --quiet
+
+      - name: Verify restart persistence
+        run: |
+          docker volume create stock-analyzer-persistence
+          cleanup() {
+            docker rm --force stock-analyzer-first \
+              stock-analyzer-second 2>/dev/null || true
+            docker volume rm stock-analyzer-persistence \
+              2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name stock-analyzer-first \
+            --volume stock-analyzer-persistence:/app/data \
+            stock-analyzer:test
+
+          python - <<'PY'
+          import time
+          import subprocess
+
+          for attempt in range(30):
+              result = subprocess.run(
+                  [
+                      "docker",
+                      "exec",
+                      "stock-analyzer-first",
+                      "python",
+                      "-c",
+                      (
+                          "import urllib.request; "
+                          "urllib.request.urlopen("
+                          "'http://127.0.0.1:8080/health/ready', "
+                          "timeout=2)"
+                      ),
+                  ],
+                  check=False,
+              )
+
+              if result.returncode == 0:
+                  break
+
+              if attempt == 29:
+                  raise RuntimeError(
+                      "First container did not become ready."
+                  )
+
+              time.sleep(1)
+          PY
+
+          docker exec stock-analyzer-first python -c \
+            "import os, sqlite3; connection = sqlite3.connect(os.environ['BSAVCI_DATABASE_PATH']); connection.execute('CREATE TABLE deployment_probe(value TEXT NOT NULL)'); connection.execute('INSERT INTO deployment_probe VALUES (?)', ('survived-restart',)); connection.commit(); connection.close()"
+
+          docker rm --force stock-analyzer-first
+
+          docker run --detach \
+            --name stock-analyzer-second \
+            --volume stock-analyzer-persistence:/app/data \
+            stock-analyzer:test
+
+          docker exec stock-analyzer-second python -c \
+            "import os, sqlite3; connection = sqlite3.connect(os.environ['BSAVCI_DATABASE_PATH']); value = connection.execute('SELECT value FROM deployment_probe').fetchone()[0]; connection.close(); assert value == 'survived-restart'"
+
