@@ -17,6 +17,11 @@ from src.data import (
     load_market_snapshot,
 )
 from src.paper import PaperTradingService
+from src.strategy import (
+    StrategyHorizon,
+    coerce_strategy_horizon,
+    normalise_strategy_version,
+)
 
 from .analysis import (
     run_deterministic_scanner_analysis,
@@ -354,7 +359,28 @@ class AutomaticMarketScanner:
         universe: StockUniverse,
         started_at: datetime | None = None,
         scan_key: str = "",
+        strategy_horizon: (
+            StrategyHorizon | str | None
+        ) = None,
+        strategy_version: str | None = None,
     ) -> MarketScanReport:
+        horizon = coerce_strategy_horizon(
+            strategy_horizon
+        )
+        version = normalise_strategy_version(
+            strategy_version
+        )
+
+        if (
+            (horizon is None)
+            != (version is None)
+        ):
+            raise ValueError(
+                "strategy_horizon and "
+                "strategy_version must be "
+                "provided together."
+            )
+
         at = (
             started_at
             or datetime.now(timezone.utc)
@@ -369,6 +395,12 @@ class AutomaticMarketScanner:
                     **asdict(
                         self.thresholds
                     ),
+                    "strategy_horizon": (
+                        horizon.value
+                        if horizon is not None
+                        else None
+                    ),
+                    "strategy_version": version,
                     "universe_policy": {
                         "policy_version": (
                             universe.policy_version
@@ -715,6 +747,15 @@ class AutomaticMarketScanner:
                     )
                 )
 
+        results = [
+            replace(
+                result,
+                strategy_horizon=horizon,
+                strategy_version=version,
+            )
+            for result in results
+        ]
+
         candidate_results = sorted(
             (
                 result
@@ -796,6 +837,8 @@ class AutomaticMarketScanner:
                         strategy=(
                             outcome.strategy
                         ),
+                        strategy_horizon=horizon,
+                        strategy_version=version,
                         recommendation="BUY",
                         market_regime=(
                             outcome
