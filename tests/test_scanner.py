@@ -99,6 +99,8 @@ def make_snapshot(
             "quoteType": "EQUITY",
             "currency": "USD",
             "exchange": "NMS",
+            "fractionalTradingEligible":
+            True,
         },
         fetched_at_utc=T0,
     )
@@ -600,6 +602,136 @@ def test_missing_release_report_is_ineligible(
     assert (
         result.watchlist_state
         is WatchlistState.PREPARE
+    )
+    assert result.signal_id is None
+
+
+def test_high_price_requires_verified_fractional_eligibility(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    def loader(symbol):
+        snapshot = make_snapshot(symbol)
+        snapshot.metadata[
+            "fractionalTradingEligible"
+        ] = False
+        return snapshot
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("Approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=loader,
+        analysis_runner=make_outcome,
+    )
+
+    report = scanner.run_scan(
+        account_id=account.account_id,
+        universe=StockUniverse(
+            name="fractional-ineligible",
+            symbols=("AAPL",),
+        ),
+        started_at=T0,
+    )
+    result = report.results[0]
+
+    assert (
+        result.status
+        is ScanResultStatus.DATA_REJECTED
+    )
+    assert (
+        result.watchlist_state
+        is WatchlistState.REJECT
+    )
+    assert (
+        result.metadata[
+            "fractional_eligible"
+        ]
+        is False
+    )
+    assert (
+        "FRACTIONAL_ELIGIBILITY_REQUIRED"
+        in result.metadata[
+            "filter_reason_codes"
+        ]
+    )
+    assert result.signal_id is None
+
+
+def test_known_near_term_event_blocks_candidate(
+    tmp_path,
+) -> None:
+    (
+        _,
+        _,
+        paper_service,
+        scanner_repository,
+        account,
+        thresholds,
+    ) = make_services(tmp_path)
+
+    event_at = T0 + timedelta(days=3)
+
+    def loader(symbol):
+        snapshot = make_snapshot(symbol)
+        snapshot.metadata[
+            "nextEventAt"
+        ] = event_at.isoformat()
+        return snapshot
+
+    scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=(
+            lambda strategy:
+            FakeReleaseReport(
+                True,
+                ("Approved.",),
+            )
+        ),
+        thresholds=thresholds,
+        snapshot_loader=loader,
+        analysis_runner=make_outcome,
+    )
+
+    report = scanner.run_scan(
+        account_id=account.account_id,
+        universe=StockUniverse(
+            name="event-blackout",
+            symbols=("AAPL",),
+        ),
+        started_at=T0,
+    )
+    result = report.results[0]
+
+    assert (
+        result.status
+        is ScanResultStatus.DATA_REJECTED
+    )
+    assert (
+        "EVENT_RISK_BLACKOUT"
+        in result.metadata[
+            "filter_reason_codes"
+        ]
+    )
+    assert (
+        result.metadata["next_event_at"]
+        == event_at.isoformat()
     )
     assert result.signal_id is None
 
