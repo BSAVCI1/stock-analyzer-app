@@ -452,11 +452,25 @@ class AutomationRepository:
         active: bool,
         reason: str | None,
         updated_at: datetime,
+        changed_by: str | None = None,
     ) -> PortfolioControl:
-        self.get_control(
+        current = self.get_control(
             account_id,
             at=updated_at,
         )
+
+        clean_reason = str(reason).strip() if reason else None
+        clean_operator = (
+            str(changed_by).strip() if changed_by else None
+        )
+
+        if clean_operator is not None and not clean_reason:
+            raise ValueError(
+                "An operator kill-switch change requires a reason."
+            )
+
+        if current.kill_switch_active is bool(active):
+            return current
 
         with transaction(
             self.database_path
@@ -471,15 +485,42 @@ class AutomationRepository:
                 """,
                 (
                     int(bool(active)),
-                    (
-                        str(reason).strip()
-                        if reason
-                        else None
-                    ),
+                    clean_reason,
                     _timestamp(updated_at),
                     account_id,
                 ),
             )
+
+            if clean_operator is not None:
+                connection.execute(
+                    """
+                    INSERT INTO paper_system_events(
+                        event_id, account_id, event_type, severity,
+                        reference_type, reference_id, message,
+                        metadata_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        _new_id("EVT"),
+                        account_id,
+                        (
+                            "GLOBAL_KILL_SWITCH_ACTIVATED"
+                            if active
+                            else "GLOBAL_KILL_SWITCH_DEACTIVATED"
+                        ),
+                        "CRITICAL" if active else "INFO",
+                        "ACCOUNT",
+                        account_id,
+                        clean_reason,
+                        _json_dump(
+                            {
+                                "active": bool(active),
+                                "changed_by": clean_operator,
+                            }
+                        ),
+                        _timestamp(updated_at),
+                    ),
+                )
 
         return self.get_control(
             account_id,
