@@ -246,6 +246,7 @@ class OrchestrationRepository:
         policy_version: str,
         report: OrchestrationCycleReport,
         recorded_at: datetime,
+        checkpoint_at: datetime | None = None,
     ) -> None:
         at = _timestamp(recorded_at)
 
@@ -335,7 +336,8 @@ class OrchestrationRepository:
                     account_id,
                     policy_version,
                     _timestamp(
-                        report.window_ended_at
+                        checkpoint_at
+                        or report.window_ended_at
                     ),
                     at,
                 ),
