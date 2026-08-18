@@ -2,8 +2,10 @@ from datetime import (
     datetime,
     timezone,
 )
-from threading import Event, Thread
+from threading import Event
 import sqlite3
+import subprocess
+import sys
 
 import pytest
 
@@ -94,6 +96,30 @@ def test_portable_runtime_rejects_double_start():
     finally:
         runtime.stop()
         runtime.wait()
+
+
+def test_combined_module_can_run_without_preload_warning():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "error",
+            "-c",
+            (
+                "import runpy; "
+                "runpy.run_module("
+                "'src.deployment.combined', "
+                "run_name='deployment_test'"
+                ")"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "found in sys.modules" not in result.stderr
 
 
 def test_validation_cycle_is_idempotent(
