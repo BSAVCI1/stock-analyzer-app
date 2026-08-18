@@ -1,0 +1,60 @@
+services:
+  health:
+    image: ${BSAVCI_IMAGE:?Set BSAVCI_IMAGE to an immutable image reference}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      BSAVCI_DATABASE_PATH: /app/data/paper_trading.db
+      BSAVCI_HEARTBEAT_PATH: /app/data/worker-heartbeat.json
+      BSAVCI_BACKUP_DIRECTORY: /app/data/backups
+      BSAVCI_REQUIRE_SECRET_FILES: "true"
+    ports:
+      - "127.0.0.1:${BSAVCI_HEALTH_PORT:-8080}:8080"
+    volumes:
+      - paper-data:/app/data
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  worker:
+    profiles:
+      - worker
+    image: ${BSAVCI_IMAGE:?Set BSAVCI_IMAGE to an immutable image reference}
+    command:
+      - python
+      - -m
+      - src.deployment.worker
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      BSAVCI_DATABASE_PATH: /app/data/paper_trading.db
+      BSAVCI_HEARTBEAT_PATH: /app/data/worker-heartbeat.json
+      BSAVCI_BACKUP_DIRECTORY: /app/data/backups
+      BSAVCI_REQUIRE_SECRET_FILES: "true"
+      BSAVCI_WORKER_CYCLE: ${BSAVCI_WORKER_CYCLE:?Set the approved paper-cycle adapter}
+      BSAVCI_WORKER_INTERVAL_SECONDS: ${BSAVCI_WORKER_INTERVAL_SECONDS:-900}
+      BSAVCI_RUN_KEY_PREFIX: ${BSAVCI_RUN_KEY_PREFIX:-managed}
+    volumes:
+      - paper-data:/app/data
+    tmpfs:
+      - /tmp
+
+volumes:
+  paper-data:
