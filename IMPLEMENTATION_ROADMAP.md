@@ -945,7 +945,8 @@ Move runtime operation out of an interactive Codespace.
 - Non-root container, persistent data boundary, health endpoints and disk-backed worker heartbeat contract: PR #19
 - Managed non-overlapping scheduler with deterministic run keys, graceful shutdown and lifecycle heartbeats: PR #20
 - Verified online SQLite backup, checksum manifest and controlled atomic restore: PR #21
-- Full regression and container smoke evidence: 601 tests passed; image build and live health checks passed in Automated tests #146
+- File-mounted secret resolution with strict deployment mode and notification integration: PR #22
+- Full regression and container smoke evidence: 608 tests passed; image build and live health checks passed in Automated tests #149
 
 **Status:** In progress
 **Dependencies:** P4.5-P4.7

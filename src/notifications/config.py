@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import Mapping
 
+from src.secrets import resolve_secret
+
 from .models import (
     EmailConfig,
     TelegramConfig,
@@ -50,8 +52,21 @@ def load_telegram_config(
 ) -> TelegramConfig | None:
     values = environ or os.environ
 
-    token = values.get(
-        "PAPER_TELEGRAM_BOT_TOKEN"
+    require_secret_files = _boolean(
+        values.get(
+            "BSAVCI_REQUIRE_SECRET_FILES"
+        ),
+        default=False,
+    )
+    resolved_token = resolve_secret(
+        "PAPER_TELEGRAM_BOT_TOKEN",
+        environ=values,
+        require_file=require_secret_files,
+    )
+    token = (
+        resolved_token.reveal()
+        if resolved_token is not None
+        else None
     )
 
     chat_id = values.get(
@@ -120,6 +135,18 @@ def load_email_config(
             + "."
         )
 
+    require_secret_files = _boolean(
+        values.get(
+            "BSAVCI_REQUIRE_SECRET_FILES"
+        ),
+        default=False,
+    )
+    resolved_password = resolve_secret(
+        "PAPER_SMTP_PASSWORD",
+        environ=values,
+        require_file=require_secret_files,
+    )
+
     return EmailConfig(
         host=host,
         port=int(
@@ -140,8 +167,10 @@ def load_email_config(
         username=values.get(
             "PAPER_SMTP_USERNAME"
         ),
-        password=values.get(
-            "PAPER_SMTP_PASSWORD"
+        password=(
+            resolved_password.reveal()
+            if resolved_password is not None
+            else None
         ),
         use_starttls=_boolean(
             values.get(
