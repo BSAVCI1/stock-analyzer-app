@@ -823,7 +823,14 @@ Continuously identify the most actionable liquid instruments without forcing tra
 - Zero actionable candidates is a valid result
 - Ranking is deterministic
 
-**Status:** Planned
+**Evidence**
+- Versioned universe governance and curated inclusion/exclusion: PR #3
+- Explicit watchlist states and decomposed deterministic scores: PR #4
+- Independent swing and medium-term watchlist ranking: PR #5
+- Fractional-feasibility, event-risk and structured filter-reason gates: PR #6
+- Full regression evidence: 510 tests passed in Automated tests #91
+
+**Status:** Complete
 **Dependencies:** P4.2-P4.3
 **Relative effort:** L
 
