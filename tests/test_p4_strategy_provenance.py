@@ -101,7 +101,7 @@ def test_genuine_v8_database_upgrades_to_v10(
             connection.execute(
                 "PRAGMA user_version"
             ).fetchone()[0]
-            == 11
+            == 12
         )
 
         tables = {

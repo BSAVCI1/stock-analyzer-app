@@ -29,11 +29,19 @@ from .models import (
     ExitRequest,
     ExitRequestStatus,
     PortfolioControl,
+    StrategyPause,
 )
 
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex}"
+
+
+def _strategy(value: str) -> str:
+    normalised = str(value).strip().lower()
+    if not normalised:
+        raise ValueError("strategy is required.")
+    return normalised
 
 
 def _timestamp(value: datetime) -> str:
@@ -526,6 +534,144 @@ class AutomationRepository:
             account_id,
             at=updated_at,
         )
+
+    @staticmethod
+    def _strategy_pause_from_row(row) -> StrategyPause:
+        return StrategyPause(
+            account_id=row["account_id"],
+            strategy=row["strategy"],
+            active=bool(row["active"]),
+            reason=row["reason"],
+            changed_by=row["changed_by"],
+            changed_at=_datetime(row["changed_at"]),
+        )
+
+    def list_strategy_pauses(
+        self,
+        account_id: str,
+        *,
+        active_only: bool = False,
+    ) -> tuple[StrategyPause, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            account = connection.execute(
+                "SELECT 1 FROM paper_accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if account is None:
+                raise ValueError(f"Unknown account: {account_id}.")
+
+            rows = connection.execute(
+                """
+                SELECT * FROM paper_strategy_pauses
+                WHERE account_id = ?
+                  AND (? = 0 OR active = 1)
+                ORDER BY strategy
+                """,
+                (account_id, int(active_only)),
+            ).fetchall()
+        finally:
+            connection.close()
+
+        return tuple(
+            self._strategy_pause_from_row(row)
+            for row in rows
+        )
+
+    def get_strategy_pause(
+        self,
+        account_id: str,
+        strategy: str,
+    ) -> StrategyPause | None:
+        target = _strategy(strategy)
+        return next(
+            (
+                pause
+                for pause in self.list_strategy_pauses(account_id)
+                if pause.strategy == target
+            ),
+            None,
+        )
+
+    def set_strategy_pause(
+        self,
+        account_id: str,
+        *,
+        strategy: str,
+        active: bool,
+        reason: str,
+        changed_by: str,
+        changed_at: datetime,
+    ) -> StrategyPause:
+        target = _strategy(strategy)
+        clean_reason = str(reason).strip()
+        clean_operator = str(changed_by).strip()
+        if not clean_reason:
+            raise ValueError("A strategy-pause reason is required.")
+        if not clean_operator:
+            raise ValueError("A strategy-pause operator is required.")
+
+        current = self.get_strategy_pause(account_id, target)
+        if current is not None and current.active is bool(active):
+            return current
+
+        with transaction(self.database_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO paper_strategy_pauses(
+                    account_id, strategy, active, reason,
+                    changed_by, changed_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(account_id, strategy) DO UPDATE SET
+                    active = excluded.active,
+                    reason = excluded.reason,
+                    changed_by = excluded.changed_by,
+                    changed_at = excluded.changed_at
+                """,
+                (
+                    account_id,
+                    target,
+                    int(bool(active)),
+                    clean_reason,
+                    clean_operator,
+                    _timestamp(changed_at),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO paper_system_events(
+                    event_id, account_id, event_type, severity,
+                    reference_type, reference_id, message,
+                    metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _new_id("EVT"),
+                    account_id,
+                    (
+                        "STRATEGY_PAUSE_ACTIVATED"
+                        if active
+                        else "STRATEGY_PAUSE_DEACTIVATED"
+                    ),
+                    "WARNING" if active else "INFO",
+                    "STRATEGY",
+                    target,
+                    clean_reason,
+                    _json_dump(
+                        {
+                            "active": bool(active),
+                            "changed_by": clean_operator,
+                            "strategy": target,
+                        }
+                    ),
+                    _timestamp(changed_at),
+                ),
+            )
+
+        pause = self.get_strategy_pause(account_id, target)
+        if pause is None:
+            raise RuntimeError("Strategy pause was not persisted.")
+        return pause
 
     def start_run(
         self,

@@ -967,7 +967,8 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 **Deliverables**
 - Global pause/kill switch (operator CLI, persistent state, audit trail and
   recovery runbook implemented in P4.9.1)
-- Per-strategy pause
+- Per-strategy pause (selective entry block, pending-order cancellation,
+  operator CLI and audit trail implemented in P4.9.2)
 - Stale-data circuit breaker
 - Reconciliation circuit breaker
 - Daily and weekly loss-limit pause

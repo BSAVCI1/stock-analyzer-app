@@ -78,3 +78,38 @@ For example:
 docker-compose -f compose.yaml -f compose.paper-local.yaml exec -T app \
   python -m src.jobs.cli kill-switch status
 ```
+
+## Per-strategy pause
+
+A strategy pause is narrower than the global kill switch. It cancels pending
+entries and blocks new entries only for the named strategy. Other strategies
+continue normally, and protective monitoring and exits remain active for
+positions that were opened by the paused strategy.
+
+Inspect all persisted strategy controls:
+
+```bash
+python -m src.jobs.cli strategy-pause status
+```
+
+Pause one strategy:
+
+```bash
+python -m src.jobs.cli strategy-pause activate trend_pullback \
+  --reason "Strategy evidence requires review" \
+  --operator "your-name"
+```
+
+Confirm that `active` is `true` and `new_entries_allowed` is `false`. Repeating
+the activation is idempotent and does not add another audit event.
+
+Resume only after review:
+
+```bash
+python -m src.jobs.cli strategy-pause deactivate trend_pullback \
+  --reason "Review completed and strategy approved" \
+  --operator "your-name"
+```
+
+The same Docker Compose prefix documented above can be placed before each
+strategy-pause command on the managed local paper profile.

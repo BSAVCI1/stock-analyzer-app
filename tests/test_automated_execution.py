@@ -211,6 +211,7 @@ def create_candidate_scan(
     stop_price=95,
     targets=(110, 120),
     quote_currency=None,
+    strategy="trend_pullback",
 ):
     signal = paper_service.persist_signal(
         account_id=account_id,
@@ -222,7 +223,7 @@ def create_candidate_scan(
             generated_at
             + timedelta(days=5)
         ),
-        strategy="trend_pullback",
+        strategy=strategy,
         recommendation="BUY",
         market_regime="BULLISH",
         score=80,
@@ -274,7 +275,7 @@ def create_candidate_scan(
                 100_000_000
             ),
             recommendation="BUY",
-            strategy="trend_pullback",
+            strategy=strategy,
             score=80,
             confidence=0.90,
             market_regime="BULLISH",
@@ -428,14 +429,196 @@ def test_schema_version_three(
     finally:
         connection.close()
 
-    assert version == 11
+    assert version == 12
 
     assert {
         "paper_execution_runs",
         "paper_account_controls",
         "paper_exit_requests",
         "paper_equity_snapshots",
+        "paper_strategy_pauses",
     }.issubset(tables)
+
+
+def test_strategy_pause_blocks_only_selected_strategy(
+    tmp_path,
+) -> None:
+    history = make_history([(T0, 100, 101, 99, 100)])
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={"AAPL": history},
+    )
+    automation_repository.set_strategy_pause(
+        account.account_id,
+        strategy="trend_pullback",
+        active=True,
+        reason="Strategy review in progress",
+        changed_by="test-operator",
+        changed_at=T0,
+    )
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+        strategy="trend_pullback",
+    )
+
+    report = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="paused-strategy-run",
+        run_at=T0,
+    )
+
+    assert report.entries_enabled is True
+    assert report.run.created_orders == 0
+    assert report.run.rejected_entries == 1
+    assert paper_repository.list_pending_orders(
+        account.account_id
+    ) == ()
+
+
+def test_other_strategy_can_enter_while_one_is_paused(
+    tmp_path,
+) -> None:
+    history = make_history([(T0, 100, 101, 99, 100)])
+    (
+        _,
+        paper_service,
+        scanner_repository,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={"AAPL": history},
+    )
+    automation_repository.set_strategy_pause(
+        account.account_id,
+        strategy="trend_pullback",
+        active=True,
+        reason="Strategy review in progress",
+        changed_by="test-operator",
+        changed_at=T0,
+    )
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+        strategy="mean_reversion",
+    )
+
+    report = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="other-strategy-run",
+        run_at=T0,
+    )
+
+    assert report.run.created_orders == 1
+
+
+def test_strategy_pause_cancels_matching_pending_entry(
+    tmp_path,
+) -> None:
+    history = make_history([(T0, 100, 101, 99, 100)])
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={"AAPL": history},
+    )
+    scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+    )
+    created = engine.run(
+        account_id=account.account_id,
+        scan_id=scan.scan_id,
+        run_key="create-before-pause",
+        run_at=T0,
+    )
+    assert created.run.created_orders == 1
+
+    automation_repository.set_strategy_pause(
+        account.account_id,
+        strategy="trend_pullback",
+        active=True,
+        reason="Pause pending entries",
+        changed_by="test-operator",
+        changed_at=T0 + timedelta(minutes=1),
+    )
+    paused = engine.run(
+        account_id=account.account_id,
+        run_key="cancel-after-pause",
+        run_at=T0 + timedelta(minutes=1),
+    )
+
+    assert paused.run.cancelled_orders == 1
+    assert paper_repository.list_pending_orders(
+        account.account_id
+    ) == ()
+
+
+def test_strategy_pause_preserves_protective_exit(
+    tmp_path,
+) -> None:
+    opened_at = T0 + timedelta(days=1)
+    stop_session = T0 + timedelta(days=2)
+    history = make_history(
+        [
+            (opened_at, 100, 102, 98, 100),
+            (stop_session, 94, 96, 93, 95),
+        ]
+    )
+    (
+        paper_repository,
+        paper_service,
+        _,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={"AAPL": history},
+    )
+    open_position(
+        paper_service=paper_service,
+        account_id=account.account_id,
+        opened_at=opened_at,
+    )
+    automation_repository.set_strategy_pause(
+        account.account_id,
+        strategy="trend_pullback",
+        active=True,
+        reason="Pause new entries only",
+        changed_by="test-operator",
+        changed_at=stop_session,
+    )
+
+    report = engine.run(
+        account_id=account.account_id,
+        run_key="paused-strategy-exit",
+        run_at=stop_session,
+    )
+
+    assert report.run.closed_positions == 1
+    assert paper_repository.list_open_positions(
+        account.account_id
+    ) == ()
 
 
 def test_candidate_creates_idempotent_order(
@@ -1604,4 +1787,3 @@ def test_horizon_position_uses_independent_holding_sessions(
         is PaperExitReason.TIME_EXIT
     )
     assert trade.exit_time == at_limit
-

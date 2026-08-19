@@ -79,7 +79,6 @@ class PortfolioControl:
             value = money(
                 getattr(self, name)
             )
-
             if not 0 < value <= 1:
                 raise ValueError(
                     f"{name} must be between 0 and 1."
@@ -208,6 +207,18 @@ class PortfolioControl:
             "maximum_invested_exposure",
             policy.maximum_invested_exposure,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyPause:
+    """Persistent entry pause for one named strategy."""
+
+    account_id: str
+    strategy: str
+    active: bool
+    reason: str | None
+    changed_by: str
+    changed_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

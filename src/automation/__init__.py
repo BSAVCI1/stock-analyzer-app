@@ -13,6 +13,7 @@ from .models import (
     ExitRequest,
     ExitRequestStatus,
     PortfolioControl,
+    StrategyPause,
 )
 from .repository import AutomationRepository
 
@@ -27,5 +28,6 @@ __all__ = [
     "ExitRequest",
     "ExitRequestStatus",
     "PortfolioControl",
+    "StrategyPause",
     "StaleMarketDataError",
 ]
