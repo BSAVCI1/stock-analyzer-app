@@ -87,6 +87,9 @@ class PerformanceSummary:
     net_pnl: Decimal
     total_fees: Decimal
     total_slippage: Decimal
+    total_costs: Decimal
+    expectancy: Decimal
+    cost_drag_pct: float | None
 
     average_return_pct: float
     best_trade_net_pnl: Decimal | None
@@ -125,7 +128,13 @@ class PerformanceBreakdown:
     winning_trades: int
     losing_trades: int
 
+    gross_pnl: Decimal
+    total_fees: Decimal
+    total_slippage: Decimal
+    total_costs: Decimal
     net_pnl: Decimal
+    expectancy: Decimal
+    profit_factor: float | None
     average_return_pct: float
 
     provenance: Provenance
