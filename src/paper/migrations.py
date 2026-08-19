@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 _SCHEMA_V1 = """
@@ -898,6 +898,30 @@ PRAGMA user_version = 12;
 """
 
 
+_SCHEMA_V13 = """
+CREATE TABLE paper_circuit_breakers (
+    account_id TEXT NOT NULL,
+    breaker_type TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0
+        CHECK(active IN (0, 1)),
+    reason TEXT NOT NULL,
+    tripped_at TEXT NOT NULL,
+    recovered_at TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(account_id, breaker_type, scope),
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+CREATE INDEX idx_circuit_breakers_active
+ON paper_circuit_breakers(account_id, active, breaker_type);
+
+PRAGMA user_version = 13;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1043,6 +1067,12 @@ def apply_migrations(
             _SCHEMA_V12
         )
         current_version = 12
+
+    if current_version < 13:
+        connection.executescript(
+            _SCHEMA_V13
+        )
+        current_version = 13
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

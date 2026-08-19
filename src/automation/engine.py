@@ -1659,6 +1659,64 @@ class AutomatedPaperExecutionEngine:
             count += 1
         return count
 
+    def _preflight_entry_data_freshness(
+        self,
+        *,
+        account_id: str,
+        scan_id: str | None,
+        run_at: datetime,
+        control: PortfolioControl,
+        cache,
+    ) -> tuple[int, tuple[str, ...]]:
+        checked = 0
+        reasons: list[str] = []
+
+        for order in self.paper_repository.list_pending_orders(
+            account_id
+        ):
+            checked += 1
+            try:
+                self._load_market(
+                    order.symbol,
+                    run_at=run_at,
+                    control=control,
+                    cache=cache,
+                )
+            except StaleMarketDataError as exc:
+                reasons.append(f"{order.symbol}: {exc}")
+
+        if scan_id is not None:
+            report = self.scanner_repository.get_report(scan_id)
+            for candidate in report.results:
+                if (
+                    candidate.status
+                    is not ScanResultStatus.ORDER_CANDIDATE
+                    or not candidate.release_eligible
+                    or candidate.signal_id is None
+                ):
+                    continue
+                checked += 1
+                if candidate.data_as_of is None:
+                    reasons.append(
+                        f"{candidate.symbol}: candidate has no "
+                        "market-data timestamp."
+                    )
+                    continue
+                data_age = (
+                    run_at.date()
+                    - candidate.data_as_of
+                    .astimezone(timezone.utc)
+                    .date()
+                ).days
+                if data_age > control.maximum_stale_market_days:
+                    reasons.append(
+                        f"{candidate.symbol}: candidate data is "
+                        f"{data_age} days old; maximum is "
+                        f"{control.maximum_stale_market_days}."
+                    )
+
+        return checked, tuple(dict.fromkeys(reasons))
+
     def _calculate_lifecycle_fee_quote(
         self,
         *,
@@ -2151,6 +2209,44 @@ class AutomatedPaperExecutionEngine:
                 )
             )
 
+            (
+                freshness_checked,
+                stale_data_reasons,
+            ) = self._preflight_entry_data_freshness(
+                account_id=account_id,
+                scan_id=scan_id,
+                run_at=at,
+                control=control,
+                cache=cache,
+            )
+
+            if stale_data_reasons:
+                self.automation_repository.trip_circuit_breaker(
+                    account_id,
+                    breaker_type="STALE_DATA",
+                    reason=(
+                        "Entry data freshness failed: "
+                        + "; ".join(stale_data_reasons)
+                    ),
+                    tripped_at=at,
+                    metadata={
+                        "checked_input_count": freshness_checked,
+                        "stale_reasons": stale_data_reasons,
+                    },
+                )
+            elif freshness_checked:
+                self.automation_repository.recover_circuit_breaker(
+                    account_id,
+                    breaker_type="STALE_DATA",
+                    reason=(
+                        "Fresh entry data was positively verified."
+                    ),
+                    recovered_at=at,
+                    metadata={
+                        "checked_input_count": freshness_checked,
+                    },
+                )
+
             closed, errors = (
                 self._monitor_price_exits(
                     account_id=account_id,
@@ -2233,6 +2329,18 @@ class AutomatedPaperExecutionEngine:
                     run_at=at,
                 )
             )
+
+            stale_breaker = (
+                self.automation_repository.get_circuit_breaker(
+                    account_id,
+                    breaker_type="STALE_DATA",
+                )
+            )
+            if stale_breaker is not None and stale_breaker.active:
+                block_reasons.append(
+                    "Stale-data circuit breaker is active: "
+                    f"{stale_breaker.reason}"
+                )
 
             if valuation_error:
                 block_reasons.append(

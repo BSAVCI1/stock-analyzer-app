@@ -212,11 +212,14 @@ def create_candidate_scan(
     targets=(110, 120),
     quote_currency=None,
     strategy="trend_pullback",
+    symbol="AAPL",
+    id_suffix="",
 ):
+    suffix = str(id_suffix).strip()
     signal = paper_service.persist_signal(
         account_id=account_id,
-        signal_id="SIG-AAPL-CANDIDATE",
-        symbol="AAPL",
+        signal_id=f"SIG-{symbol}-CANDIDATE{suffix}",
+        symbol=symbol,
         quote_currency=quote_currency,
         generated_at=generated_at,
         expires_at=(
@@ -242,7 +245,7 @@ def create_candidate_scan(
         account_id=account_id,
         universe=StockUniverse(
             name="test",
-            symbols=("AAPL",),
+            symbols=(symbol,),
         ),
         configuration={},
         app_version="test",
@@ -250,15 +253,16 @@ def create_candidate_scan(
         scan_key=(
             "scan-"
             + generated_at.isoformat()
+            + suffix
         ),
     )
 
     scanner_repository.save_result(
         ScanResult(
-            result_id="RESULT-AAPL-CANDIDATE",
+            result_id=f"RESULT-{symbol}-CANDIDATE{suffix}",
             scan_id=scan.scan_id,
             account_id=account_id,
-            symbol="AAPL",
+            symbol=symbol,
             status=(
                 ScanResultStatus
                 .ORDER_CANDIDATE
@@ -429,7 +433,7 @@ def test_schema_version_three(
     finally:
         connection.close()
 
-    assert version == 12
+    assert version == 13
 
     assert {
         "paper_execution_runs",
@@ -437,6 +441,7 @@ def test_schema_version_three(
         "paper_exit_requests",
         "paper_equity_snapshots",
         "paper_strategy_pauses",
+        "paper_circuit_breakers",
     }.issubset(tables)
 
 
@@ -480,6 +485,13 @@ def test_strategy_pause_blocks_only_selected_strategy(
     assert report.entries_enabled is True
     assert report.run.created_orders == 0
     assert report.run.rejected_entries == 1
+    assert (
+        paper_repository
+        .list_pending_orders(
+            account.account_id
+        )
+        == ()
+    )
     assert paper_repository.list_pending_orders(
         account.account_id
     ) == ()
@@ -1122,16 +1134,129 @@ def test_stale_candidate_is_rejected(
     )
 
     assert report.run.created_orders == 0
-    assert report.run.rejected_entries == 1
+    assert report.run.rejected_entries == 0
+    assert report.entries_enabled is False
 
-    assert (
-        paper_repository
-        .list_pending_orders(
-            account.account_id
-        )
-        == ()
+
+def test_stale_data_breaker_blocks_all_entries_and_recovers(
+    tmp_path,
+) -> None:
+    stale_run = T0 + timedelta(days=8)
+    recovery_run = T0 + timedelta(days=9)
+    history = {
+        "MSFT": make_history(
+            [
+                (T0, 100, 101, 99, 100),
+                (stale_run, 101, 102, 100, 101),
+            ]
+        ),
+        "AAPL": make_history([(T0, 100, 101, 99, 100)]),
+        "GOOG": make_history(
+            [(recovery_run, 100, 101, 99, 100)]
+        ),
+    }
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol=history,
     )
 
+    fresh_pending_scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+        symbol="MSFT",
+        id_suffix="-PENDING",
+    )
+    pending = engine.run(
+        account_id=account.account_id,
+        scan_id=fresh_pending_scan.scan_id,
+        run_key="fresh-pending-before-stale",
+        run_at=T0,
+    )
+    assert pending.run.created_orders == 1
+
+    stale_scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+        generated_at=stale_run,
+        data_as_of=T0,
+        symbol="AAPL",
+        id_suffix="-STALE",
+    )
+    tripped = engine.run(
+        account_id=account.account_id,
+        scan_id=stale_scan.scan_id,
+        run_key="trip-stale-data-breaker",
+        run_at=stale_run,
+    )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="STALE_DATA",
+    )
+    assert breaker is not None
+    assert breaker.active is True
+    assert tripped.entries_enabled is False
+    assert tripped.run.created_orders == 0
+    assert tripped.run.cancelled_orders == 1
+    assert paper_repository.list_pending_orders(
+        account.account_id
+    ) == ()
+
+    persisted = AutomationRepository(
+        paper_repository.database_path
+    ).get_circuit_breaker(
+        account.account_id,
+        breaker_type="STALE_DATA",
+    )
+    assert persisted is not None
+    assert persisted.active is True
+
+    recovery_scan = create_candidate_scan(
+        paper_service=paper_service,
+        scanner_repository=scanner_repository,
+        account_id=account.account_id,
+        generated_at=recovery_run,
+        data_as_of=recovery_run,
+        symbol="GOOG",
+        id_suffix="-RECOVERY",
+    )
+    recovered = engine.run(
+        account_id=account.account_id,
+        scan_id=recovery_scan.scan_id,
+        run_key="recover-stale-data-breaker",
+        run_at=recovery_run,
+    )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="STALE_DATA",
+    )
+    assert breaker is not None
+    assert breaker.active is False
+    assert breaker.recovered_at == recovery_run
+    assert recovered.entries_enabled is True
+    assert recovered.run.created_orders == 1
+
+    events = tuple(
+        event.event_type
+        for event in paper_repository.list_system_events(
+            account.account_id
+        )
+        if event.event_type.startswith("CIRCUIT_BREAKER_")
+    )
+    assert events == (
+        "CIRCUIT_BREAKER_TRIPPED",
+        "CIRCUIT_BREAKER_RECOVERED",
+    )
 
 def test_empty_execution_run_reconciles(
     tmp_path,

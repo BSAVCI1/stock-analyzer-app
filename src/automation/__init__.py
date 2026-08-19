@@ -6,6 +6,7 @@ from .engine import (
 )
 from .models import (
     AutomatedExecutionConfig,
+    CircuitBreakerState,
     EquitySnapshot,
     ExecutionRun,
     ExecutionRunReport,
@@ -21,6 +22,7 @@ __all__ = [
     "AutomatedExecutionConfig",
     "AutomatedPaperExecutionEngine",
     "AutomationRepository",
+    "CircuitBreakerState",
     "EquitySnapshot",
     "ExecutionRun",
     "ExecutionRunReport",

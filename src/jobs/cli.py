@@ -353,6 +353,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Required operator identity for a state change.",
     )
 
+    circuit_breaker = commands.add_parser(
+        "circuit-breaker",
+        help="Inspect persisted automatic circuit breakers.",
+    )
+    _add_runtime_arguments(circuit_breaker)
+    circuit_breaker.add_argument(
+        "action",
+        choices=("status",),
+    )
+
     return parser
 
 
@@ -892,6 +902,12 @@ def _run_status(
             active_only=True,
         )
     )
+    circuit_breakers = (
+        runtime.automation_repository.list_circuit_breakers(
+            account_id,
+            active_only=True,
+        )
+    )
 
     _write_json(
         {
@@ -995,6 +1011,10 @@ def _run_status(
                     "changed_at": pause.changed_at,
                 }
                 for pause in strategy_pauses
+            ],
+            "circuit_breakers": [
+                _circuit_breaker_payload(state)
+                for state in circuit_breakers
             ],
         }
     )
@@ -1123,6 +1143,45 @@ def _run_strategy_pause(
     return 0
 
 
+def _circuit_breaker_payload(state) -> dict[str, object]:
+    return {
+        "account_id": state.account_id,
+        "breaker_type": state.breaker_type,
+        "scope": state.scope,
+        "active": state.active,
+        "reason": state.reason,
+        "tripped_at": state.tripped_at,
+        "recovered_at": state.recovered_at,
+        "metadata": dict(state.metadata),
+        "updated_at": state.updated_at,
+        "new_entries_allowed": not state.active,
+    }
+
+
+def _run_circuit_breaker_status(
+    runtime: PaperJobRuntime,
+) -> int:
+    account_id = runtime.settings.account_id
+    states = runtime.automation_repository.list_circuit_breakers(
+        account_id
+    )
+    _write_json(
+        {
+            "account_id": account_id,
+            "circuit_breakers": [
+                _circuit_breaker_payload(state)
+                for state in states
+            ],
+            "active_breaker_types": [
+                state.breaker_type
+                for state in states
+                if state.active
+            ],
+        }
+    )
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1176,6 +1235,9 @@ def main(
 
         if args.command == "strategy-pause":
             return _run_strategy_pause(runtime, args)
+
+        if args.command == "circuit-breaker":
+            return _run_circuit_breaker_status(runtime)
 
         parser.error(
             f"Unsupported command: "

@@ -23,6 +23,7 @@ from src.paper import (
 )
 
 from .models import (
+    CircuitBreakerState,
     EquitySnapshot,
     ExecutionRun,
     ExecutionRunStatus,
@@ -41,6 +42,13 @@ def _strategy(value: str) -> str:
     normalised = str(value).strip().lower()
     if not normalised:
         raise ValueError("strategy is required.")
+    return normalised
+
+
+def _breaker_key(value: str, *, name: str) -> str:
+    normalised = str(value).strip().upper()
+    if not normalised:
+        raise ValueError(f"{name} is required.")
     return normalised
 
 
@@ -672,6 +680,244 @@ class AutomationRepository:
         if pause is None:
             raise RuntimeError("Strategy pause was not persisted.")
         return pause
+
+    @staticmethod
+    def _circuit_breaker_from_row(row) -> CircuitBreakerState:
+        return CircuitBreakerState(
+            account_id=row["account_id"],
+            breaker_type=row["breaker_type"],
+            scope=row["scope"],
+            active=bool(row["active"]),
+            reason=row["reason"],
+            tripped_at=_datetime(row["tripped_at"]),
+            recovered_at=_datetime(row["recovered_at"]),
+            metadata=json.loads(row["metadata_json"]),
+            updated_at=_datetime(row["updated_at"]),
+        )
+
+    def list_circuit_breakers(
+        self,
+        account_id: str,
+        *,
+        active_only: bool = False,
+    ) -> tuple[CircuitBreakerState, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            account = connection.execute(
+                "SELECT 1 FROM paper_accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if account is None:
+                raise ValueError(f"Unknown account: {account_id}.")
+            rows = connection.execute(
+                """
+                SELECT * FROM paper_circuit_breakers
+                WHERE account_id = ?
+                  AND (? = 0 OR active = 1)
+                ORDER BY breaker_type, scope
+                """,
+                (account_id, int(active_only)),
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(
+            self._circuit_breaker_from_row(row)
+            for row in rows
+        )
+
+    def get_circuit_breaker(
+        self,
+        account_id: str,
+        *,
+        breaker_type: str,
+        scope: str = "ACCOUNT",
+    ) -> CircuitBreakerState | None:
+        target_type = _breaker_key(
+            breaker_type,
+            name="breaker_type",
+        )
+        target_scope = _breaker_key(scope, name="scope")
+        return next(
+            (
+                state
+                for state in self.list_circuit_breakers(account_id)
+                if state.breaker_type == target_type
+                and state.scope == target_scope
+            ),
+            None,
+        )
+
+    def trip_circuit_breaker(
+        self,
+        account_id: str,
+        *,
+        breaker_type: str,
+        reason: str,
+        tripped_at: datetime,
+        scope: str = "ACCOUNT",
+        metadata: Mapping[str, object] | None = None,
+    ) -> CircuitBreakerState:
+        target_type = _breaker_key(
+            breaker_type,
+            name="breaker_type",
+        )
+        target_scope = _breaker_key(scope, name="scope")
+        clean_reason = str(reason).strip()
+        if not clean_reason:
+            raise ValueError("A circuit-breaker reason is required.")
+        current = self.get_circuit_breaker(
+            account_id,
+            breaker_type=target_type,
+            scope=target_scope,
+        )
+        if current is not None and current.active:
+            return current
+
+        payload = dict(metadata or {})
+        with transaction(self.database_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO paper_circuit_breakers(
+                    account_id, breaker_type, scope, active,
+                    reason, tripped_at, recovered_at,
+                    metadata_json, updated_at
+                ) VALUES (?, ?, ?, 1, ?, ?, NULL, ?, ?)
+                ON CONFLICT(account_id, breaker_type, scope) DO UPDATE SET
+                    active = 1,
+                    reason = excluded.reason,
+                    tripped_at = excluded.tripped_at,
+                    recovered_at = NULL,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    account_id,
+                    target_type,
+                    target_scope,
+                    clean_reason,
+                    _timestamp(tripped_at),
+                    _json_dump(payload),
+                    _timestamp(tripped_at),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO paper_system_events(
+                    event_id, account_id, event_type, severity,
+                    reference_type, reference_id, message,
+                    metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _new_id("EVT"),
+                    account_id,
+                    "CIRCUIT_BREAKER_TRIPPED",
+                    "ERROR",
+                    "CIRCUIT_BREAKER",
+                    f"{target_type}:{target_scope}",
+                    clean_reason,
+                    _json_dump(
+                        {
+                            **payload,
+                            "breaker_type": target_type,
+                            "scope": target_scope,
+                        }
+                    ),
+                    _timestamp(tripped_at),
+                ),
+            )
+        state = self.get_circuit_breaker(
+            account_id,
+            breaker_type=target_type,
+            scope=target_scope,
+        )
+        if state is None:
+            raise RuntimeError("Circuit breaker was not persisted.")
+        return state
+
+    def recover_circuit_breaker(
+        self,
+        account_id: str,
+        *,
+        breaker_type: str,
+        reason: str,
+        recovered_at: datetime,
+        scope: str = "ACCOUNT",
+        metadata: Mapping[str, object] | None = None,
+    ) -> CircuitBreakerState | None:
+        target_type = _breaker_key(
+            breaker_type,
+            name="breaker_type",
+        )
+        target_scope = _breaker_key(scope, name="scope")
+        clean_reason = str(reason).strip()
+        if not clean_reason:
+            raise ValueError("A recovery reason is required.")
+        current = self.get_circuit_breaker(
+            account_id,
+            breaker_type=target_type,
+            scope=target_scope,
+        )
+        if current is None or not current.active:
+            return current
+
+        payload = {
+            **dict(current.metadata),
+            **dict(metadata or {}),
+            "recovery_reason": clean_reason,
+        }
+        with transaction(self.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE paper_circuit_breakers
+                SET active = 0,
+                    recovered_at = ?,
+                    metadata_json = ?,
+                    updated_at = ?
+                WHERE account_id = ?
+                  AND breaker_type = ?
+                  AND scope = ?
+                """,
+                (
+                    _timestamp(recovered_at),
+                    _json_dump(payload),
+                    _timestamp(recovered_at),
+                    account_id,
+                    target_type,
+                    target_scope,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO paper_system_events(
+                    event_id, account_id, event_type, severity,
+                    reference_type, reference_id, message,
+                    metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _new_id("EVT"),
+                    account_id,
+                    "CIRCUIT_BREAKER_RECOVERED",
+                    "INFO",
+                    "CIRCUIT_BREAKER",
+                    f"{target_type}:{target_scope}",
+                    clean_reason,
+                    _json_dump(
+                        {
+                            "breaker_type": target_type,
+                            "scope": target_scope,
+                            **dict(metadata or {}),
+                        }
+                    ),
+                    _timestamp(recovered_at),
+                ),
+            )
+        return self.get_circuit_breaker(
+            account_id,
+            breaker_type=target_type,
+            scope=target_scope,
+        )
 
     def start_run(
         self,
