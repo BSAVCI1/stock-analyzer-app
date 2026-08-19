@@ -969,7 +969,8 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
   recovery runbook implemented in P4.9.1)
 - Per-strategy pause (selective entry block, pending-order cancellation,
   operator CLI and audit trail implemented in P4.9.2)
-- Stale-data circuit breaker
+- Stale-data circuit breaker (account-wide entry preflight, persistent trip
+  and verified automatic recovery implemented in P4.9.3)
 - Reconciliation circuit breaker
 - Daily and weekly loss-limit pause
 - Provider outage handling

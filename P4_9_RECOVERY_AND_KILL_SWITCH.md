@@ -113,3 +113,35 @@ python -m src.jobs.cli strategy-pause deactivate trend_pullback \
 
 The same Docker Compose prefix documented above can be placed before each
 strategy-pause command on the managed local paper profile.
+
+## Stale-data circuit breaker
+
+The stale-data breaker is automatic and account-wide. Before any pending or
+new entry is processed, the execution engine checks every relevant entry-data
+timestamp against the configured freshness limit. If one critical input is
+missing or stale, the breaker:
+
+- blocks all new entries for the account;
+- cancels pending entries before they can fill;
+- persists across process and container restarts;
+- records one auditable trip event; and
+- remains active when no fresh evidence is available.
+
+Inspect the state:
+
+```bash
+python -m src.jobs.cli circuit-breaker status
+```
+
+The breaker cannot be cleared manually. It recovers automatically only when a
+later execution cycle positively verifies at least one relevant entry input
+and all checked entry inputs are fresh. Recovery is persisted and recorded as
+a separate system event. Protective position monitoring is not disabled by
+the entry circuit breaker.
+
+For the managed local paper profile:
+
+```bash
+docker-compose -f compose.yaml -f compose.paper-local.yaml exec -T app \
+  python -m src.jobs.cli circuit-breaker status
+```

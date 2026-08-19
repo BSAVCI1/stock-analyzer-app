@@ -222,6 +222,21 @@ class StrategyPause:
 
 
 @dataclass(frozen=True, slots=True)
+class CircuitBreakerState:
+    """Persistent automatic safety circuit state."""
+
+    account_id: str
+    breaker_type: str
+    scope: str
+    active: bool
+    reason: str
+    tripped_at: datetime
+    recovered_at: datetime | None
+    metadata: Mapping[str, object]
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class ExitRequest:
     request_id: str
     account_id: str
