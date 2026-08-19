@@ -2185,6 +2185,8 @@ class AutomatedPaperExecutionEngine:
             "error_count": 0,
         }
 
+        failure_entry_block_reasons: tuple[str, ...] = ()
+
         cache = {}
 
         try:
@@ -2196,10 +2198,53 @@ class AutomatedPaperExecutionEngine:
             )
 
             if not reconciliation.reconciled:
+                reconciliation_reason = (
+                    "Account reconciliation circuit breaker is active: "
+                    "stored cash differs from the ledger by "
+                    f"{reconciliation.difference}."
+                )
+                self.automation_repository.trip_circuit_breaker(
+                    account_id,
+                    breaker_type="RECONCILIATION",
+                    reason=reconciliation_reason,
+                    tripped_at=at,
+                    metadata={
+                        "stage": "PRE_EXECUTION",
+                        "stored_cash_balance": str(
+                            reconciliation.stored_cash_balance
+                        ),
+                        "ledger_cash_balance": str(
+                            reconciliation.ledger_cash_balance
+                        ),
+                        "difference": str(reconciliation.difference),
+                    },
+                )
+                failure_entry_block_reasons = (
+                    reconciliation_reason,
+                )
                 raise RuntimeError(
                     "Account did not reconcile "
                     "before execution."
                 )
+
+            self.automation_repository.recover_circuit_breaker(
+                account_id,
+                breaker_type="RECONCILIATION",
+                reason=(
+                    "Account cash and ledger balances reconciled."
+                ),
+                recovered_at=at,
+                metadata={
+                    "stage": "PRE_EXECUTION",
+                    "stored_cash_balance": str(
+                        reconciliation.stored_cash_balance
+                    ),
+                    "ledger_cash_balance": str(
+                        reconciliation.ledger_cash_balance
+                    ),
+                    "difference": str(reconciliation.difference),
+                },
+            )
 
             control = (
                 self.automation_repository
@@ -2472,6 +2517,30 @@ class AutomatedPaperExecutionEngine:
             )
 
             if not reconciliation.reconciled:
+                reconciliation_reason = (
+                    "Account reconciliation circuit breaker is active: "
+                    "stored cash differs from the ledger by "
+                    f"{reconciliation.difference}."
+                )
+                self.automation_repository.trip_circuit_breaker(
+                    account_id,
+                    breaker_type="RECONCILIATION",
+                    reason=reconciliation_reason,
+                    tripped_at=at,
+                    metadata={
+                        "stage": "POST_EXECUTION",
+                        "stored_cash_balance": str(
+                            reconciliation.stored_cash_balance
+                        ),
+                        "ledger_cash_balance": str(
+                            reconciliation.ledger_cash_balance
+                        ),
+                        "difference": str(reconciliation.difference),
+                    },
+                )
+                failure_entry_block_reasons = (
+                    reconciliation_reason,
+                )
                 raise RuntimeError(
                     "Account did not reconcile "
                     "after execution."
@@ -2524,7 +2593,9 @@ class AutomatedPaperExecutionEngine:
                         .FAILED
                     ),
                     completed_at=at,
-                    entry_block_reasons=(),
+                    entry_block_reasons=(
+                        failure_entry_block_reasons
+                    ),
                     error_message=(
                         f"{type(exc).__name__}: "
                         f"{exc}"

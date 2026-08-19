@@ -24,6 +24,7 @@ from src.costs import (
 )
 from src.data import MarketSnapshot
 from src.paper import (
+    AccountReconciliation,
     PaperExitReason,
     PaperPortfolioConfig,
     PaperRepository,
@@ -1257,6 +1258,160 @@ def test_stale_data_breaker_blocks_all_entries_and_recovers(
         "CIRCUIT_BREAKER_TRIPPED",
         "CIRCUIT_BREAKER_RECOVERED",
     )
+
+
+def test_reconciliation_breaker_persists_and_recovers_only_after_match(
+    tmp_path,
+) -> None:
+    (
+        paper_repository,
+        _,
+        _,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={},
+    )
+
+    with sqlite3.connect(paper_repository.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE paper_accounts
+            SET cash_balance = ?
+            WHERE account_id = ?
+            """,
+            ("9999.00", account.account_id),
+        )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Account did not reconcile before execution",
+    ):
+        engine.run(
+            account_id=account.account_id,
+            run_key="trip-reconciliation-breaker",
+            run_at=T0,
+        )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="RECONCILIATION",
+    )
+    assert breaker is not None
+    assert breaker.active is True
+    assert breaker.metadata["stage"] == "PRE_EXECUTION"
+    assert breaker.metadata["difference"] == "-1.00000000"
+
+    with pytest.raises(RuntimeError):
+        engine.run(
+            account_id=account.account_id,
+            run_key="repeat-reconciliation-failure",
+            run_at=T0 + timedelta(minutes=1),
+        )
+
+    trip_events = tuple(
+        event
+        for event in paper_repository.list_system_events(
+            account.account_id
+        )
+        if event.event_type == "CIRCUIT_BREAKER_TRIPPED"
+    )
+    assert len(trip_events) == 1
+
+    with sqlite3.connect(paper_repository.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE paper_accounts
+            SET cash_balance = ?
+            WHERE account_id = ?
+            """,
+            ("10000.00", account.account_id),
+        )
+
+    recovered = engine.run(
+        account_id=account.account_id,
+        run_key="recover-reconciliation-breaker",
+        run_at=T0 + timedelta(minutes=2),
+    )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="RECONCILIATION",
+    )
+    assert breaker is not None
+    assert breaker.active is False
+    assert breaker.recovered_at == T0 + timedelta(minutes=2)
+    assert recovered.entries_enabled is True
+    assert recovered.reconciliation.reconciled is True
+
+    circuit_events = tuple(
+        event.event_type
+        for event in paper_repository.list_system_events(
+            account.account_id
+        )
+        if event.event_type.startswith("CIRCUIT_BREAKER_")
+    )
+    assert circuit_events == (
+        "CIRCUIT_BREAKER_TRIPPED",
+        "CIRCUIT_BREAKER_RECOVERED",
+    )
+
+
+def test_post_execution_reconciliation_failure_trips_breaker(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    (
+        paper_repository,
+        _,
+        _,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={},
+    )
+    reconcile = paper_repository.reconcile_account
+    call_count = 0
+
+    def reconcile_then_fail(account_id):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return reconcile(account_id)
+        return AccountReconciliation(
+            account_id=account_id,
+            stored_cash_balance=Decimal("9999"),
+            ledger_cash_balance=Decimal("10000"),
+            difference=Decimal("-1"),
+        )
+
+    monkeypatch.setattr(
+        paper_repository,
+        "reconcile_account",
+        reconcile_then_fail,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Account did not reconcile after execution",
+    ):
+        engine.run(
+            account_id=account.account_id,
+            run_key="post-execution-reconciliation-failure",
+            run_at=T0,
+        )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="RECONCILIATION",
+    )
+    assert breaker is not None
+    assert breaker.active is True
+    assert breaker.metadata["stage"] == "POST_EXECUTION"
 
 def test_empty_execution_run_reconciles(
     tmp_path,
