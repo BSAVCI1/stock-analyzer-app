@@ -192,6 +192,7 @@ class AutomaticMarketScanner:
         score_components: (
             dict[str, float] | None
         ) = None,
+        metadata: dict[str, object] | None = None,
     ) -> ScanResult:
         order = (
             outcome.order
@@ -348,6 +349,7 @@ class AutomaticMarketScanner:
                         metrics
                         .provider_warnings
                     ),
+                    "provider_load_succeeded": True,
                     "analysis_warnings":
                     list(
                         outcome.warnings
@@ -355,6 +357,7 @@ class AutomaticMarketScanner:
                         is not None
                         else ()
                     ),
+                    **dict(metadata or {}),
                 }
                 if metrics is not None
                 else {
@@ -362,6 +365,7 @@ class AutomaticMarketScanner:
                     watchlist_state.value,
                     "rank_score_components":
                     components,
+                    **dict(metadata or {}),
                 }
             ),
         )
@@ -465,11 +469,34 @@ class AutomaticMarketScanner:
             ) = None
 
             try:
-                snapshot = (
-                    self.snapshot_loader(
-                        symbol
+                try:
+                    snapshot = self.snapshot_loader(symbol)
+                except Exception as exc:
+                    results.append(
+                        self._result_from_metrics(
+                            scan_id=scan.scan_id,
+                            account_id=account_id,
+                            symbol=symbol,
+                            status=ScanResultStatus.SCAN_ERROR,
+                            processed_at=processed_at,
+                            metrics=None,
+                            outcome=None,
+                            release_eligible=False,
+                            rank_score=None,
+                            reasons=(
+                                "Market-data provider failed with "
+                                f"{type(exc).__name__}: {exc}",
+                            ),
+                            metadata={
+                                "failure_stage":
+                                "MARKET_DATA_PROVIDER",
+                                "provider_load_succeeded": False,
+                                "error_type": type(exc).__name__,
+                                "error_message": str(exc),
+                            },
+                        )
                     )
-                )
+                    continue
 
                 metrics, data_reasons = (
                     evaluate_market_snapshot(
@@ -758,6 +785,12 @@ class AutomaticMarketScanner:
                             f"{type(exc).__name__}: "
                             f"{exc}",
                         ),
+                        metadata={
+                            "failure_stage": "SCANNER_PROCESSING",
+                            "provider_load_succeeded": True,
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        },
                     )
                 )
 

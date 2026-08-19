@@ -976,7 +976,9 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Daily and weekly loss-limit pause (persistent period-locked entry pauses,
   configurable 3%/5% defaults and audited rollover recovery implemented in
   P4.9.5)
-- Provider outage handling
+- Provider outage handling (provider-stage classification, persistent
+  fail-closed entry breaker, scheduler-cycle retry and verified clean-provider
+  recovery implemented in P4.9.6)
 - Restart recovery and idempotent replay
 - Operational incident log
 

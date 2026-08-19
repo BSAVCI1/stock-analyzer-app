@@ -2,6 +2,7 @@
 
 from .engine import (
     AutomatedPaperExecutionEngine,
+    ProviderUnavailableError,
     StaleMarketDataError,
 )
 from .models import (
@@ -30,6 +31,7 @@ __all__ = [
     "ExitRequest",
     "ExitRequestStatus",
     "PortfolioControl",
+    "ProviderUnavailableError",
     "StrategyPause",
     "StaleMarketDataError",
 ]
