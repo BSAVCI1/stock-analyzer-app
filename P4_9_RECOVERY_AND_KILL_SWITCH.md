@@ -114,6 +114,26 @@ python -m src.jobs.cli strategy-pause deactivate trend_pullback \
 The same Docker Compose prefix documented above can be placed before each
 strategy-pause command on the managed local paper profile.
 
+## Reconciliation circuit breaker
+
+The reconciliation breaker is automatic and account-wide. Every execution
+run compares the account's stored cash balance with the complete ledger before
+processing any market action. A mismatch fails the run, persists a
+`RECONCILIATION` breaker, records the balances and difference in the audit
+metadata, and blocks new entries across process and container restarts.
+
+Inspect the persisted state with the common breaker command:
+
+```bash
+python -m src.jobs.cli circuit-breaker status
+```
+
+Do not clear the breaker manually or edit the paper database. Investigate the
+underlying ledger or account-writing fault and restore from verified evidence
+when required. The breaker recovers automatically only when a later execution
+run positively verifies that stored cash and ledger cash match exactly. A
+repeated mismatch is idempotent and does not create duplicate trip events.
+
 ## Stale-data circuit breaker
 
 The stale-data breaker is automatic and account-wide. Before any pending or

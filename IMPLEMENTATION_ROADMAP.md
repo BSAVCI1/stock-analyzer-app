@@ -971,7 +971,8 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
   operator CLI and audit trail implemented in P4.9.2)
 - Stale-data circuit breaker (account-wide entry preflight, persistent trip
   and verified automatic recovery implemented in P4.9.3)
-- Reconciliation circuit breaker
+- Reconciliation circuit breaker (persistent pre/post-execution trip,
+  idempotent audit and verified automatic recovery implemented in P4.9.4)
 - Daily and weekly loss-limit pause
 - Provider outage handling
 - Restart recovery and idempotent replay
