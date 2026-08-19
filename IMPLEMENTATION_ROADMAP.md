@@ -1001,10 +1001,15 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 Measure whether the bot creates useful decisions, not merely activity.
 
 **Deliverables**
-- Performance after commissions, spread, slippage and FX
-- Separate swing and medium-term results
+- Performance after commissions, spread, slippage and FX (persisted-trade
+  gross, fee, slippage, total-cost, net and expectancy baseline implemented in
+  P4.10.1)
+- Separate swing and medium-term results (combined horizon and strategy-version
+  cohorts implemented in P4.10.1)
 - Benchmark and cash comparison
-- Expectancy, drawdown, profit factor and concentration
+- Expectancy, drawdown, profit factor and concentration (cost-adjusted
+  expectancy and profit factor implemented in P4.10.1; drawdown retained from
+  persisted equity snapshots; concentration pending)
 - Watchlist conversion and stale-signal rate
 - Alert usefulness and manual-copy journal
 - Operational reliability metrics
@@ -1014,7 +1019,7 @@ Measure whether the bot creates useful decisions, not merely activity.
 - Results are not mixed across strategy versions
 - No headline metric hides transaction costs
 
-**Status:** Planned
+**Status:** In progress
 **Dependencies:** P4.2-P4.9
 **Relative effort:** M
 

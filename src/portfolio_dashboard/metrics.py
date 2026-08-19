@@ -110,6 +110,11 @@ def calculate_performance(
         ZERO,
     )
 
+    total_costs = (
+        total_fees
+        + total_slippage
+    )
+
     gross_profit = sum(
         (
             trade.net_pnl
@@ -146,6 +151,22 @@ def calculate_performance(
         else 0.0
     )
 
+    expectancy = (
+        net_pnl / trade_count
+        if trade_count
+        else ZERO
+    )
+
+    cost_drag_pct = (
+        float(
+            total_costs
+            / abs(gross_pnl)
+            * Decimal("100")
+        )
+        if gross_pnl != ZERO
+        else None
+    )
+
     profit_factor = (
         float(
             gross_profit / gross_loss
@@ -172,6 +193,9 @@ def calculate_performance(
         total_slippage=(
             total_slippage
         ),
+        total_costs=total_costs,
+        expectancy=expectancy,
+        cost_drag_pct=cost_drag_pct,
         average_return_pct=(
             average_return
         ),
@@ -405,6 +429,60 @@ def _breakdown(
             ZERO,
         )
 
+        gross_pnl = sum(
+            (
+                trade.gross_pnl
+                for trade in members
+            ),
+            ZERO,
+        )
+
+        total_fees = sum(
+            (
+                trade.fees
+                for trade in members
+            ),
+            ZERO,
+        )
+
+        total_slippage = sum(
+            (
+                trade.slippage
+                for trade in members
+            ),
+            ZERO,
+        )
+
+        gross_profit = sum(
+            (
+                trade.net_pnl
+                for trade in members
+                if trade.net_pnl > ZERO
+            ),
+            ZERO,
+        )
+
+        gross_loss = abs(
+            sum(
+                (
+                    trade.net_pnl
+                    for trade in members
+                    if trade.net_pnl < ZERO
+                ),
+                ZERO,
+            )
+        )
+
+        profit_factor = (
+            float(gross_profit / gross_loss)
+            if gross_loss > ZERO
+            else (
+                None
+                if gross_profit == ZERO
+                else float("inf")
+            )
+        )
+
         average_return = (
             sum(
                 trade.return_pct
@@ -420,7 +498,19 @@ def _breakdown(
                 trade_count=len(members),
                 winning_trades=wins,
                 losing_trades=losses,
+                gross_pnl=gross_pnl,
+                total_fees=total_fees,
+                total_slippage=total_slippage,
+                total_costs=(
+                    total_fees
+                    + total_slippage
+                ),
                 net_pnl=net_pnl,
+                expectancy=(
+                    net_pnl
+                    / len(members)
+                ),
+                profit_factor=profit_factor,
                 average_return_pct=(
                     average_return
                 ),
@@ -487,6 +577,15 @@ def calculate_breakdowns(
         ),
     )
 
+    strategy_cohort = _breakdown(
+        dimension="strategy_cohort",
+        trades=trades,
+        key_lookup=lambda trade: (
+            f"{trade.strategy_horizon.value if trade.strategy_horizon is not None else 'UNKNOWN'}"
+            f"|{trade.strategy_version or 'UNKNOWN'}"
+        ),
+    )
+
     instrument = _breakdown(
         dimension="instrument",
         trades=trades,
@@ -517,6 +616,7 @@ def calculate_breakdowns(
         *strategy,
         *horizon,
         *strategy_version,
+        *strategy_cohort,
         *instrument,
         *regime,
         *threshold,

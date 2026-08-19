@@ -391,9 +391,26 @@ def performance_breakdown_rows(
             row.winning_trades,
             "losing_trades":
             row.losing_trades,
+            "gross_pnl": _decimal_text(
+                row.gross_pnl
+            ),
+            "fees": _decimal_text(
+                row.total_fees
+            ),
+            "slippage": _decimal_text(
+                row.total_slippage
+            ),
+            "total_costs": _decimal_text(
+                row.total_costs
+            ),
             "net_pnl": _decimal_text(
                 row.net_pnl
             ),
+            "expectancy": _decimal_text(
+                row.expectancy
+            ),
+            "profit_factor":
+            row.profit_factor,
             "average_return_pct":
             row.average_return_pct,
             "source_record_ids":

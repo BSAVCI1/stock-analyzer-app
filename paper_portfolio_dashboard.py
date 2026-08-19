@@ -387,7 +387,7 @@ with equity_tab:
     performance = snapshot.performance
     equity = snapshot.equity_performance
 
-    performance_columns = st.columns(6)
+    performance_columns = st.columns(8)
 
     performance_values = (
         (
@@ -401,7 +401,23 @@ with equity_tab:
             ),
         ),
         (
-            "Net P&L",
+            "Gross P&L",
+            format_money(
+                performance.gross_pnl,
+                snapshot.account
+                .base_currency,
+            ),
+        ),
+        (
+            "Transaction costs",
+            format_money(
+                performance.total_costs,
+                snapshot.account
+                .base_currency,
+            ),
+        ),
+        (
+            "Net P&L after costs",
             format_money(
                 performance.net_pnl,
                 snapshot.account
@@ -409,10 +425,11 @@ with equity_tab:
             ),
         ),
         (
-            "Average return",
-            format_percent(
-                performance
-                .average_return_pct
+            "Expectancy per trade",
+            format_money(
+                performance.expectancy,
+                snapshot.account
+                .base_currency,
             ),
         ),
         (

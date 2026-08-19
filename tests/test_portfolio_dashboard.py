@@ -596,6 +596,17 @@ def test_strategy_and_threshold_breakdowns(
         )
     )
 
+    strategy_cohort = next(
+        row
+        for row in snapshot.breakdowns
+        if (
+            row.dimension
+            == "strategy_cohort"
+            and row.key
+            == "SWING|p4.3-swing-v1"
+        )
+    )
+
     threshold = next(
         row
         for row in snapshot.breakdowns
@@ -610,6 +621,8 @@ def test_strategy_and_threshold_breakdowns(
     assert strategy.trade_count == 1
     assert horizon.trade_count == 1
     assert strategy_version.trade_count == 1
+    assert strategy_cohort.trade_count == 1
+    assert strategy_cohort.total_costs > Decimal("0")
     assert threshold.trade_count == 1
 
     assert (
