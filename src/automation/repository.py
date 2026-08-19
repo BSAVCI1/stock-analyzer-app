@@ -276,6 +276,11 @@ class AutomationRepository:
                     "maximum_daily_loss_fraction"
                 ]
             ),
+            maximum_weekly_loss_fraction=money(
+                row[
+                    "maximum_weekly_loss_fraction"
+                ]
+            ),
             maximum_drawdown_fraction=money(
                 row[
                     "maximum_drawdown_fraction"

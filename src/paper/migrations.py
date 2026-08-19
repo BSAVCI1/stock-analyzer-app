@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 _SCHEMA_V1 = """
@@ -922,6 +922,14 @@ PRAGMA user_version = 13;
 """
 
 
+_SCHEMA_V14 = """
+ALTER TABLE paper_account_controls
+ADD COLUMN maximum_weekly_loss_fraction TEXT NOT NULL DEFAULT '0.05';
+
+PRAGMA user_version = 14;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1073,6 +1081,12 @@ def apply_migrations(
             _SCHEMA_V13
         )
         current_version = 13
+
+    if current_version < 14:
+        connection.executescript(
+            _SCHEMA_V14
+        )
+        current_version = 14
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(
