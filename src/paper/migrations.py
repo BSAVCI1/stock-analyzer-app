@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 _SCHEMA_V1 = """
@@ -877,6 +877,27 @@ PRAGMA user_version = 11;
 """
 
 
+_SCHEMA_V12 = """
+CREATE TABLE paper_strategy_pauses (
+    account_id TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0
+        CHECK(active IN (0, 1)),
+    reason TEXT,
+    changed_by TEXT NOT NULL,
+    changed_at TEXT NOT NULL,
+    PRIMARY KEY(account_id, strategy),
+    FOREIGN KEY(account_id)
+        REFERENCES paper_accounts(account_id)
+);
+
+CREATE INDEX idx_strategy_pauses_active
+ON paper_strategy_pauses(account_id, active, strategy);
+
+PRAGMA user_version = 12;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1016,6 +1037,12 @@ def apply_migrations(
             _SCHEMA_V11
         )
         current_version = 11
+
+    if current_version < 12:
+        connection.executescript(
+            _SCHEMA_V12
+        )
+        current_version = 12
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

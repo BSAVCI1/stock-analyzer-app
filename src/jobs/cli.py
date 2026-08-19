@@ -330,6 +330,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Required operator identity for a state change.",
     )
 
+    strategy_pause = commands.add_parser(
+        "strategy-pause",
+        help="Inspect or change a named strategy entry pause.",
+    )
+    _add_runtime_arguments(strategy_pause)
+    strategy_pause.add_argument(
+        "action",
+        choices=("status", "activate", "deactivate"),
+    )
+    strategy_pause.add_argument(
+        "strategy",
+        nargs="?",
+        help="Strategy name; required for a state change.",
+    )
+    strategy_pause.add_argument(
+        "--reason",
+        help="Required reason for activate or deactivate.",
+    )
+    strategy_pause.add_argument(
+        "--operator",
+        help="Required operator identity for a state change.",
+    )
+
     return parser
 
 
@@ -863,6 +886,12 @@ def _run_status(
         account_id,
         at=datetime.now(timezone.utc),
     )
+    strategy_pauses = (
+        runtime.automation_repository.list_strategy_pauses(
+            account_id,
+            active_only=True,
+        )
+    )
 
     _write_json(
         {
@@ -958,6 +987,15 @@ def _run_status(
                     not kill_switch.kill_switch_active
                 ),
             },
+            "strategy_pauses": [
+                {
+                    "strategy": pause.strategy,
+                    "reason": pause.reason,
+                    "changed_by": pause.changed_by,
+                    "changed_at": pause.changed_at,
+                }
+                for pause in strategy_pauses
+            ],
         }
     )
 
@@ -1015,6 +1053,76 @@ def _run_kill_switch(
     return 0
 
 
+def _strategy_pause_payload(pause) -> dict[str, object]:
+    return {
+        "account_id": pause.account_id,
+        "strategy": pause.strategy,
+        "active": pause.active,
+        "reason": pause.reason,
+        "changed_by": pause.changed_by,
+        "changed_at": pause.changed_at,
+        "new_entries_allowed": not pause.active,
+    }
+
+
+def _run_strategy_pause(
+    runtime: PaperJobRuntime,
+    args,
+) -> int:
+    account_id = runtime.settings.account_id
+    repository = runtime.automation_repository
+
+    if args.action == "status":
+        pauses = repository.list_strategy_pauses(account_id)
+        if args.strategy:
+            target = args.strategy.strip().lower()
+            pauses = tuple(
+                pause
+                for pause in pauses
+                if pause.strategy == target
+            )
+        _write_json(
+            {
+                "account_id": account_id,
+                "strategy_pauses": [
+                    _strategy_pause_payload(pause)
+                    for pause in pauses
+                ],
+                "active_strategies": [
+                    pause.strategy
+                    for pause in pauses
+                    if pause.active
+                ],
+            }
+        )
+        return 0
+
+    if not args.strategy or not args.reason or not args.operator:
+        raise ValueError(
+            "strategy, --reason and --operator are required "
+            "for strategy-pause state changes."
+        )
+
+    before = repository.get_strategy_pause(
+        account_id,
+        args.strategy,
+    )
+    pause = repository.set_strategy_pause(
+        account_id,
+        strategy=args.strategy,
+        active=args.action == "activate",
+        reason=args.reason,
+        changed_by=args.operator,
+        changed_at=datetime.now(timezone.utc),
+    )
+    payload = _strategy_pause_payload(pause)
+    payload["changed"] = (
+        before is None or before.active is not pause.active
+    )
+    _write_json(payload)
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1065,6 +1173,9 @@ def main(
 
         if args.command == "kill-switch":
             return _run_kill_switch(runtime, args)
+
+        if args.command == "strategy-pause":
+            return _run_strategy_pause(runtime, args)
 
         parser.error(
             f"Unsupported command: "

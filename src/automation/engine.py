@@ -89,6 +89,10 @@ class IBKRCostGateRejected(RuntimeError):
     """Raised when P4.2 rejects a candidate after costs."""
 
 
+class StrategyPausedError(RuntimeError):
+    """Raised when a named strategy cannot create entries."""
+
+
 
 class AutomatedPaperExecutionEngine:
     """Execute and monitor a persistent paper portfolio."""
@@ -1627,6 +1631,34 @@ class AutomatedPaperExecutionEngine:
             error_count,
         )
 
+    def _cancel_paused_strategy_entries(
+        self,
+        *,
+        account_id: str,
+        run_at: datetime,
+        paused_strategies: dict[str, str],
+    ) -> int:
+        count = 0
+        for order in self.paper_repository.list_pending_orders(
+            account_id
+        ):
+            signal = self.paper_repository.get_signal(
+                order.signal_id
+            )
+            strategy = signal.strategy.strip().lower()
+            if strategy not in paused_strategies:
+                continue
+            self.execution_adapter.cancel_order(
+                order_id=order.order_id,
+                reason=(
+                    f"Strategy {strategy!r} is paused: "
+                    f"{paused_strategies[strategy]}"
+                ),
+                cancelled_at=run_at,
+            )
+            count += 1
+        return count
+
     def _calculate_lifecycle_fee_quote(
         self,
         *,
@@ -1822,6 +1854,7 @@ class AutomatedPaperExecutionEngine:
         scan_id: str,
         run_at: datetime,
         control: PortfolioControl,
+        paused_strategies: dict[str, str] | None = None,
     ) -> tuple[int, int]:
         report = (
             self.scanner_repository
@@ -1835,6 +1868,7 @@ class AutomatedPaperExecutionEngine:
 
         created_count = 0
         rejected_count = 0
+        paused = paused_strategies or {}
 
         candidates = sorted(
             (
@@ -1867,6 +1901,16 @@ class AutomatedPaperExecutionEngine:
                 break
 
             try:
+                signal = self.paper_repository.get_signal(
+                    candidate.signal_id
+                )
+                strategy = signal.strategy.strip().lower()
+                if strategy in paused:
+                    raise StrategyPausedError(
+                        f"Strategy {strategy!r} is paused: "
+                        f"{paused[strategy]}"
+                    )
+
                 if candidate.data_as_of is None:
                     raise ValueError(
                         "Candidate has no "
@@ -1898,13 +1942,6 @@ class AutomatedPaperExecutionEngine:
                         ),
                         control=control,
                         run_at=run_at,
-                    )
-                )
-
-                signal = (
-                    self.paper_repository
-                    .get_signal(
-                        candidate.signal_id
                     )
                 )
 
@@ -2003,6 +2040,16 @@ class AutomatedPaperExecutionEngine:
             or datetime.now(timezone.utc)
         )
 
+        paused_strategies = {
+            pause.strategy: (
+                pause.reason or "No reason recorded."
+            )
+            for pause in self.automation_repository.list_strategy_pauses(
+                account_id,
+                active_only=True,
+            )
+        }
+
         configuration = {
             "fill_rule":
             self.config.fill_rule.value,
@@ -2015,6 +2062,7 @@ class AutomatedPaperExecutionEngine:
                     self.config.costs
                 ).items()
             },
+            "paused_strategies": paused_strategies,
         }
 
         run, created = (
@@ -2212,6 +2260,14 @@ class AutomatedPaperExecutionEngine:
                     )
                 )
             else:
+                counters[
+                    "cancelled_orders"
+                ] += self._cancel_paused_strategy_entries(
+                    account_id=account_id,
+                    run_at=at,
+                    paused_strategies=paused_strategies,
+                )
+
                 (
                     filled,
                     expired,
@@ -2249,6 +2305,9 @@ class AutomatedPaperExecutionEngine:
                             scan_id=scan_id,
                             run_at=at,
                             control=control,
+                            paused_strategies=(
+                                paused_strategies
+                            ),
                         )
                     )
 
