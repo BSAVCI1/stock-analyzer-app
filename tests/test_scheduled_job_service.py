@@ -15,6 +15,7 @@ from src.automation import (
 from src.jobs import (
     JobRepository,
     JobStatus,
+    JobType,
     ScheduledJobService,
 )
 from src.notifications import (
@@ -450,6 +451,111 @@ def test_repeated_market_cycle_is_idempotent(
     assert env.scanner.calls == 1
     assert env.execution.calls == 1
     assert len(env.sender.messages) == 1
+
+
+def test_interrupted_market_cycle_resumes_once_after_restart(
+    tmp_path,
+) -> None:
+    env = make_environment(tmp_path)
+    session = env.service.calendar.session_for_run(
+        AFTER_CLOSE
+    )
+    assert session is not None
+
+    job_key = env.service._market_job_key(
+        scheduled_for=AFTER_CLOSE,
+        session=session,
+        after_close=True,
+    )
+    interrupted, created = (
+        env.job_repository.start_job(
+            account_id=env.account.account_id,
+            job_key=job_key,
+            job_type=JobType.MARKET_CYCLE,
+            scheduled_for=AFTER_CLOSE,
+            exchange_code="XNYS",
+            metadata={
+                "session_date": (
+                    session.session_date.isoformat()
+                ),
+            },
+            started_at=AFTER_CLOSE,
+        )
+    )
+    assert created is True
+    assert interrupted.status is JobStatus.RUNNING
+
+    restarted_paper = PaperRepository(
+        env.database_path
+    )
+    restarted_automation = AutomationRepository(
+        env.database_path
+    )
+    restarted_scanner = FakeScanner(
+        ScannerRepository(env.database_path)
+    )
+    restarted_execution = FakeExecutionEngine(
+        automation_repository=restarted_automation,
+        paper_repository=restarted_paper,
+    )
+    restarted_sender = SuccessfulSender()
+    restarted_service = ScheduledJobService(
+        job_repository=JobRepository(env.database_path),
+        paper_repository=restarted_paper,
+        scanner=restarted_scanner,
+        execution_engine=restarted_execution,
+        notification_service=NotificationService(
+            restarted_paper,
+            senders={
+                NotificationChannel.EMAIL:
+                restarted_sender,
+            },
+        ),
+        universe_loader=lambda: StockUniverse(
+            name="test",
+            symbols=("AAPL",),
+        ),
+        notification_channels=(
+            NotificationChannel.EMAIL,
+        ),
+    )
+
+    recovered = restarted_service.run_market_cycle(
+        account_id=env.account.account_id,
+        scheduled_for=AFTER_CLOSE,
+    )
+    replay = restarted_service.run_market_cycle(
+        account_id=env.account.account_id,
+        scheduled_for=AFTER_CLOSE,
+    )
+
+    assert recovered.duplicate is False
+    assert recovered.job.job_run_id == interrupted.job_run_id
+    assert recovered.job.status is JobStatus.COMPLETED
+    assert recovered.job.metadata["recovery_count"] == 1
+    assert recovered.job.metadata["last_recovered_at"] == (
+        AFTER_CLOSE.isoformat()
+    )
+
+    assert replay.duplicate is True
+    assert replay.job.job_run_id == interrupted.job_run_id
+    assert restarted_scanner.calls == 1
+    assert restarted_execution.calls == 1
+    assert len(restarted_sender.messages) == 1
+
+    events = env.paper_repository.list_system_events(
+        env.account.account_id
+    )
+    recovery_events = tuple(
+        event
+        for event in events
+        if event.event_type == "JOB_RUN_RECOVERED"
+    )
+    assert len(recovery_events) == 1
+    assert recovery_events[0].reference_id == (
+        interrupted.job_run_id
+    )
+    assert recovery_events[0].metadata["recovery_count"] == 1
 
 
 def test_risk_block_queues_alert(

@@ -302,6 +302,104 @@ class JobRepository:
 
         return self._from_row(row)
 
+    def resume_running_job(
+        self,
+        job_run_id: str,
+        *,
+        resumed_at: datetime,
+    ) -> JobRun:
+        """Record a managed restart of an interrupted job."""
+
+        with transaction(
+            self.database_path
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT account_id, status, metadata_json
+                FROM paper_job_runs
+                WHERE job_run_id = ?
+                """,
+                (job_run_id,),
+            ).fetchone()
+
+            if row is None:
+                raise ValueError(
+                    f"Unknown job run: {job_run_id}."
+                )
+
+            if (
+                JobStatus(row["status"])
+                is not JobStatus.RUNNING
+            ):
+                raise ValueError(
+                    "Only a RUNNING job can be resumed."
+                )
+
+            metadata = json.loads(
+                row["metadata_json"]
+            )
+            recovery_count = int(
+                metadata.get(
+                    "recovery_count",
+                    0,
+                )
+            ) + 1
+            resumed_timestamp = _timestamp(
+                resumed_at
+            )
+            metadata.update(
+                {
+                    "recovery_count": recovery_count,
+                    "last_recovered_at": resumed_timestamp,
+                }
+            )
+
+            connection.execute(
+                """
+                UPDATE paper_job_runs
+                SET metadata_json = ?
+                WHERE job_run_id = ?
+                  AND status = ?
+                """,
+                (
+                    _json_dump(metadata),
+                    job_run_id,
+                    JobStatus.RUNNING.value,
+                ),
+            )
+
+            connection.execute(
+                """
+                INSERT INTO paper_system_events(
+                    event_id,
+                    account_id,
+                    event_type,
+                    severity,
+                    reference_type,
+                    reference_id,
+                    message,
+                    metadata_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, 'WARNING', 'JOB_RUN', ?, ?, ?, ?)
+                """,
+                (
+                    _new_id("EVT"),
+                    row["account_id"],
+                    "JOB_RUN_RECOVERED",
+                    job_run_id,
+                    "Interrupted scheduled job resumed after restart.",
+                    _json_dump(
+                        {
+                            "recovery_count": recovery_count,
+                        }
+                    ),
+                    resumed_timestamp,
+                ),
+            )
+
+        return self.get_job(job_run_id)
+
     def complete_job(
         self,
         job_run_id: str,
@@ -354,7 +452,7 @@ class JobRepository:
         ) as connection:
             existing = connection.execute(
                 """
-                SELECT job_run_id
+                SELECT job_run_id, metadata_json
                 FROM paper_job_runs
                 WHERE job_run_id = ?
                 """,
@@ -366,6 +464,13 @@ class JobRepository:
                     f"Unknown job run: "
                     f"{job_run_id}."
                 )
+
+            existing_metadata = json.loads(
+                existing["metadata_json"]
+            )
+            existing_metadata.update(
+                dict(metadata or {})
+            )
 
             connection.execute(
                 """
@@ -391,9 +496,7 @@ class JobRepository:
                     queued_notifications,
                     sent_notifications,
                     failed_notifications,
-                    _json_dump(
-                        dict(metadata or {})
-                    ),
+                    _json_dump(existing_metadata),
                     (
                         str(error_message)
                         .strip()
