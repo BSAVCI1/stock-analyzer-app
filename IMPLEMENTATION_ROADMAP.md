@@ -965,7 +965,8 @@ Move runtime operation out of an interactive Codespace.
 Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 
 **Deliverables**
-- Global pause/kill switch
+- Global pause/kill switch (operator CLI, persistent state, audit trail and
+  recovery runbook implemented in P4.9.1)
 - Per-strategy pause
 - Stale-data circuit breaker
 - Reconciliation circuit breaker
@@ -980,7 +981,7 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Kill switch is tested end to end
 - Recovery steps are documented
 
-**Status:** Planned
+**Status:** In progress
 **Dependencies:** P4.8
 **Relative effort:** L
 
