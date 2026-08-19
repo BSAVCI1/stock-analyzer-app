@@ -982,7 +982,9 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Restart recovery and idempotent replay (persistent interrupted-job
   recovery evidence plus duplicate-safe scan, execution and notification
   replay implemented in P4.9.7)
-- Operational incident log
+- Operational incident log (persistent lifecycle, named-operator CLI,
+  immutable audit timeline and root-cause closure evidence implemented in
+  P4.9.8)
 
 **Gate**
 - Any critical invariant failure blocks new orders
@@ -990,7 +992,7 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Kill switch is tested end to end
 - Recovery steps are documented
 
-**Status:** In progress
+**Status:** Complete
 **Dependencies:** P4.8
 **Relative effort:** L
 

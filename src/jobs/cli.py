@@ -31,6 +31,11 @@ from src.product_config import (
     safe_product_policy_payload,
 )
 
+from src.paper import (
+    IncidentSeverity,
+    IncidentStatus,
+)
+
 from src.execution_adapters import (
     BrokerReconciliationItemStatus,
     BrokerReconciliationRepository,
@@ -362,6 +367,37 @@ def build_parser() -> argparse.ArgumentParser:
         "action",
         choices=("status",),
     )
+
+    incident = commands.add_parser(
+        "incident",
+        help="Open, review, update or resolve operational incidents.",
+    )
+    _add_runtime_arguments(incident)
+    incident.add_argument(
+        "action",
+        choices=("list", "show", "open", "update", "resolve"),
+    )
+    incident.add_argument(
+        "incident_id",
+        nargs="?",
+        help="Incident ID; required for show, update and resolve.",
+    )
+    incident.add_argument("--title")
+    incident.add_argument(
+        "--severity",
+        choices=tuple(level.value for level in IncidentSeverity),
+    )
+    incident.add_argument("--summary")
+    incident.add_argument(
+        "--status",
+        choices=tuple(state.value for state in IncidentStatus),
+    )
+    incident.add_argument("--note")
+    incident.add_argument("--root-cause")
+    incident.add_argument("--resolution")
+    incident.add_argument("--operator")
+    incident.add_argument("--reference-type")
+    incident.add_argument("--reference-id")
 
     return parser
 
@@ -869,6 +905,11 @@ def _run_status(
         .list_notifications(account_id)
     )
 
+    incidents = (
+        runtime.paper_repository
+        .list_incidents(account_id)
+    )
+
     job_status_counts = Counter(
         job.status.value
         for job in jobs
@@ -983,6 +1024,21 @@ def _run_status(
                     in runtime
                     .notification_channels
                 ],
+            },
+            "incidents": {
+                "total": len(incidents),
+                "open": sum(
+                    incident.status
+                    is not IncidentStatus.RESOLVED
+                    for incident in incidents
+                ),
+                "critical_open": sum(
+                    incident.status
+                    is not IncidentStatus.RESOLVED
+                    and incident.severity
+                    is IncidentSeverity.CRITICAL
+                    for incident in incidents
+                ),
             },
             "release_configuration": {
                 "eligible_strategies":
@@ -1182,6 +1238,154 @@ def _run_circuit_breaker_status(
     return 0
 
 
+def _incident_payload(incident) -> dict[str, object]:
+    return {
+        "incident_id": incident.incident_id,
+        "account_id": incident.account_id,
+        "title": incident.title,
+        "severity": incident.severity,
+        "status": incident.status,
+        "summary": incident.summary,
+        "root_cause": incident.root_cause,
+        "resolution": incident.resolution,
+        "reference_type": incident.reference_type,
+        "reference_id": incident.reference_id,
+        "opened_by": incident.opened_by,
+        "opened_at": incident.opened_at,
+        "updated_by": incident.updated_by,
+        "updated_at": incident.updated_at,
+        "resolved_by": incident.resolved_by,
+        "resolved_at": incident.resolved_at,
+    }
+
+
+def _run_incident(runtime: PaperJobRuntime, args) -> int:
+    repository = runtime.paper_repository
+    account_id = runtime.settings.account_id
+
+    if args.action == "list":
+        status = (
+            IncidentStatus(args.status)
+            if args.status
+            else None
+        )
+        incidents = repository.list_incidents(
+            account_id,
+            status=status,
+        )
+        _write_json(
+            {
+                "account_id": account_id,
+                "incidents": [
+                    _incident_payload(incident)
+                    for incident in incidents
+                ],
+                "total": len(incidents),
+            }
+        )
+        return 0
+
+    if args.action == "show":
+        if not args.incident_id:
+            raise ValueError("incident_id is required for show.")
+        incident = repository.get_incident(args.incident_id)
+        if incident.account_id != account_id:
+            raise ValueError("Incident does not belong to the selected account.")
+        timeline = tuple(
+            event
+            for event in repository.list_system_events(account_id)
+            if (
+                event.reference_type == "INCIDENT"
+                and event.reference_id == incident.incident_id
+            )
+        )
+        payload = _incident_payload(incident)
+        payload["timeline"] = [
+            {
+                "event_type": event.event_type,
+                "severity": event.severity,
+                "message": event.message,
+                "metadata": dict(event.metadata),
+                "created_at": event.created_at,
+            }
+            for event in timeline
+        ]
+        _write_json(payload)
+        return 0
+
+    if args.action == "open":
+        if not all((args.title, args.severity, args.summary, args.operator)):
+            raise ValueError(
+                "--title, --severity, --summary and --operator are required for open."
+            )
+        incident = repository.open_incident(
+            account_id=account_id,
+            title=args.title,
+            severity=IncidentSeverity(args.severity),
+            summary=args.summary,
+            opened_by=args.operator,
+            reference_type=args.reference_type,
+            reference_id=args.reference_id,
+        )
+    elif args.action == "update":
+        if not args.incident_id or not args.operator or not args.note:
+            raise ValueError(
+                "incident_id, --operator and --note are required for update."
+            )
+        if args.status == IncidentStatus.RESOLVED.value:
+            raise ValueError("Use resolve to close an incident.")
+        existing = repository.get_incident(args.incident_id)
+        if existing.account_id != account_id:
+            raise ValueError(
+                "Incident does not belong to the selected account."
+            )
+        incident = repository.update_incident(
+            args.incident_id,
+            changed_by=args.operator,
+            note=args.note,
+            summary=args.summary,
+            severity=(
+                IncidentSeverity(args.severity)
+                if args.severity
+                else None
+            ),
+            status=(
+                IncidentStatus(args.status)
+                if args.status
+                else None
+            ),
+        )
+    else:
+        if not all(
+            (
+                args.incident_id,
+                args.root_cause,
+                args.resolution,
+                args.operator,
+            )
+        ):
+            raise ValueError(
+                "incident_id, --root-cause, --resolution and --operator "
+                "are required for resolve."
+            )
+        existing = repository.get_incident(args.incident_id)
+        if existing.account_id != account_id:
+            raise ValueError(
+                "Incident does not belong to the selected account."
+            )
+        incident = repository.resolve_incident(
+            args.incident_id,
+            root_cause=args.root_cause,
+            resolution=args.resolution,
+            resolved_by=args.operator,
+        )
+
+    if incident.account_id != account_id:
+        raise ValueError("Incident does not belong to the selected account.")
+    _write_json(_incident_payload(incident))
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1238,6 +1442,9 @@ def main(
 
         if args.command == "circuit-breaker":
             return _run_circuit_breaker_status(runtime)
+
+        if args.command == "incident":
+            return _run_incident(runtime, args)
 
         parser.error(
             f"Unsupported command: "

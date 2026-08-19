@@ -40,6 +40,55 @@ recovered, retain its `JOB_RUN_RECOVERED` event as incident evidence. Do not
 manually delete or rename a running job to force replay; preserve the database
 and allow the managed scheduler to reuse the existing key.
 
+## Operational incident log
+
+Use the incident log for an operational disruption that requires ownership,
+follow-up or root-cause evidence. Technical system events remain immutable raw
+evidence; an incident provides the managed lifecycle around that evidence.
+
+Open an incident as soon as the impact is understood:
+
+```bash
+python -m src.jobs.cli incident open \
+  --title "Market-data provider outage" \
+  --severity HIGH \
+  --summary "All requested symbols failed during the scheduled cycle" \
+  --operator "your-name"
+```
+
+Use `--reference-type` and `--reference-id` together when the incident relates
+to a known job, execution run or other persisted record. Valid severities are
+`LOW`, `MEDIUM`, `HIGH` and `CRITICAL`.
+
+Review open incidents and one incident's immutable timeline:
+
+```bash
+python -m src.jobs.cli incident list --status OPEN
+python -m src.jobs.cli incident show INC-...
+```
+
+Record a material update or move the incident into monitoring:
+
+```bash
+python -m src.jobs.cli incident update INC-... \
+  --status MONITORING \
+  --note "Clean provider cycle completed; monitoring the next run" \
+  --operator "your-name"
+```
+
+Resolve only after both cause and corrective action are known:
+
+```bash
+python -m src.jobs.cli incident resolve INC-... \
+  --root-cause "Provider authentication endpoint was unavailable" \
+  --resolution "Credentials verified and a clean cycle completed" \
+  --operator "your-name"
+```
+
+Resolution is idempotent: repeating it does not replace the original closure
+evidence. A resolved incident cannot be reopened or edited. If a separate
+problem occurs later, open a new incident so both records remain intact.
+
 ## Inspect the switch
 
 ```bash
