@@ -41,9 +41,12 @@ from .models import (
     AccountReconciliation,
     AccountStatus,
     ClosedPaperTrade,
+    IncidentSeverity,
+    IncidentStatus,
     NotificationChannel,
     NotificationRecord,
     NotificationStatus,
+    OperationalIncident,
     OrderStatus,
     PaperAccount,
     PaperExitReason,
@@ -2721,6 +2724,262 @@ class PaperRepository:
         return self.get_notification(
             notification_id
         )
+
+    @staticmethod
+    def _incident_from_row(
+        row: sqlite3.Row,
+    ) -> OperationalIncident:
+        return OperationalIncident(
+            incident_id=row["incident_id"],
+            account_id=row["account_id"],
+            title=row["title"],
+            severity=IncidentSeverity(
+                row["severity"]
+            ),
+            status=IncidentStatus(row["status"]),
+            summary=row["summary"],
+            root_cause=row["root_cause"],
+            resolution=row["resolution"],
+            reference_type=row["reference_type"],
+            reference_id=row["reference_id"],
+            opened_by=row["opened_by"],
+            opened_at=_datetime(row["opened_at"]),
+            updated_by=row["updated_by"],
+            updated_at=_datetime(row["updated_at"]),
+            resolved_by=row["resolved_by"],
+            resolved_at=_datetime(row["resolved_at"]),
+        )
+
+    def open_incident(
+        self,
+        *,
+        account_id: str,
+        title: str,
+        severity: IncidentSeverity,
+        summary: str,
+        opened_by: str,
+        opened_at: datetime | None = None,
+        reference_type: str | None = None,
+        reference_id: str | None = None,
+    ) -> OperationalIncident:
+        at = opened_at or _utc_now()
+        clean_title = str(title).strip()
+        clean_summary = str(summary).strip()
+        operator = str(opened_by).strip()
+        level = IncidentSeverity(severity)
+
+        if not clean_title or not clean_summary or not operator:
+            raise ValueError(
+                "title, summary and opened_by are required."
+            )
+
+        if bool(reference_type) is not bool(reference_id):
+            raise ValueError(
+                "reference_type and reference_id must be provided together."
+            )
+
+        incident_id = _new_id("INC")
+
+        with transaction(self.database_path) as connection:
+            account = connection.execute(
+                "SELECT account_id FROM paper_accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if account is None:
+                raise ValueError(f"Unknown account: {account_id}.")
+
+            connection.execute(
+                """
+                INSERT INTO paper_operational_incidents(
+                    incident_id, account_id, title, severity, status,
+                    summary, root_cause, resolution,
+                    reference_type, reference_id,
+                    opened_by, opened_at, updated_by, updated_at,
+                    resolved_by, resolved_at
+                )
+                VALUES (?, ?, ?, ?, 'OPEN', ?, NULL, NULL, ?, ?, ?, ?, ?, ?, NULL, NULL)
+                """,
+                (
+                    incident_id, account_id, clean_title, level.value,
+                    clean_summary,
+                    str(reference_type).strip() if reference_type else None,
+                    str(reference_id).strip() if reference_id else None,
+                    operator, _timestamp(at), operator, _timestamp(at),
+                ),
+            )
+            _insert_event(
+                connection,
+                account_id=account_id,
+                event_type="OPERATIONAL_INCIDENT_OPENED",
+                severity=level.value,
+                reference_type="INCIDENT",
+                reference_id=incident_id,
+                message=f"Operational incident opened: {clean_title}",
+                metadata={"opened_by": operator, "status": "OPEN"},
+                created_at=at,
+            )
+
+        return self.get_incident(incident_id)
+
+    def get_incident(
+        self,
+        incident_id: str,
+    ) -> OperationalIncident:
+        connection = connect_database(self.database_path)
+        try:
+            row = connection.execute(
+                "SELECT * FROM paper_operational_incidents WHERE incident_id = ?",
+                (incident_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            raise ValueError(f"Unknown incident: {incident_id}.")
+        return self._incident_from_row(row)
+
+    def list_incidents(
+        self,
+        account_id: str,
+        *,
+        status: IncidentStatus | None = None,
+    ) -> tuple[OperationalIncident, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            if status is None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM paper_operational_incidents
+                    WHERE account_id = ?
+                    ORDER BY opened_at DESC, incident_id
+                    """,
+                    (account_id,),
+                ).fetchall()
+            else:
+                target = IncidentStatus(status)
+                rows = connection.execute(
+                    """
+                    SELECT * FROM paper_operational_incidents
+                    WHERE account_id = ? AND status = ?
+                    ORDER BY opened_at DESC, incident_id
+                    """,
+                    (account_id, target.value),
+                ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._incident_from_row(row) for row in rows)
+
+    def update_incident(
+        self,
+        incident_id: str,
+        *,
+        changed_by: str,
+        note: str,
+        summary: str | None = None,
+        severity: IncidentSeverity | None = None,
+        status: IncidentStatus | None = None,
+        changed_at: datetime | None = None,
+    ) -> OperationalIncident:
+        at = changed_at or _utc_now()
+        operator = str(changed_by).strip()
+        clean_note = str(note).strip()
+        if not operator or not clean_note:
+            raise ValueError("changed_by and note are required.")
+
+        with transaction(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_operational_incidents WHERE incident_id = ?",
+                (incident_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown incident: {incident_id}.")
+            if IncidentStatus(row["status"]) is IncidentStatus.RESOLVED:
+                raise ValueError("A resolved incident cannot be updated.")
+
+            next_summary = str(summary).strip() if summary is not None else row["summary"]
+            next_severity = IncidentSeverity(severity).value if severity is not None else row["severity"]
+            next_status = IncidentStatus(status).value if status is not None else row["status"]
+            if not next_summary:
+                raise ValueError("summary cannot be empty.")
+            if next_status == IncidentStatus.RESOLVED.value:
+                raise ValueError("Use resolve_incident to close an incident.")
+
+            connection.execute(
+                """
+                UPDATE paper_operational_incidents
+                SET summary = ?, severity = ?, status = ?,
+                    updated_by = ?, updated_at = ?
+                WHERE incident_id = ?
+                """,
+                (next_summary, next_severity, next_status, operator, _timestamp(at), incident_id),
+            )
+            _insert_event(
+                connection,
+                account_id=row["account_id"],
+                event_type="OPERATIONAL_INCIDENT_UPDATED",
+                severity=next_severity,
+                reference_type="INCIDENT",
+                reference_id=incident_id,
+                message=clean_note,
+                metadata={
+                    "changed_by": operator,
+                    "previous_status": row["status"],
+                    "status": next_status,
+                },
+                created_at=at,
+            )
+
+        return self.get_incident(incident_id)
+
+    def resolve_incident(
+        self,
+        incident_id: str,
+        *,
+        root_cause: str,
+        resolution: str,
+        resolved_by: str,
+        resolved_at: datetime | None = None,
+    ) -> OperationalIncident:
+        at = resolved_at or _utc_now()
+        cause = str(root_cause).strip()
+        action = str(resolution).strip()
+        operator = str(resolved_by).strip()
+        if not cause or not action or not operator:
+            raise ValueError(
+                "root_cause, resolution and resolved_by are required."
+            )
+
+        with transaction(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_operational_incidents WHERE incident_id = ?",
+                (incident_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown incident: {incident_id}.")
+            if IncidentStatus(row["status"]) is IncidentStatus.RESOLVED:
+                return self._incident_from_row(row)
+
+            connection.execute(
+                """
+                UPDATE paper_operational_incidents
+                SET status = 'RESOLVED', root_cause = ?, resolution = ?,
+                    updated_by = ?, updated_at = ?, resolved_by = ?, resolved_at = ?
+                WHERE incident_id = ?
+                """,
+                (cause, action, operator, _timestamp(at), operator, _timestamp(at), incident_id),
+            )
+            _insert_event(
+                connection,
+                account_id=row["account_id"],
+                event_type="OPERATIONAL_INCIDENT_RESOLVED",
+                severity=row["severity"],
+                reference_type="INCIDENT",
+                reference_id=incident_id,
+                message=f"Operational incident resolved: {row['title']}",
+                metadata={"resolved_by": operator, "root_cause": cause, "resolution": action},
+                created_at=at,
+            )
+
+        return self.get_incident(incident_id)
 
     def list_system_events(
         self,

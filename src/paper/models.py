@@ -382,6 +382,39 @@ class SystemEventRecord:
     created_at: datetime
 
 
+class IncidentSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class IncidentStatus(str, Enum):
+    OPEN = "OPEN"
+    MONITORING = "MONITORING"
+    RESOLVED = "RESOLVED"
+
+
+@dataclass(frozen=True, slots=True)
+class OperationalIncident:
+    incident_id: str
+    account_id: str
+    title: str
+    severity: IncidentSeverity
+    status: IncidentStatus
+    summary: str
+    root_cause: str | None
+    resolution: str | None
+    reference_type: str | None
+    reference_id: str | None
+    opened_by: str
+    opened_at: datetime
+    updated_by: str
+    updated_at: datetime
+    resolved_by: str | None
+    resolved_at: datetime | None
+
+
 @dataclass(frozen=True, slots=True)
 class AccountReconciliation:
     account_id: str
