@@ -85,6 +85,10 @@ class StaleMarketDataError(RuntimeError):
     """Market history is not fresh enough for automation."""
 
 
+class ProviderUnavailableError(RuntimeError):
+    """Market-data provider could not return a usable snapshot."""
+
+
 class IBKRCostGateRejected(RuntimeError):
     """Raised when P4.2 rejects a candidate after costs."""
 
@@ -192,9 +196,13 @@ class AutomatedPaperExecutionEngine:
         if symbol in cache:
             return cache[symbol]
 
-        snapshot = self.snapshot_loader(
-            symbol
-        )
+        try:
+            snapshot = self.snapshot_loader(symbol)
+        except Exception as exc:
+            raise ProviderUnavailableError(
+                f"{symbol} market-data provider failed with "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
 
         history = snapshot.history.copy()
 
@@ -1011,6 +1019,15 @@ class AutomatedPaperExecutionEngine:
             except Exception as exc:
                 error_count += 1
 
+                if isinstance(exc, ProviderUnavailableError):
+                    self._trip_provider_outage(
+                        account_id=account_id,
+                        run_at=run_at,
+                        error=exc,
+                        stage="POSITION_MONITOR",
+                        reference_id=position.position_id,
+                    )
+
                 self.paper_repository.record_system_event(
                     account_id=account_id,
                     event_type=(
@@ -1129,6 +1146,15 @@ class AutomatedPaperExecutionEngine:
             except Exception as exc:
                 error_count += 1
 
+                if isinstance(exc, ProviderUnavailableError):
+                    self._trip_provider_outage(
+                        account_id=account_id,
+                        run_at=run_at,
+                        error=exc,
+                        stage="EXIT_REQUEST",
+                        reference_id=request.request_id,
+                    )
+
                 self.automation_repository.update_exit_request(
                     request.request_id,
                     status=(
@@ -1246,6 +1272,15 @@ class AutomatedPaperExecutionEngine:
                     )
 
             except Exception as exc:
+                if isinstance(exc, ProviderUnavailableError):
+                    self._trip_provider_outage(
+                        account_id=account_id,
+                        run_at=run_at,
+                        error=exc,
+                        stage="SIGNAL_REVERSAL",
+                        reference_id=position.position_id,
+                    )
+
                 self.paper_repository.record_system_event(
                     account_id=account_id,
                     event_type=(
@@ -1385,6 +1420,11 @@ class AutomatedPaperExecutionEngine:
                 reasons.append(
                     "Weekly realised-loss circuit breaker is active: "
                     f"{breaker.reason}"
+                )
+            elif breaker.breaker_type == "PROVIDER_OUTAGE":
+                reasons.append(
+                    "Market-data provider outage circuit breaker is "
+                    f"active: {breaker.reason}"
                 )
 
         stored_peak = (
@@ -1739,9 +1779,14 @@ class AutomatedPaperExecutionEngine:
         run_at: datetime,
         control: PortfolioControl,
         cache,
-    ) -> tuple[int, tuple[str, ...]]:
+    ) -> tuple[
+        int,
+        tuple[str, ...],
+        tuple[str, ...],
+    ]:
         checked = 0
         reasons: list[str] = []
+        provider_errors: list[str] = []
 
         for order in self.paper_repository.list_pending_orders(
             account_id
@@ -1756,6 +1801,8 @@ class AutomatedPaperExecutionEngine:
                 )
             except StaleMarketDataError as exc:
                 reasons.append(f"{order.symbol}: {exc}")
+            except ProviderUnavailableError as exc:
+                provider_errors.append(str(exc))
 
         if scan_id is not None:
             report = self.scanner_repository.get_report(scan_id)
@@ -1787,7 +1834,73 @@ class AutomatedPaperExecutionEngine:
                         f"{control.maximum_stale_market_days}."
                     )
 
-        return checked, tuple(dict.fromkeys(reasons))
+        return (
+            checked,
+            tuple(dict.fromkeys(reasons)),
+            tuple(dict.fromkeys(provider_errors)),
+        )
+
+    def _provider_scan_observations(
+        self,
+        scan_id: str | None,
+    ) -> tuple[bool, tuple[str, ...]]:
+        if scan_id is None:
+            return False, ()
+
+        report = self.scanner_repository.get_report(scan_id)
+        provider_errors = tuple(
+            f"{result.symbol}: "
+            + str(
+                result.metadata.get(
+                    "error_message",
+                    "Provider load failed.",
+                )
+            )
+            for result in report.results
+            if result.metadata.get("failure_stage")
+            == "MARKET_DATA_PROVIDER"
+        )
+        successful_loads = sum(
+            result.metadata.get("provider_load_succeeded") is True
+            for result in report.results
+        )
+        conclusive_outage = (
+            report.scan.requested_count > 0
+            and len(provider_errors) == report.scan.requested_count
+        )
+        conclusively_healthy = (
+            successful_loads > 0
+            and not provider_errors
+        )
+        return (
+            conclusively_healthy,
+            provider_errors if conclusive_outage else (),
+        )
+
+    def _trip_provider_outage(
+        self,
+        *,
+        account_id: str,
+        run_at: datetime,
+        error: ProviderUnavailableError,
+        stage: str,
+        reference_id: str,
+    ) -> None:
+        self.automation_repository.trip_circuit_breaker(
+            account_id,
+            breaker_type="PROVIDER_OUTAGE",
+            reason=(
+                "Market-data provider outage was verified: "
+                f"{error}"
+            ),
+            tripped_at=run_at,
+            metadata={
+                "failure_stage": stage,
+                "reference_id": reference_id,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+            },
+        )
 
     def _calculate_lifecycle_fee_quote(
         self,
@@ -2329,6 +2442,7 @@ class AutomatedPaperExecutionEngine:
             (
                 freshness_checked,
                 stale_data_reasons,
+                entry_provider_errors,
             ) = self._preflight_entry_data_freshness(
                 account_id=account_id,
                 scan_id=scan_id,
@@ -2336,6 +2450,52 @@ class AutomatedPaperExecutionEngine:
                 control=control,
                 cache=cache,
             )
+
+            (
+                scan_provider_healthy,
+                scan_provider_errors,
+            ) = self._provider_scan_observations(scan_id)
+            provider_errors = tuple(
+                dict.fromkeys(
+                    (
+                        *scan_provider_errors,
+                        *entry_provider_errors,
+                    )
+                )
+            )
+
+            if provider_errors:
+                self.automation_repository.trip_circuit_breaker(
+                    account_id,
+                    breaker_type="PROVIDER_OUTAGE",
+                    reason=(
+                        "Market-data provider outage was verified: "
+                        + "; ".join(provider_errors)
+                    ),
+                    tripped_at=at,
+                    metadata={
+                        "scan_id": scan_id,
+                        "provider_errors": provider_errors,
+                    },
+                )
+            elif scan_provider_healthy or (
+                scan_id is None
+                and freshness_checked > 0
+                and not entry_provider_errors
+            ):
+                self.automation_repository.recover_circuit_breaker(
+                    account_id,
+                    breaker_type="PROVIDER_OUTAGE",
+                    reason=(
+                        "A clean market-data provider observation was "
+                        "positively verified."
+                    ),
+                    recovered_at=at,
+                    metadata={
+                        "scan_id": scan_id,
+                        "checked_input_count": freshness_checked,
+                    },
+                )
 
             if stale_data_reasons:
                 self.automation_repository.trip_circuit_breaker(

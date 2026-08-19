@@ -33,6 +33,7 @@ from src.paper import (
 )
 from src.strategy import StrategyHorizon
 from src.scanner import (
+    AutomaticMarketScanner,
     ScannerAnalysisOutcome,
     ScannerRepository,
     ScanResult,
@@ -1553,6 +1554,151 @@ def test_weekly_loss_pause_remains_locked_until_next_utc_week(
     assert weekly is not None
     assert weekly.active is False
     assert recovered.entries_enabled is True
+
+
+def test_full_provider_outage_blocks_entries_until_clean_scan(
+    tmp_path,
+) -> None:
+    history = make_history(
+        [
+            (
+                timestamp.to_pydatetime(),
+                100,
+                101,
+                99,
+                100,
+            )
+            for timestamp in pd.date_range(
+                end=T0,
+                periods=260,
+                freq="B",
+                tz="UTC",
+            )
+        ]
+    )
+    (
+        paper_repository,
+        paper_service,
+        scanner_repository,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={
+            "AAPL": history,
+            "MSFT": history,
+        },
+    )
+
+    def unavailable(symbol):
+        raise RuntimeError("Provider unavailable")
+
+    outage_scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=lambda strategy: None,
+        snapshot_loader=unavailable,
+        analysis_runner=make_hold_outcome,
+    )
+    universe = StockUniverse(
+        name="provider-outage",
+        symbols=("AAPL", "MSFT"),
+    )
+    outage_scan = outage_scanner.run_scan(
+        account_id=account.account_id,
+        universe=universe,
+        started_at=T0,
+        scan_key="provider-outage",
+    )
+    blocked = engine.run(
+        account_id=account.account_id,
+        scan_id=outage_scan.scan.scan_id,
+        run_key="provider-outage-execution",
+        run_at=T0,
+    )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="PROVIDER_OUTAGE",
+    )
+    assert breaker is not None
+    assert breaker.active is True
+    assert blocked.entries_enabled is False
+    assert len(breaker.metadata["provider_errors"]) == 2
+
+    def partial_loader(symbol):
+        if symbol == "MSFT":
+            raise RuntimeError("Provider unavailable for MSFT")
+        return make_snapshot(symbol, history)
+
+    partial_scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=lambda strategy: None,
+        snapshot_loader=partial_loader,
+        analysis_runner=make_hold_outcome,
+    )
+    partial_at = T0 + timedelta(hours=1)
+    partial_scan = partial_scanner.run_scan(
+        account_id=account.account_id,
+        universe=universe,
+        started_at=partial_at,
+        scan_key="provider-partial-recovery",
+    )
+    partial = engine.run(
+        account_id=account.account_id,
+        scan_id=partial_scan.scan.scan_id,
+        run_key="provider-partial-recovery-execution",
+        run_at=partial_at,
+    )
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="PROVIDER_OUTAGE",
+    )
+    assert breaker is not None
+    assert breaker.active is True
+    assert partial.entries_enabled is False
+
+    healthy_scanner = AutomaticMarketScanner(
+        scanner_repository=scanner_repository,
+        paper_service=paper_service,
+        release_gate_lookup=lambda strategy: None,
+        snapshot_loader=lambda symbol: make_snapshot(symbol, history),
+        analysis_runner=make_hold_outcome,
+    )
+    recovery_at = T0 + timedelta(days=1)
+    healthy_scan = healthy_scanner.run_scan(
+        account_id=account.account_id,
+        universe=universe,
+        started_at=recovery_at,
+        scan_key="provider-recovery",
+    )
+    recovered = engine.run(
+        account_id=account.account_id,
+        scan_id=healthy_scan.scan.scan_id,
+        run_key="provider-recovery-execution",
+        run_at=recovery_at,
+    )
+
+    breaker = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="PROVIDER_OUTAGE",
+    )
+    assert breaker is not None
+    assert breaker.active is False
+    assert recovered.entries_enabled is True
+    events = tuple(
+        event.event_type
+        for event in paper_repository.list_system_events(
+            account.account_id
+        )
+        if event.event_type.startswith("CIRCUIT_BREAKER_")
+    )
+    assert events == (
+        "CIRCUIT_BREAKER_TRIPPED",
+        "CIRCUIT_BREAKER_RECOVERED",
+    )
 
 def test_empty_execution_run_reconciles(
     tmp_path,

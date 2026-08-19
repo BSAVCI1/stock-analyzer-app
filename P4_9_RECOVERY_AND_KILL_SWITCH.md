@@ -156,6 +156,31 @@ limit. Trip and recovery transitions are persisted and auditable through:
 python -m src.jobs.cli circuit-breaker status
 ```
 
+## Market-data provider outage handling
+
+Provider failures are classified separately from valid scans that find no
+qualified opportunity. An account-wide `PROVIDER_OUTAGE` breaker trips when
+every requested scan symbol fails at the market-data provider boundary, when
+a required pending-entry market load fails, or when protective position
+monitoring verifies provider unavailability.
+
+The breaker blocks and cancels new entries, persists across restarts, and
+records the affected symbols or execution reference. Protective monitoring
+and exit processing continue to be attempted; failures remain visible as
+operational errors. A partial symbol failure is persisted as a scan error but
+does not by itself declare a full provider outage. It also cannot clear a
+breaker that is already active.
+
+There is no aggressive inline retry loop. The managed scheduler supplies the
+controlled retry on the next idempotent market cycle. Recovery is automatic
+only after a later scan has at least one successful provider load and no
+provider-stage failures, or a required entry input loads successfully without
+a provider error. Inspect the state with:
+
+```bash
+python -m src.jobs.cli circuit-breaker status
+```
+
 ## Stale-data circuit breaker
 
 The stale-data breaker is automatic and account-wide. Before any pending or

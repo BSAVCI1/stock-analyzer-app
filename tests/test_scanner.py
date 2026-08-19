@@ -1199,6 +1199,11 @@ def test_symbol_failure_is_persisted_as_scan_error(
 
     assert len(errors) == 1
     assert errors[0].symbol == "MSFT"
+    assert (
+        errors[0].metadata["failure_stage"]
+        == "MARKET_DATA_PROVIDER"
+    )
+    assert errors[0].metadata["provider_load_succeeded"] is False
 
 
 def test_candidate_without_valid_currency_is_not_persisted(
