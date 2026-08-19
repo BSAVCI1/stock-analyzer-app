@@ -134,6 +134,28 @@ when required. The breaker recovers automatically only when a later execution
 run positively verifies that stored cash and ledger cash match exactly. A
 repeated mismatch is idempotent and does not create duplicate trip events.
 
+## Daily and weekly realised-loss pauses
+
+The account has two automatic realised-loss controls. The daily limit keeps
+the existing configurable default of 3% of starting balance. The weekly limit
+has a configurable default of 5%. For the EUR 2,000 operational paper account,
+these defaults are EUR 60 per UTC day and EUR 100 per UTC week.
+
+When closed-trade net P&L reaches either limit, the corresponding
+`LOSS_LIMIT_DAILY` or `LOSS_LIMIT_WEEKLY` breaker blocks new entries and
+cancels pending entries. Protective monitoring and exits remain active. The
+pause is locked for the rest of that UTC day or Monday-to-Sunday UTC week; a
+later improvement in realised P&L does not reopen entries inside the same
+period.
+
+The pause cannot be cleared manually. On the first execution run in a new
+period, it recovers automatically only when the new period is within its loss
+limit. Trip and recovery transitions are persisted and auditable through:
+
+```bash
+python -m src.jobs.cli circuit-breaker status
+```
+
 ## Stale-data circuit breaker
 
 The stale-data breaker is automatic and account-wide. Before any pending or

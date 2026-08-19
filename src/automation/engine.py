@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import (
     Decimal,
     ROUND_FLOOR,
@@ -1370,38 +1370,22 @@ class AutomatedPaperExecutionEngine:
                 or "Portfolio kill switch is active."
             )
 
-        trades = (
-            self.paper_repository
-            .list_closed_trades(account_id)
-        )
-
-        daily_net_pnl = money(
-            sum(
-                (
-                    trade.net_pnl
-                    for trade in trades
-                    if (
-                        trade.exit_time
-                        .astimezone(timezone.utc)
-                        .date()
-                        == run_at.date()
-                    )
-                ),
-                Decimal("0"),
+        for breaker in (
+            self.automation_repository.list_circuit_breakers(
+                account_id,
+                active_only=True,
             )
-        )
-
-        daily_loss_limit = money(
-            account.starting_balance
-            * control
-            .maximum_daily_loss_fraction
-        )
-
-        if daily_net_pnl <= -daily_loss_limit:
-            reasons.append(
-                "Daily realised-loss circuit "
-                "breaker is active."
-            )
+        ):
+            if breaker.breaker_type == "LOSS_LIMIT_DAILY":
+                reasons.append(
+                    "Daily realised-loss circuit breaker is active: "
+                    f"{breaker.reason}"
+                )
+            elif breaker.breaker_type == "LOSS_LIMIT_WEEKLY":
+                reasons.append(
+                    "Weekly realised-loss circuit breaker is active: "
+                    f"{breaker.reason}"
+                )
 
         stored_peak = (
             self.automation_repository
@@ -1439,6 +1423,94 @@ class AutomatedPaperExecutionEngine:
             )
 
         return tuple(reasons)
+
+    def _update_loss_limit_breakers(
+        self,
+        *,
+        account_id: str,
+        control: PortfolioControl,
+        run_at: datetime,
+    ) -> None:
+        account = self.paper_repository.get_account(account_id)
+        trades = self.paper_repository.list_closed_trades(account_id)
+        run_date = run_at.astimezone(timezone.utc).date()
+        week_start = run_date - timedelta(days=run_date.weekday())
+
+        periods = (
+            (
+                "LOSS_LIMIT_DAILY",
+                "daily",
+                run_date.isoformat(),
+                lambda exit_date: exit_date == run_date,
+                control.maximum_daily_loss_fraction,
+            ),
+            (
+                "LOSS_LIMIT_WEEKLY",
+                "weekly",
+                week_start.isoformat(),
+                lambda exit_date: (
+                    week_start <= exit_date < week_start + timedelta(days=7)
+                ),
+                control.maximum_weekly_loss_fraction,
+            ),
+        )
+
+        for breaker_type, label, period_key, includes, fraction in periods:
+            realised_net_pnl = money(
+                sum(
+                    (
+                        trade.net_pnl
+                        for trade in trades
+                        if includes(
+                            trade.exit_time.astimezone(timezone.utc).date()
+                        )
+                    ),
+                    Decimal("0"),
+                )
+            )
+            loss_limit = money(account.starting_balance * fraction)
+            current = self.automation_repository.get_circuit_breaker(
+                account_id,
+                breaker_type=breaker_type,
+            )
+
+            if realised_net_pnl <= -loss_limit:
+                self.automation_repository.trip_circuit_breaker(
+                    account_id,
+                    breaker_type=breaker_type,
+                    reason=(
+                        f"The {label} realised net P&L of "
+                        f"{realised_net_pnl} reached the loss limit of "
+                        f"-{loss_limit}."
+                    ),
+                    tripped_at=run_at,
+                    metadata={
+                        "period_key": period_key,
+                        "period_type": label.upper(),
+                        "realised_net_pnl": str(realised_net_pnl),
+                        "loss_limit": str(loss_limit),
+                        "loss_limit_fraction": str(fraction),
+                    },
+                )
+            elif (
+                current is not None
+                and current.active
+                and current.metadata.get("period_key") != period_key
+            ):
+                self.automation_repository.recover_circuit_breaker(
+                    account_id,
+                    breaker_type=breaker_type,
+                    reason=(
+                        f"A new {label} loss-control period began and "
+                        "the current period is within its limit."
+                    ),
+                    recovered_at=run_at,
+                    metadata={
+                        "recovery_period_key": period_key,
+                        "realised_net_pnl": str(realised_net_pnl),
+                        "loss_limit": str(loss_limit),
+                    },
+                )
 
     def _cancel_pending_entries(
         self,
@@ -2362,6 +2434,12 @@ class AutomatedPaperExecutionEngine:
             current_equity = money(
                 account.cash_balance
                 + market_value
+            )
+
+            self._update_loss_limit_breakers(
+                account_id=account_id,
+                control=control,
+                run_at=at,
             )
 
             block_reasons = list(

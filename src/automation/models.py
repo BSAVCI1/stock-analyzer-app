@@ -52,6 +52,10 @@ class PortfolioControl:
         "0.03"
     )
 
+    maximum_weekly_loss_fraction: Decimal = Decimal(
+        "0.05"
+    )
+
     maximum_drawdown_fraction: Decimal = Decimal(
         "0.10"
     )
@@ -74,6 +78,7 @@ class PortfolioControl:
     def __post_init__(self) -> None:
         for name in (
             "maximum_daily_loss_fraction",
+            "maximum_weekly_loss_fraction",
             "maximum_drawdown_fraction",
         ):
             value = money(

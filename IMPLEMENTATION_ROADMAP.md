@@ -973,7 +973,9 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
   and verified automatic recovery implemented in P4.9.3)
 - Reconciliation circuit breaker (persistent pre/post-execution trip,
   idempotent audit and verified automatic recovery implemented in P4.9.4)
-- Daily and weekly loss-limit pause
+- Daily and weekly loss-limit pause (persistent period-locked entry pauses,
+  configurable 3%/5% defaults and audited rollover recovery implemented in
+  P4.9.5)
 - Provider outage handling
 - Restart recovery and idempotent replay
 - Operational incident log

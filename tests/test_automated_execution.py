@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 import sqlite3
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -434,7 +435,7 @@ def test_schema_version_three(
     finally:
         connection.close()
 
-    assert version == 13
+        assert version == 14
 
     assert {
         "paper_execution_runs",
@@ -1412,6 +1413,146 @@ def test_post_execution_reconciliation_failure_trips_breaker(
     assert breaker is not None
     assert breaker.active is True
     assert breaker.metadata["stage"] == "POST_EXECUTION"
+
+
+def test_daily_loss_pause_remains_locked_until_next_utc_day(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    (
+        paper_repository,
+        _,
+        _,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={},
+    )
+    trades = [
+        SimpleNamespace(
+            net_pnl=Decimal("-300"),
+            exit_time=T0,
+        )
+    ]
+    monkeypatch.setattr(
+        paper_repository,
+        "list_closed_trades",
+        lambda account_id: tuple(trades),
+    )
+
+    tripped = engine.run(
+        account_id=account.account_id,
+        run_key="trip-daily-loss-limit",
+        run_at=T0,
+    )
+    daily = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_DAILY",
+    )
+    weekly = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_WEEKLY",
+    )
+    assert daily is not None
+    assert daily.active is True
+    assert weekly is None
+    assert tripped.entries_enabled is False
+    assert daily.metadata["loss_limit"] == "300.00000000"
+
+    trades.clear()
+    locked = engine.run(
+        account_id=account.account_id,
+        run_key="daily-loss-limit-same-day",
+        run_at=T0 + timedelta(hours=1),
+    )
+    assert locked.entries_enabled is False
+
+    recovered = engine.run(
+        account_id=account.account_id,
+        run_key="recover-daily-loss-limit",
+        run_at=T0 + timedelta(days=1),
+    )
+    daily = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_DAILY",
+    )
+    assert daily is not None
+    assert daily.active is False
+    assert recovered.entries_enabled is True
+
+
+def test_weekly_loss_pause_remains_locked_until_next_utc_week(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    (
+        paper_repository,
+        _,
+        _,
+        automation_repository,
+        engine,
+        account,
+    ) = make_environment(
+        tmp_path,
+        history_by_symbol={},
+    )
+    trades = [
+        SimpleNamespace(
+            net_pnl=Decimal("-250"),
+            exit_time=T0 - timedelta(days=1),
+        ),
+        SimpleNamespace(
+            net_pnl=Decimal("-250"),
+            exit_time=T0 - timedelta(days=2),
+        ),
+    ]
+    monkeypatch.setattr(
+        paper_repository,
+        "list_closed_trades",
+        lambda account_id: tuple(trades),
+    )
+
+    tripped = engine.run(
+        account_id=account.account_id,
+        run_key="trip-weekly-loss-limit",
+        run_at=T0,
+    )
+    daily = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_DAILY",
+    )
+    weekly = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_WEEKLY",
+    )
+    assert daily is None
+    assert weekly is not None
+    assert weekly.active is True
+    assert weekly.metadata["loss_limit"] == "500.00000000"
+    assert tripped.entries_enabled is False
+
+    trades.clear()
+    locked = engine.run(
+        account_id=account.account_id,
+        run_key="weekly-loss-limit-same-week",
+        run_at=T0 + timedelta(days=1),
+    )
+    assert locked.entries_enabled is False
+
+    recovered = engine.run(
+        account_id=account.account_id,
+        run_key="recover-weekly-loss-limit",
+        run_at=T0 + timedelta(days=2),
+    )
+    weekly = automation_repository.get_circuit_breaker(
+        account.account_id,
+        breaker_type="LOSS_LIMIT_WEEKLY",
+    )
+    assert weekly is not None
+    assert weekly.active is False
+    assert recovered.entries_enabled is True
 
 def test_empty_execution_run_reconciles(
     tmp_path,

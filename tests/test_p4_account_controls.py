@@ -29,6 +29,7 @@ T0 = datetime(
 
 
 EXPECTED_COLUMNS = {
+    "maximum_weekly_loss_fraction",
     "sizing_mode",
     "portfolio_currency",
     "target_order_value",
@@ -92,7 +93,7 @@ def test_schema_version_six_adds_sizing_controls(
     finally:
         connection.close()
 
-    assert version == 13
+    assert version == 14
 
     assert EXPECTED_COLUMNS.issubset(
         columns
@@ -204,6 +205,11 @@ def test_version_five_control_upgrades_as_legacy(
     )
 
     assert (
+        control.maximum_weekly_loss_fraction
+        == Decimal("0.05000000")
+    )
+
+    assert (
         control.maximum_drawdown_fraction
         == Decimal("0.10000000")
     )
@@ -219,7 +225,7 @@ def test_version_five_control_upgrades_as_legacy(
     finally:
         connection.close()
 
-    assert version == 13
+    assert version == 14
 
 
 def test_fixed_notional_control_round_trip(
