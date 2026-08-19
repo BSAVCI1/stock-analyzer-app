@@ -35,6 +35,7 @@ from src.scanner import (
 from .calendar import ExchangeCalendar
 from .models import (
     ExchangeSession,
+    JobRun,
     JobStatus,
     JobType,
     ScheduledJobReport,
@@ -226,6 +227,29 @@ class ScheduledJobService:
                 queued += 1
 
         return queued
+
+    def _resume_if_interrupted(
+        self,
+        job: JobRun,
+        *,
+        created: bool,
+        resumed_at: datetime,
+    ) -> tuple[JobRun, bool]:
+        """Resume RUNNING jobs; completed jobs remain duplicates."""
+
+        if created:
+            return job, False
+
+        if job.status is not JobStatus.RUNNING:
+            return job, True
+
+        return (
+            self.job_repository.resume_running_job(
+                job.job_run_id,
+                resumed_at=resumed_at,
+            ),
+            False,
+        )
 
     def _dispatch(
         self,
@@ -638,7 +662,13 @@ class ScheduledJobService:
             )
         )
 
-        if not created:
+        job, duplicate = self._resume_if_interrupted(
+            job,
+            created=created,
+            resumed_at=scheduled_for,
+        )
+
+        if duplicate:
             return ScheduledJobReport(
                 job=job,
                 session=session,
@@ -741,7 +771,13 @@ class ScheduledJobService:
             )
         )
 
-        if not created:
+        job, duplicate = self._resume_if_interrupted(
+            job,
+            created=created,
+            resumed_at=at,
+        )
+
+        if duplicate:
             return ScheduledJobReport(
                 job=job,
                 session=session,
@@ -1139,7 +1175,13 @@ class ScheduledJobService:
                 "the week."
             )
 
-            if created:
+            job, duplicate = self._resume_if_interrupted(
+                job,
+                created=created,
+                resumed_at=at,
+            )
+
+            if not duplicate:
                 job = (
                     self.job_repository
                     .complete_job(
@@ -1158,7 +1200,7 @@ class ScheduledJobService:
             return ScheduledJobReport(
                 job=job,
                 session=session,
-                duplicate=not created,
+                duplicate=duplicate,
                 skipped_reason=reason,
             )
 
@@ -1189,7 +1231,13 @@ class ScheduledJobService:
             )
         )
 
-        if not created:
+        job, duplicate = self._resume_if_interrupted(
+            job,
+            created=created,
+            resumed_at=at,
+        )
+
+        if duplicate:
             return ScheduledJobReport(
                 job=job,
                 session=session,

@@ -13,6 +13,33 @@ survives application and container restarts. While active, execution cycles:
 The commands below affect only the account and database selected by the
 runtime environment or the explicit `--database` and `--account-id` options.
 
+## Restart recovery and idempotent replay
+
+The managed scheduler is non-overlapping: only one worker may own a scheduled
+cycle at a time. If that worker or its container stops after a job is persisted
+as `RUNNING`, the next scheduler replay resumes that same job instead of
+creating a replacement. The original job ID and deterministic keys are reused
+for its scan, execution run, orders and notifications.
+
+Each resume increments `recovery_count`, stores `last_recovered_at` in the job
+metadata and records one `JOB_RUN_RECOVERED` warning in the system-event log.
+A successfully completed job is never resumed; later delivery of the same
+schedule key is reported as a duplicate. Database uniqueness constraints and
+the nested idempotency keys prevent the recovery path from duplicating scans,
+orders, fills, exits or notification records.
+
+After a restart, verify the worker and latest job:
+
+```bash
+curl http://127.0.0.1:8080/health/worker
+python -m src.jobs.cli status
+```
+
+The latest job must leave `RUNNING` and reach a terminal status. If it was
+recovered, retain its `JOB_RUN_RECOVERED` event as incident evidence. Do not
+manually delete or rename a running job to force replay; preserve the database
+and allow the managed scheduler to reuse the existing key.
+
 ## Inspect the switch
 
 ```bash

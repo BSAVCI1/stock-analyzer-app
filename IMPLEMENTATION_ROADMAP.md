@@ -979,7 +979,9 @@ Ensure failure causes safe inactivity rather than uncontrolled behaviour.
 - Provider outage handling (provider-stage classification, persistent
   fail-closed entry breaker, scheduler-cycle retry and verified clean-provider
   recovery implemented in P4.9.6)
-- Restart recovery and idempotent replay
+- Restart recovery and idempotent replay (persistent interrupted-job
+  recovery evidence plus duplicate-safe scan, execution and notification
+  replay implemented in P4.9.7)
 - Operational incident log
 
 **Gate**
