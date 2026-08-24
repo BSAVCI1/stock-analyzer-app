@@ -50,6 +50,22 @@ the same paper account.
 - `horizons`: independent accepted swing and medium-term reports.
 - `policy`: use the approved repository product policy unchanged.
 
+Do not edit horizon decision booleans by hand. Produce `horizons.json` from
+independent structured reports with the fail-closed builder:
+
+```bash
+python -m src.jobs.cli p4-build-horizon-evidence \
+  --release-id P4-OPERATIONAL-ACCEPTANCE-2026-08-24 \
+  --observed-at 2026-08-24T22:00:00+00:00 \
+  --swing-report /evidence/swing-validation-report.json \
+  --medium-term-report /evidence/medium-term-validation-report.json \
+  --threshold-manifest /app/config/approved_signal_thresholds.json
+```
+
+The command returns non-zero when either report is rejected. Report and
+validation identifiers are derived from canonical source content; the approved
+threshold-manifest identifier is derived from the repository manifest.
+
 Operational drills must use the documented paper controls. Stop and investigate
 any unexpected order, live capability, failed notification, unhealthy service,
 or unresolved incident; do not edit evidence to hide it.

@@ -1077,6 +1077,12 @@ A controlled, persisted application notification probe was implemented in
 P4.11.10 after the target-Mac rehearsal confirmed that passive dispatch cannot
 produce delivery evidence when no eligible event is queued.
 
+A fail-closed horizon-evidence builder was implemented in P4.11.11. It derives
+the swing and medium-term gate decisions from two independent structured
+validation reports, calculates trade-count and stability results, and binds the
+source reports and approved threshold manifest with deterministic SHA-256
+identifiers. It cannot promote a failed or incomplete source observation.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
