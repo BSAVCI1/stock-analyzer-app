@@ -1068,6 +1068,11 @@ plan, and target-Mac runbook were implemented in P4.11.8. The rehearsal cannot
 promote example evidence and keeps P5 blocked until the assembled genuine
 manifest is READY.
 
+A dedicated EUR 2,000 operational acceptance profile and fail-closed account
+currency/balance validation were implemented in P4.11.9 after the target-Mac
+rehearsal correctly exposed that the earlier EUR 100,000 deployment-test
+account must remain isolated from release evidence.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
