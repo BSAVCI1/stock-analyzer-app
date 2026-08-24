@@ -11,6 +11,7 @@ import streamlit as st
 
 from src.portfolio_dashboard import (
     benchmark_comparison_rows,
+    actionability_rows,
     concentration_rows,
     PortfolioDashboardRepository,
     PortfolioDashboardService,
@@ -502,6 +503,28 @@ with equity_tab:
                 st.metric(label, value)
         st.dataframe(
             pd.DataFrame(concentration_rows(snapshot)),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader("Signal actionability")
+    actionability = snapshot.actionability
+    action_columns = st.columns(4)
+    action_values = (
+        ("Watchlist conversion", format_percent(actionability.conversion_rate_pct)),
+        ("Converted entries", str(actionability.converted_entries)),
+        ("Stale-signal rate", format_percent(actionability.stale_signal_rate_pct)),
+        ("Matured signals", str(actionability.matured_signal_count)),
+    )
+    for column, (label, value) in zip(action_columns, action_values):
+        with column:
+            st.metric(label, value)
+    actionability_data = pd.DataFrame(actionability_rows(snapshot))
+    if actionability_data.empty:
+        st.info("No persisted watchlist episodes are available.")
+    else:
+        st.dataframe(
+            actionability_data,
             use_container_width=True,
             hide_index=True,
         )

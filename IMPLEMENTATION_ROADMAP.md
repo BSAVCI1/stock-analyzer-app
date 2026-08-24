@@ -1013,7 +1013,9 @@ Measure whether the bot creates useful decisions, not merely activity.
   expectancy and profit factor implemented in P4.10.1; drawdown retained from
   persisted equity snapshots; immutable position valuations, symbol weights,
   top-three weight and HHI concentration implemented in P4.10.3)
-- Watchlist conversion and stale-signal rate
+- Watchlist conversion and stale-signal rate (version-safe watch/preparation
+  episodes, later actionable conversion, abandoned/open outcomes and expired
+  unordered-signal rate implemented in P4.10.4)
 - Alert usefulness and manual-copy journal
 - Operational reliability metrics
 

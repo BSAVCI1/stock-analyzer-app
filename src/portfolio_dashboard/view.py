@@ -469,6 +469,22 @@ def concentration_rows(
     )
 
 
+def actionability_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "cohort": row.key,
+            "watchlist_entries": row.watchlist_entries,
+            "converted_entries": row.converted_entries,
+            "open_entries": row.open_entries,
+            "abandoned_entries": row.abandoned_entries,
+            "conversion_rate_pct": row.conversion_rate_pct,
+        }
+        for row in snapshot.actionability.cohorts
+    )
+
+
 def scan_rows(
     snapshot: PortfolioDashboardSnapshot,
 ) -> tuple[dict[str, object], ...]:

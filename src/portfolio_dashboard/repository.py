@@ -128,6 +128,21 @@ class PortfolioDashboardRepository:
             account_id
         )
 
+    def list_orders(
+        self,
+        account_id: str,
+    ) -> tuple[PaperOrderRecord, ...]:
+        order_ids = self._list_ids(
+            query="""
+                SELECT order_id FROM paper_orders
+                WHERE account_id = ?
+                ORDER BY created_at, order_id
+            """,
+            parameters=(account_id,),
+            column="order_id",
+        )
+        return tuple(self.paper.get_order(order_id) for order_id in order_ids)
+
     def list_open_positions(
         self,
         account_id: str,

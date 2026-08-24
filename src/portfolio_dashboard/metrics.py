@@ -18,16 +18,20 @@ from src.paper import (
     PaperAccount,
     PersistedSignal,
     PaperPositionRecord,
+    PaperOrderRecord,
     PositionValuationObservation,
     SystemEventRecord,
 )
 from src.scanner import MarketScanReport
+from src.scanner import WatchlistState
 
 from .models import (
     EquityPerformance,
     BenchmarkComparison,
     ConcentrationHolding,
     ConcentrationSummary,
+    ActionabilityCohort,
+    ActionabilitySummary,
     PerformanceBreakdown,
     PerformanceSummary,
     Provenance,
@@ -37,6 +41,111 @@ from .models import (
 
 
 ZERO = Decimal("0")
+
+
+def _cohort_key(item) -> str:
+    horizon = (
+        item.strategy_horizon.value
+        if item.strategy_horizon is not None else "UNKNOWN"
+    )
+    return f"{horizon}|{item.strategy_version or 'UNKNOWN'}"
+
+
+def calculate_actionability(
+    *, signals: tuple[PersistedSignal, ...],
+    orders: tuple[PaperOrderRecord, ...],
+    scans: tuple[MarketScanReport, ...],
+    at,
+) -> ActionabilitySummary:
+    """Calculate version-safe watchlist conversion and stale-signal rates."""
+    observed_signals = tuple(item for item in signals if item.generated_at <= at)
+    observed_orders = tuple(item for item in orders if item.created_at <= at)
+    ordered_signal_ids = {item.signal_id for item in observed_orders}
+    matured = tuple(
+        item for item in observed_signals
+        if item.expires_at <= at or item.signal_id in ordered_signal_ids
+    )
+    stale = tuple(
+        item for item in matured if item.signal_id not in ordered_signal_ids
+    )
+
+    grouped_results = defaultdict(list)
+    result_ids = []
+    for report in scans:
+        for result in report.results:
+            if result.processed_at <= at:
+                grouped_results[(result.symbol, _cohort_key(result))].append(result)
+                result_ids.append(result.result_id)
+
+    cohort_counts = defaultdict(lambda: [0, 0, 0, 0])
+    for (_, cohort), results in grouped_results.items():
+        open_episode = False
+        for result in sorted(results, key=lambda x: (x.processed_at, x.result_id)):
+            state = result.watchlist_state
+            if state in (WatchlistState.WATCH, WatchlistState.PREPARE):
+                if not open_episode:
+                    cohort_counts[cohort][0] += 1
+                    open_episode = True
+            elif state is WatchlistState.ACTIONABLE:
+                if open_episode:
+                    cohort_counts[cohort][1] += 1
+                    open_episode = False
+            elif state in (WatchlistState.REJECT, WatchlistState.STALE):
+                if open_episode:
+                    cohort_counts[cohort][3] += 1
+                open_episode = False
+        if open_episode:
+            cohort_counts[cohort][2] += 1
+
+    cohorts = tuple(
+        ActionabilityCohort(
+            key=key,
+            watchlist_entries=values[0],
+            converted_entries=values[1],
+            open_entries=values[2],
+            abandoned_entries=values[3],
+            conversion_rate_pct=(
+                values[1] / values[0] * 100 if values[0] else None
+            ),
+        )
+        for key, values in sorted(cohort_counts.items())
+    )
+    entries = sum(item.watchlist_entries for item in cohorts)
+    converted = sum(item.converted_entries for item in cohorts)
+    open_entries = sum(item.open_entries for item in cohorts)
+    abandoned = sum(item.abandoned_entries for item in cohorts)
+    return ActionabilitySummary(
+        generated_at=at,
+        watchlist_entries=entries,
+        converted_entries=converted,
+        open_entries=open_entries,
+        abandoned_entries=abandoned,
+        conversion_rate_pct=(converted / entries * 100 if entries else None),
+        signal_count=len(observed_signals),
+        matured_signal_count=len(matured),
+        ordered_signal_count=sum(
+            1 for item in matured if item.signal_id in ordered_signal_ids
+        ),
+        stale_signal_count=len(stale),
+        stale_signal_rate_pct=(
+            len(stale) / len(matured) * 100 if matured else None
+        ),
+        cohorts=cohorts,
+        provenance=make_provenance(
+            tables=("paper_scan_results", "paper_signals", "paper_orders"),
+            record_ids=(
+                *result_ids,
+                *(item.signal_id for item in matured),
+                *(item.order_id for item in observed_orders),
+            ),
+            filters=(f"observed_at<={at.isoformat()}",),
+            calculation=(
+                "Watch/preparation episodes converting to actionable within the same "
+                "strategy-horizon/version cohort; expired unordered signals divided "
+                "by matured signals."
+            ),
+        ),
+    )
 
 
 def calculate_concentration(

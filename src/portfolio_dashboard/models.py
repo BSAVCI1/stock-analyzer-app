@@ -165,6 +165,33 @@ class ConcentrationSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionabilityCohort:
+    key: str
+    watchlist_entries: int
+    converted_entries: int
+    open_entries: int
+    abandoned_entries: int
+    conversion_rate_pct: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class ActionabilitySummary:
+    generated_at: datetime
+    watchlist_entries: int
+    converted_entries: int
+    open_entries: int
+    abandoned_entries: int
+    conversion_rate_pct: float | None
+    signal_count: int
+    matured_signal_count: int
+    ordered_signal_count: int
+    stale_signal_count: int
+    stale_signal_rate_pct: float | None
+    cohorts: tuple[ActionabilityCohort, ...]
+    provenance: Provenance
+
+
+@dataclass(frozen=True, slots=True)
 class PerformanceBreakdown:
     dimension: str
     key: str
@@ -263,6 +290,7 @@ class PortfolioDashboardSnapshot:
         PositionValuationObservation, ...,
     ]
     concentration: ConcentrationSummary
+    actionability: ActionabilitySummary
 
     performance: PerformanceSummary
     equity_performance: EquityPerformance
