@@ -1043,6 +1043,10 @@ required before the gate can become READY.
 Static paper-only and EUR portfolio-policy evidence, including deterministic
 policy fingerprints and fail-closed CLI output, was implemented in P4.11.2.
 
+Versioned scheduler/deployment evidence for both local-device and external
+always-on runtimes, with health, completed-cycle, restart and persistent-storage
+requirements, was implemented in P4.11.3.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
