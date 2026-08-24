@@ -33,6 +33,7 @@ from src.p4_scheduler_evidence import build_scheduler_deployment_check
 from src.p4_notification_evidence import build_notification_delivery_checks
 from src.p4_recovery_evidence import build_recovery_control_checks
 from src.p4_horizon_evidence import build_strategy_horizon_check
+from src.p4_evidence_assembly import assemble_p4_release_evidence
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -301,6 +302,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--evidence", required=True,
         help="Path to a strategy-horizon evidence JSON file.",
     )
+
+    p4_assemble = commands.add_parser(
+        "p4-assemble-evidence",
+        help="Assemble and evaluate the complete P4 release evidence set.",
+    )
+    for flag in (
+        "release", "policy", "regression", "scheduler",
+        "notifications", "recovery", "horizons",
+    ):
+        p4_assemble.add_argument(
+            f"--{flag}", required=True,
+            help=f"Path to the {flag} JSON evidence file.",
+        )
 
     p3_release.add_argument(
         "--regression-passed",
@@ -667,6 +681,60 @@ def _run_p4_horizon_evidence(args) -> int:
         },
     })
     return 0 if check.status.value == "PASS" else 1
+
+
+def _read_json_object(path_value: str, label: str) -> dict[str, object]:
+    path = Path(path_value)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object.")
+    return payload
+
+
+def _run_p4_assemble_evidence(args) -> int:
+    evidence = assemble_p4_release_evidence(
+        release=_read_json_object(args.release, "release metadata"),
+        policy=_read_json_object(args.policy, "product policy"),
+        regression=_read_json_object(args.regression, "regression evidence"),
+        scheduler=_read_json_object(args.scheduler, "scheduler evidence"),
+        notifications=_read_json_object(
+            args.notifications, "notification evidence"
+        ),
+        recovery=_read_json_object(args.recovery, "recovery evidence"),
+        horizons=_read_json_object(args.horizons, "horizon evidence"),
+    )
+    report = evaluate_p4_release_gate(evidence)
+    _write_json({
+        "schema_version": evidence.schema_version,
+        "release_id": evidence.release_id,
+        "generated_at": evidence.generated_at,
+        "account_id": evidence.account_id,
+        "status": report.status.value,
+        "release_ready": report.release_ready,
+        "blocking_checks": report.blocking_checks,
+        "reasons": report.reasons,
+        "execution_mode": evidence.execution_mode,
+        "live_execution_enabled": evidence.live_execution_enabled,
+        "unresolved_operational_failures": (
+            evidence.unresolved_operational_failures
+        ),
+        "regression": {
+            "passed": evidence.regression.passed,
+            "test_count": evidence.regression.test_count,
+            "covered_phases": evidence.regression.covered_phases,
+            "workflow": evidence.regression.workflow,
+        },
+        "checks": [
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "evidence_ids": check.evidence_ids,
+                "details": check.details,
+            }
+            for check in evidence.checks
+        ],
+    })
+    return 0 if report.release_ready else 1
 
 
 def _job_payload(
@@ -1839,6 +1907,9 @@ def main(
 
         if args.command == "p4-horizon-evidence":
             return _run_p4_horizon_evidence(args)
+
+        if args.command == "p4-assemble-evidence":
+            return _run_p4_assemble_evidence(args)
 
         runtime = _runtime_from_args(
             args

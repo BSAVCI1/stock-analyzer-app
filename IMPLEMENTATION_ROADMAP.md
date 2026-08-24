@@ -1059,6 +1059,10 @@ Independent versioned swing and medium-term acceptance evidence, including
 out-of-sample, walk-forward, cost, trade-count and parameter-stability proof,
 was implemented in P4.11.6.
 
+Traceable P0-P4 GitHub Actions regression evidence and deterministic assembly
+of all eight P4 checks into the final release manifest was implemented in
+P4.11.7. Genuine operational observations remain required for a READY result.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks

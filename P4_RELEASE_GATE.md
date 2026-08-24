@@ -135,3 +135,30 @@ parameter-stability evidence, plus traceable acceptance, validation and
 threshold IDs. Aggregate results, duplicate horizons, version mismatches,
 rejections or missing evidence block release. The repository example is
 deliberately blocked.
+
+## Regression evidence and final assembly (P4.11.7)
+
+The assembly command validates traceable GitHub Actions evidence covering P0
+through P4, then invokes every independent evidence producer and evaluates the
+existing release gate:
+
+```bash
+python -m src.jobs.cli p4-assemble-evidence \
+  --release config/p4_release_metadata.example.json \
+  --policy config/product_policy_v1.json \
+  --regression config/p4_regression_evidence.example.json \
+  --scheduler config/p4_scheduler_evidence.example.json \
+  --notifications config/p4_notification_evidence.example.json \
+  --recovery config/p4_recovery_evidence.example.json \
+  --horizons config/p4_horizon_evidence.example.json
+```
+
+A successful workflow conclusion is insufficient unless the run URL, numeric
+run ID, 40-character commit SHA and P0-P4 coverage are traceable. The command
+does not create observations or modify source files; operators replace examples
+with genuine evidence and may redirect JSON output to a reviewed manifest. The
+repository examples intentionally assemble to `BLOCKED`.
+
+Assembly also requires the release ID and paper-account ID to match across all
+applicable component files. Evidence from another release or account is invalid
+and cannot be silently combined.
