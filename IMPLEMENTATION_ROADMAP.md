@@ -1063,6 +1063,11 @@ Traceable P0-P4 GitHub Actions regression evidence and deterministic assembly
 of all eight P4 checks into the final release manifest was implemented in
 P4.11.7. Genuine operational observations remain required for a READY result.
 
+A read-only operational acceptance rehearsal, deterministic blocker-to-action
+plan, and target-Mac runbook were implemented in P4.11.8. The rehearsal cannot
+promote example evidence and keeps P5 blocked until the assembled genuine
+manifest is READY.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
