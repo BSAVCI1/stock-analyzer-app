@@ -28,6 +28,7 @@ from src.p4_release_gate import (
     evaluate_p4_release_gate,
     p4_evidence_from_mapping,
 )
+from src.p4_policy_evidence import build_policy_gate_checks
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -249,6 +250,16 @@ def build_parser() -> argparse.ArgumentParser:
     p4_release.add_argument(
         "--manifest", required=True,
         help="Path to the P4 release-evidence JSON manifest.",
+    )
+
+    p4_policy = commands.add_parser(
+        "p4-policy-evidence",
+        help="Produce read-only P4 paper and EUR policy evidence.",
+    )
+    p4_policy.add_argument(
+        "--policy",
+        default=str(DEFAULT_PRODUCT_POLICY_PATH),
+        help="Path to the versioned product policy JSON.",
     )
 
     p3_release.add_argument(
@@ -511,6 +522,29 @@ def _run_p4_release_status(args) -> int:
         ],
     })
     return 0 if report.release_ready else 1
+
+
+def _run_p4_policy_evidence(args) -> int:
+    path = Path(args.policy)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("P4 product policy must contain a JSON object.")
+    checks = build_policy_gate_checks(payload)
+    _write_json({
+        "schema_version": 1,
+        "policy_path": path,
+        "policy_version": payload.get("policy_version"),
+        "checks": [
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "evidence_ids": check.evidence_ids,
+                "details": check.details,
+            }
+            for check in checks
+        ],
+    })
+    return 0 if all(check.status.value == "PASS" for check in checks) else 1
 
 
 def _job_payload(
@@ -1668,6 +1702,9 @@ def main(
 
         if args.command == "p4-release-status":
             return _run_p4_release_status(args)
+
+        if args.command == "p4-policy-evidence":
+            return _run_p4_policy_evidence(args)
 
         runtime = _runtime_from_args(
             args
