@@ -1,5 +1,7 @@
 {
   "schema_version": 1,
+  "release_id": "REPLACE-WITH-RELEASE-ID",
+  "account_id": "REPLACE-WITH-PAPER-ACCOUNT",
   "deployment_id": "REPLACE-WITH-DEPLOYMENT-ID",
   "observed_at": "2026-08-24T18:30:00+00:00",
   "runtime_target": "LOCAL_DEVICE",
