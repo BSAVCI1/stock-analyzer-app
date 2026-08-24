@@ -1055,6 +1055,10 @@ Independent recovery-controls and global kill-switch drill evidence, including
 restart/replay, circuit breakers, outage handling, incident closure, order
 blocking, audit persistence and safe recovery, was implemented in P4.11.5.
 
+Independent versioned swing and medium-term acceptance evidence, including
+out-of-sample, walk-forward, cost, trade-count and parameter-stability proof,
+was implemented in P4.11.6.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
