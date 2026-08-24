@@ -11,9 +11,9 @@ or invented identifiers. P5 may start only when the final command reports
 cd ~/Documents/stock-analyzer-app
 git pull --ff-only
 colima start --cpu 2 --memory 3 --disk 20
-docker-compose -f compose.yaml -f compose.paper-local.yaml build
-docker-compose -f compose.yaml -f compose.paper-local.yaml up -d
-docker-compose -f compose.yaml -f compose.paper-local.yaml ps
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml build
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml up -d
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml ps
 ```
 
 Require the app to be `healthy`. Then verify all three runtime checks:
@@ -25,6 +25,12 @@ curl http://127.0.0.1:8080/health/worker
 ```
 
 ## 2. Collect genuine evidence
+
+Confirm `status` reports account `ACC-P4-EUR-2000`, EUR base currency and a
+starting balance of exactly EUR 2,000. The bootstrap fails closed if an
+existing account with that ID does not match the configured currency or
+starting balance. The earlier `ACC-LOCAL-DEVICE` account remains preserved as
+deployment-test history and must not be used for P4 release evidence.
 
 Create private working copies of the seven example files. Do not commit
 credentials, message destinations, database contents, or other secrets.
@@ -59,7 +65,7 @@ mkdir -p ~/Documents/stock-analyzer-p4-evidence
 After populating those JSON files, assemble the manifest:
 
 ```bash
-docker-compose -f compose.yaml -f compose.paper-local.yaml run --rm --no-deps \
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml run --rm --no-deps \
   -v "$HOME/Documents/stock-analyzer-p4-evidence:/evidence:ro" app \
   python -m src.jobs.cli p4-assemble-evidence \
   --release /evidence/release.json \
@@ -76,7 +82,7 @@ The command mounts the private evidence directory read-only and saves only the
 assembled result on the Mac. Rehearse that result in the same container image:
 
 ```bash
-docker-compose -f compose.yaml -f compose.paper-local.yaml run --rm --no-deps \
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml run --rm --no-deps \
   -v "$HOME/Documents/stock-analyzer-p4-evidence:/evidence:ro" app \
   python -m src.jobs.cli p4-release-rehearsal \
   --manifest /evidence/assembled-release.json
@@ -89,6 +95,6 @@ present. Follow `next_actions` and repeat. Exit code `0`, `READY`, and
 ## 4. Stop safely when finished
 
 ```bash
-docker-compose -f compose.yaml -f compose.paper-local.yaml down
+docker-compose -f compose.yaml -f compose.paper-local.yaml -f compose.p4-acceptance.yaml down
 colima stop
 ```

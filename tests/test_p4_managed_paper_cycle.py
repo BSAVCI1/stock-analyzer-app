@@ -2,6 +2,7 @@ from datetime import (
     datetime,
     timezone,
 )
+from decimal import Decimal
 import importlib
 from types import SimpleNamespace
 
@@ -198,6 +199,37 @@ def test_local_bootstrap_is_idempotent(
     assert first.starting_balance == (
         second.starting_balance
     )
+
+
+def test_local_bootstrap_uses_configured_operational_policy(tmp_path) -> None:
+    account = ensure_local_paper_account({
+        "BSAVCI_LOCAL_PAPER_BOOTSTRAP": "true",
+        "BSAVCI_DATABASE_PATH": str(tmp_path / "paper.db"),
+        "PAPER_ACCOUNT_ID": "ACC-P4-EUR-2000",
+        "PAPER_BROKER_ENABLED": "false",
+        "PAPER_BROKER_LIVE_TRADING": "false",
+        "BSAVCI_LOCAL_PAPER_ACCOUNT_NAME": "P4 Operational Paper Account",
+        "BSAVCI_LOCAL_PAPER_BASE_CURRENCY": "EUR",
+        "BSAVCI_LOCAL_PAPER_STARTING_BALANCE": "2000",
+    })
+    assert account.account_id == "ACC-P4-EUR-2000"
+    assert account.base_currency == "EUR"
+    assert account.starting_balance == Decimal("2000.00000000")
+
+
+def test_local_bootstrap_rejects_existing_policy_mismatch(tmp_path) -> None:
+    values = {
+        "BSAVCI_LOCAL_PAPER_BOOTSTRAP": "true",
+        "BSAVCI_DATABASE_PATH": str(tmp_path / "paper.db"),
+        "PAPER_ACCOUNT_ID": "ACC-P4",
+        "PAPER_BROKER_ENABLED": "false",
+        "PAPER_BROKER_LIVE_TRADING": "false",
+        "BSAVCI_LOCAL_PAPER_STARTING_BALANCE": "2000",
+    }
+    ensure_local_paper_account(values)
+    values["BSAVCI_LOCAL_PAPER_STARTING_BALANCE"] = "3000"
+    with pytest.raises(RuntimeError, match="does not match its configured policy"):
+        ensure_local_paper_account(values)
 
 
 def test_local_bootstrap_requires_gate():

@@ -57,27 +57,47 @@ def ensure_local_paper_account(
     )
     repository = PaperRepository(database_path)
 
+    expected_name = values.get(
+        "BSAVCI_LOCAL_PAPER_ACCOUNT_NAME",
+        "Local Device Paper Account",
+    )
+    expected_currency = values.get(
+        "BSAVCI_LOCAL_PAPER_BASE_CURRENCY",
+        "EUR",
+    ).strip().upper()
+    expected_balance = Decimal(
+        values.get(
+            "BSAVCI_LOCAL_PAPER_STARTING_BALANCE",
+            "100000",
+        )
+    )
+
     try:
-        return repository.get_account(account_id)
+        account = repository.get_account(account_id)
     except ValueError:
         return repository.create_account(
             account_id=account_id,
-            name=values.get(
-                "BSAVCI_LOCAL_PAPER_ACCOUNT_NAME",
-                "Local Device Paper Account",
-            ),
-            base_currency=values.get(
-                "BSAVCI_LOCAL_PAPER_BASE_CURRENCY",
-                "EUR",
-            ),
-            starting_balance=Decimal(
-                values.get(
-                    "BSAVCI_LOCAL_PAPER_STARTING_BALANCE",
-                    "100000",
-                )
-            ),
+            name=expected_name,
+            base_currency=expected_currency,
+            starting_balance=expected_balance,
             created_at=datetime.now(timezone.utc),
         )
+
+    mismatches = []
+    if account.base_currency != expected_currency:
+        mismatches.append(
+            f"base currency is {account.base_currency}, expected {expected_currency}"
+        )
+    if account.starting_balance != expected_balance:
+        mismatches.append(
+            f"starting balance is {account.starting_balance}, expected {expected_balance}"
+        )
+    if mismatches:
+        raise RuntimeError(
+            f"Existing local paper account {account_id} does not match its "
+            "configured policy: " + "; ".join(mismatches) + "."
+        )
+    return account
 
 
 def main() -> None:
