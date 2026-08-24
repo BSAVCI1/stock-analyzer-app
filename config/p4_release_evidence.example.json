@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "release_id": "P4-REPLACE-WITH-RELEASE-ID",
+  "generated_at": "2026-08-24T20:00:00+00:00",
+  "account_id": "ACC-REPLACE-WITH-PAPER-ACCOUNT",
+  "regression": {
+    "passed": false,
+    "test_count": 665,
+    "covered_phases": ["P0", "P1", "P2", "P3", "P4"],
+    "workflow": "REPLACE-WITH-GITHUB-ACTIONS-RUN"
+  },
+  "checks": [
+    {"name": "paper_only_invariants", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "eur_portfolio_policy", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "scheduler_deployment", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "email_delivery", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "telegram_delivery", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "recovery_controls", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "kill_switch", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]},
+    {"name": "strategy_horizon_acceptance", "status": "NOT_OBSERVED", "evidence_ids": [], "details": ["Evidence not yet assembled."]}
+  ],
+  "execution_mode": "PAPER",
+  "live_execution_enabled": false,
+  "unresolved_operational_failures": 0
+}

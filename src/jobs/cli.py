@@ -24,6 +24,10 @@ from src.release_gate import (
     build_operational_reliability_report,
     evaluate_p3_release_gate,
 )
+from src.p4_release_gate import (
+    evaluate_p4_release_gate,
+    p4_evidence_from_mapping,
+)
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -236,6 +240,15 @@ def build_parser() -> argparse.ArgumentParser:
             "as the report generation time. "
             "Defaults to current UTC time."
         ),
+    )
+
+    p4_release = commands.add_parser(
+        "p4-release-status",
+        help="Evaluate a versioned P4 release-evidence manifest.",
+    )
+    p4_release.add_argument(
+        "--manifest", required=True,
+        help="Path to the P4 release-evidence JSON manifest.",
     )
 
     p3_release.add_argument(
@@ -460,6 +473,44 @@ def _runtime_from_args(
     )
 
     return build_runtime(settings)
+
+
+def _run_p4_release_status(args) -> int:
+    path = Path(args.manifest)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("P4 release manifest must contain a JSON object.")
+    evidence = p4_evidence_from_mapping(payload)
+    report = evaluate_p4_release_gate(evidence)
+    _write_json({
+        "schema_version": evidence.schema_version,
+        "release_id": evidence.release_id,
+        "generated_at": evidence.generated_at,
+        "account_id": evidence.account_id,
+        "status": report.status.value,
+        "release_ready": report.release_ready,
+        "blocking_checks": report.blocking_checks,
+        "reasons": report.reasons,
+        "execution_mode": evidence.execution_mode,
+        "live_execution_enabled": evidence.live_execution_enabled,
+        "unresolved_operational_failures": evidence.unresolved_operational_failures,
+        "regression": {
+            "passed": evidence.regression.passed,
+            "test_count": evidence.regression.test_count,
+            "covered_phases": evidence.regression.covered_phases,
+            "workflow": evidence.regression.workflow,
+        },
+        "checks": [
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "evidence_ids": check.evidence_ids,
+                "details": check.details,
+            }
+            for check in evidence.checks
+        ],
+    })
+    return 0 if report.release_ready else 1
 
 
 def _job_payload(
@@ -1614,6 +1665,9 @@ def main(
             return _run_product_config(
                 args
             )
+
+        if args.command == "p4-release-status":
+            return _run_p4_release_status(args)
 
         runtime = _runtime_from_args(
             args

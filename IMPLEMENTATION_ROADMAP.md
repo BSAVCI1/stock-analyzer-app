@@ -1036,6 +1036,10 @@ Measure whether the bot creates useful decisions, not merely activity.
 
 Control entry into unattended paper validation.
 
+The versioned fail-closed evidence manifest, deterministic evaluator and CLI
+contract were implemented in P4.11.1. Evidence-production slices remain
+required before the gate can become READY.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
@@ -1050,7 +1054,7 @@ Control entry into unattended paper validation.
 - Any live-execution capability blocks release
 - Operational failures remain visible and blocking
 
-**Status:** Planned
+**Status:** In progress
 **Dependencies:** P4.0-P4.10
 **Relative effort:** M
 
