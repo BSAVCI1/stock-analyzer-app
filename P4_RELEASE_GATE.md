@@ -84,3 +84,20 @@ scheduler, healthy container/liveness/readiness/worker observations, verified
 restart recovery, verified persistent storage and at least one completed paper
 cycle. Labels without evidence IDs cannot pass. The repository example is
 intentionally blocked and is not release evidence.
+
+## Notification delivery evidence (P4.11.4)
+
+Email and Telegram are evaluated independently from persisted application-level
+sent records:
+
+```bash
+python -m src.jobs.cli p4-notification-evidence \
+  --evidence config/p4_notification_evidence.example.json
+```
+
+Each channel requires persisted, channel-specific, deduplicated and retryable
+delivery records linked to a source reference. At least one `SENT` record with
+a timezone-aware delivery time and attempt count is mandatory; configured
+credentials or channels alone are not proof. Pending or failed delivery blocks
+that channel. The repository example deliberately contains no sent records and
+therefore returns a blocking result.

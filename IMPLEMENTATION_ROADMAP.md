@@ -1047,6 +1047,10 @@ Versioned scheduler/deployment evidence for both local-device and external
 always-on runtimes, with health, completed-cycle, restart and persistent-storage
 requirements, was implemented in P4.11.3.
 
+Independent email and Telegram application-level sent evidence, including
+source linkage, retry/deduplication assertions and blocking pending/failure
+counts, was implemented in P4.11.4.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks

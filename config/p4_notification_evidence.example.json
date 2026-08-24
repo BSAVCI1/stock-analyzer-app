@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "release_id": "REPLACE-WITH-RELEASE-ID",
+  "account_id": "REPLACE-WITH-PAPER-ACCOUNT",
+  "observed_at": "2026-08-24T19:00:00+00:00",
+  "email": {
+    "persisted": true,
+    "deduplicated": true,
+    "retryable": true,
+    "pending_count": 0,
+    "failed_count": 0,
+    "sent_records": []
+  },
+  "telegram": {
+    "persisted": true,
+    "deduplicated": true,
+    "retryable": true,
+    "pending_count": 0,
+    "failed_count": 0,
+    "sent_records": []
+  }
+}

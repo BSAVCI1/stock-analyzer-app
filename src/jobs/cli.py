@@ -30,6 +30,7 @@ from src.p4_release_gate import (
 )
 from src.p4_policy_evidence import build_policy_gate_checks
 from src.p4_scheduler_evidence import build_scheduler_deployment_check
+from src.p4_notification_evidence import build_notification_delivery_checks
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -270,6 +271,15 @@ def build_parser() -> argparse.ArgumentParser:
     p4_scheduler.add_argument(
         "--evidence", required=True,
         help="Path to a scheduler/deployment observation JSON file.",
+    )
+
+    p4_notifications = commands.add_parser(
+        "p4-notification-evidence",
+        help="Evaluate application-level email and Telegram sent evidence.",
+    )
+    p4_notifications.add_argument(
+        "--evidence", required=True,
+        help="Path to a notification delivery evidence JSON file.",
     )
 
     p3_release.add_argument(
@@ -574,6 +584,28 @@ def _run_p4_scheduler_evidence(args) -> int:
         },
     })
     return 0 if check.status.value == "PASS" else 1
+
+
+def _run_p4_notification_evidence(args) -> int:
+    path = Path(args.evidence)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("P4 notification evidence must contain a JSON object.")
+    checks = build_notification_delivery_checks(payload)
+    _write_json({
+        "schema_version": 1,
+        "evidence_path": path,
+        "checks": [
+            {
+                "name": check.name,
+                "status": check.status.value,
+                "evidence_ids": check.evidence_ids,
+                "details": check.details,
+            }
+            for check in checks
+        ],
+    })
+    return 0 if all(check.status.value == "PASS" for check in checks) else 1
 
 
 def _job_payload(
@@ -1737,6 +1769,9 @@ def main(
 
         if args.command == "p4-scheduler-evidence":
             return _run_p4_scheduler_evidence(args)
+
+        if args.command == "p4-notification-evidence":
+            return _run_p4_notification_evidence(args)
 
         runtime = _runtime_from_args(
             args
