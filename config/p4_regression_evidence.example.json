@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "conclusion": "NOT_OBSERVED",
+  "test_count": 708,
+  "covered_phases": ["P0", "P1", "P2", "P3", "P4"],
+  "workflow_run_id": "REPLACE-WITH-RUN-ID",
+  "workflow_url": "REPLACE-WITH-GITHUB-ACTIONS-URL",
+  "commit_sha": "REPLACE-WITH-40-CHARACTER-COMMIT-SHA",
+  "completed_at": "2026-08-24T21:00:00+00:00"
+}
