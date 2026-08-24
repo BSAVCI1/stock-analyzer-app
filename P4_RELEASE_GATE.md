@@ -51,3 +51,19 @@ the other checks.
 This contract is P4.11.1. Later P4.11 slices will produce and assemble the
 specific evidence; the example is not an approval and must not be promoted by
 changing labels without the underlying records.
+
+## Static policy evidence (P4.11.2)
+
+Produce the first two gate checks directly from the versioned product policy:
+
+```bash
+python -m src.jobs.cli p4-policy-evidence \
+  --policy config/product_policy_v1.json
+```
+
+The command verifies paper-only, disabled live and broker connectivity,
+deny-by-default behaviour, prohibited instrument classes, the EUR 2,000
+portfolio, EUR 100 target/hard ceiling, and approved risk/exposure limits. A
+pass carries a deterministic SHA-256 evidence ID over the canonical policy.
+Any missing or changed invariant is emitted as explicit `FAIL` evidence and
+returns exit code `1`.
