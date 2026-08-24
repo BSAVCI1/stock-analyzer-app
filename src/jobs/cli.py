@@ -415,6 +415,19 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--fx-rate")
     benchmark.add_argument("--source")
 
+    valuation = commands.add_parser(
+        "position-valuation",
+        help="Record or list immutable open-position valuation evidence.",
+    )
+    _add_runtime_arguments(valuation)
+    valuation.add_argument("action", choices=("record", "list"))
+    valuation.add_argument("position_id", nargs="?")
+    valuation.add_argument("--captured-at")
+    valuation.add_argument("--quote-currency")
+    valuation.add_argument("--close-price")
+    valuation.add_argument("--fx-rate")
+    valuation.add_argument("--source")
+
     return parser
 
 
@@ -1468,6 +1481,55 @@ def _run_benchmark(runtime: PaperJobRuntime, args) -> int:
     return 0
 
 
+def _position_valuation_payload(observation) -> dict[str, object]:
+    return {
+        "observation_id": observation.observation_id,
+        "account_id": observation.account_id,
+        "position_id": observation.position_id,
+        "symbol": observation.symbol,
+        "captured_at": observation.captured_at,
+        "quote_currency": observation.quote_currency,
+        "close_price": observation.close_price,
+        "fx_rate": observation.fx_rate,
+        "quantity": observation.quantity,
+        "market_value_portfolio": observation.market_value_portfolio,
+        "source": observation.source,
+    }
+
+
+def _run_position_valuation(runtime: PaperJobRuntime, args) -> int:
+    repository = runtime.paper_repository
+    account_id = runtime.settings.account_id
+    if args.action == "list":
+        observations = repository.list_position_valuation_observations(account_id)
+        if args.position_id:
+            observations = tuple(
+                item for item in observations if item.position_id == args.position_id
+            )
+        _write_json({
+            "account_id": account_id,
+            "observations": [_position_valuation_payload(item) for item in observations],
+            "total": len(observations),
+        })
+        return 0
+    if not all((args.position_id, args.captured_at, args.quote_currency,
+                args.close_price, args.fx_rate, args.source)):
+        raise ValueError(
+            "position_id, --captured-at, --quote-currency, --close-price, "
+            "--fx-rate and --source are required for record."
+        )
+    captured_at = datetime.fromisoformat(args.captured_at)
+    if captured_at.tzinfo is None or captured_at.utcoffset() is None:
+        raise ValueError("--captured-at must be timezone-aware.")
+    observation = repository.save_position_valuation_observation(
+        account_id=account_id, position_id=args.position_id,
+        captured_at=captured_at, quote_currency=args.quote_currency,
+        close_price=args.close_price, fx_rate=args.fx_rate, source=args.source,
+    )
+    _write_json(_position_valuation_payload(observation))
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1530,6 +1592,9 @@ def main(
 
         if args.command == "benchmark":
             return _run_benchmark(runtime, args)
+
+        if args.command == "position-valuation":
+            return _run_position_valuation(runtime, args)
 
         parser.error(
             f"Unsupported command: "

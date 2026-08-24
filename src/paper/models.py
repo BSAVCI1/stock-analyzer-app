@@ -429,6 +429,21 @@ class BenchmarkObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class PositionValuationObservation:
+    observation_id: str
+    account_id: str
+    position_id: str
+    symbol: str
+    captured_at: datetime
+    quote_currency: str
+    close_price: Decimal
+    fx_rate: Decimal
+    quantity: Decimal
+    market_value_portfolio: Decimal
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
 class AccountReconciliation:
     account_id: str
     stored_cash_balance: Decimal

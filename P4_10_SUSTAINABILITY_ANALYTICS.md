@@ -41,8 +41,8 @@ Examples are `SWING|p4.3-swing-v1` and
 gross P&L, fees, slippage, total costs, net P&L, expectancy and profit factor,
 with the contributing persisted trade IDs attached as provenance.
 
-This baseline intentionally does not yet supply concentration, watchlist
-conversion, alert usefulness or manual-copy journal metrics. Those remain
+This baseline intentionally does not yet supply watchlist conversion, alert
+usefulness or manual-copy journal metrics. Those remain
 separate P4.10 slices so their data contracts can be tested without weakening
 the cost and version boundaries above.
 
@@ -90,3 +90,26 @@ is nominal 0%; interest and inflation are not assumed. The report displays:
 Multiple benchmark symbols may be recorded and are never blended into one
 headline. Benchmark selection policy and automated observation capture remain
 future configuration work.
+
+## P4.10.3 portfolio concentration
+
+Concentration uses immutable position-valuation evidence rather than entry
+cost or an inferred price. Each observation records the open position,
+quantity, close price, quote-to-portfolio FX rate, portfolio-currency market
+value, timestamp and source. Repeating identical evidence is idempotent;
+conflicting evidence is rejected.
+
+```bash
+python -m src.jobs.cli position-valuation record POS-123 \
+  --captured-at 2026-08-24T20:00:00+00:00 \
+  --quote-currency USD --close-price 230.00 --fx-rate 0.86 \
+  --source "operator-verified-close"
+```
+
+A result is reported only when the latest timestamp covers every currently
+open position and an equity snapshot exists at or before that timestamp.
+Positions in the same symbol are combined. The read-only dashboard displays
+each symbol's share of invested market value and total equity, the largest
+symbol weight, top-three weight, invested share of equity and the
+Herfindahl-Hirschman Index (HHI). No diversification judgment or policy limit
+is inferred; the slice provides reproducible evidence only.

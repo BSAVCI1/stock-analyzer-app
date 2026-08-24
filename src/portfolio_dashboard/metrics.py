@@ -17,6 +17,8 @@ from src.paper import (
     NotificationRecord,
     PaperAccount,
     PersistedSignal,
+    PaperPositionRecord,
+    PositionValuationObservation,
     SystemEventRecord,
 )
 from src.scanner import MarketScanReport
@@ -24,6 +26,8 @@ from src.scanner import MarketScanReport
 from .models import (
     EquityPerformance,
     BenchmarkComparison,
+    ConcentrationHolding,
+    ConcentrationSummary,
     PerformanceBreakdown,
     PerformanceSummary,
     Provenance,
@@ -33,6 +37,92 @@ from .models import (
 
 
 ZERO = Decimal("0")
+
+
+def calculate_concentration(
+    positions: tuple[PaperPositionRecord, ...],
+    observations: tuple[PositionValuationObservation, ...],
+    equity_snapshots: tuple[EquitySnapshot, ...],
+) -> ConcentrationSummary:
+    open_ids = {item.position_id for item in positions}
+    latest_at = max((item.captured_at for item in observations), default=None)
+    latest = tuple(
+        item for item in observations
+        if item.captured_at == latest_at and item.position_id in open_ids
+    )
+    valued_ids = {item.position_id for item in latest}
+    reason = None
+    equity_snapshot = None
+    if not positions:
+        reason = "No open positions are available for concentration analysis."
+    elif latest_at is None:
+        reason = "No persisted position valuations are available."
+    elif valued_ids != open_ids:
+        reason = "The latest valuation timestamp does not cover every open position."
+    else:
+        aligned = tuple(
+            item for item in equity_snapshots if item.captured_at <= latest_at
+        )
+        equity_snapshot = max(
+            aligned, key=lambda item: (item.captured_at, item.snapshot_id),
+            default=None,
+        )
+        if equity_snapshot is None:
+            reason = "No equity snapshot is aligned to the valuation timestamp."
+        elif equity_snapshot.equity <= ZERO:
+            reason = "Aligned portfolio equity must be positive."
+
+    sufficient = reason is None
+    grouped: dict[str, list[PositionValuationObservation]] = defaultdict(list)
+    for item in latest:
+        grouped[item.symbol].append(item)
+    total = sum((item.market_value_portfolio for item in latest), ZERO)
+    if sufficient and total <= ZERO:
+        sufficient = False
+        reason = "Invested market value must be positive."
+
+    holdings = ()
+    invested_equity_pct = largest_weight = top_three = hhi = None
+    largest_symbol = None
+    if sufficient:
+        rows = []
+        for symbol, items in grouped.items():
+            value = sum((item.market_value_portfolio for item in items), ZERO)
+            weight = float(value / total * Decimal("100"))
+            rows.append(ConcentrationHolding(
+                symbol=symbol,
+                market_value=value,
+                portfolio_weight_pct=weight,
+                equity_weight_pct=float(
+                    value / equity_snapshot.equity * Decimal("100")
+                ),
+                position_ids=tuple(sorted(item.position_id for item in items)),
+            ))
+        holdings = tuple(sorted(rows, key=lambda row: (-row.portfolio_weight_pct, row.symbol)))
+        largest_symbol = holdings[0].symbol
+        largest_weight = holdings[0].portfolio_weight_pct
+        top_three = sum(row.portfolio_weight_pct for row in holdings[:3])
+        hhi = sum((row.portfolio_weight_pct / 100) ** 2 for row in holdings)
+        invested_equity_pct = float(total / equity_snapshot.equity * Decimal("100"))
+
+    return ConcentrationSummary(
+        sufficient_evidence=sufficient, reason=reason, captured_at=latest_at,
+        position_count=len(positions), symbol_count=len(grouped),
+        invested_market_value=total,
+        equity=(equity_snapshot.equity if equity_snapshot else None),
+        invested_equity_pct=invested_equity_pct,
+        largest_symbol=largest_symbol,
+        largest_symbol_weight_pct=largest_weight,
+        top_three_weight_pct=top_three, hhi=hhi, holdings=holdings,
+        provenance=make_provenance(
+            tables=("paper_position_valuation_observations", "paper_positions", "paper_equity_snapshots"),
+            record_ids=(
+                *(item.observation_id for item in latest),
+                *((equity_snapshot.snapshot_id,) if equity_snapshot else ()),
+            ),
+            calculation="Latest complete position-valuation set grouped by symbol and aligned to persisted portfolio equity.",
+        ),
+    )
 
 
 def calculate_benchmark_comparisons(

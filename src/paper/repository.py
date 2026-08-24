@@ -54,6 +54,7 @@ from .models import (
     PaperFillRecord,
     PaperOrderRecord,
     PaperPositionRecord,
+    PositionValuationObservation,
     PersistedSignal,
     PositionStatus,
     SystemEventRecord,
@@ -2862,6 +2863,121 @@ class PaperRepository:
         finally:
             connection.close()
         return tuple(self._benchmark_from_row(row) for row in rows)
+
+    @staticmethod
+    def _position_valuation_from_row(
+        row: sqlite3.Row,
+    ) -> PositionValuationObservation:
+        return PositionValuationObservation(
+            observation_id=row["observation_id"],
+            account_id=row["account_id"],
+            position_id=row["position_id"],
+            symbol=row["symbol"],
+            captured_at=_datetime(row["captured_at"]),
+            quote_currency=row["quote_currency"],
+            close_price=money(row["close_price"]),
+            fx_rate=money(row["fx_rate"]),
+            quantity=money(row["quantity"]),
+            market_value_portfolio=money(row["market_value_portfolio"]),
+            source=row["source"],
+        )
+
+    def save_position_valuation_observation(
+        self, *, account_id: str, position_id: str,
+        captured_at: datetime, quote_currency: str,
+        close_price: object, fx_rate: object, source: str,
+    ) -> PositionValuationObservation:
+        currency = str(quote_currency).strip().upper()
+        clean_source = str(source).strip()
+        close = money(close_price)
+        fx = money(fx_rate)
+        if not currency or not clean_source:
+            raise ValueError("quote_currency and source are required.")
+        if close <= 0 or fx <= 0:
+            raise ValueError("close_price and fx_rate must be positive.")
+        timestamp = _timestamp(captured_at)
+        with transaction(self.database_path) as connection:
+            position = connection.execute(
+                "SELECT * FROM paper_positions WHERE position_id = ? AND account_id = ?",
+                (position_id, account_id),
+            ).fetchone()
+            if position is None:
+                raise ValueError(f"Unknown open position: {position_id}.")
+            if position["status"] != PositionStatus.OPEN.value:
+                raise ValueError("Position valuation requires an open position.")
+            if captured_at.astimezone(timezone.utc) < _datetime(position["opened_at"]):
+                raise ValueError("Position valuation cannot predate position opening.")
+            position_currency = position["quote_currency"]
+            if position_currency and currency != position_currency:
+                raise ValueError(
+                    "quote_currency must match the persisted position currency."
+                )
+            quantity = money(position["quantity"])
+            value = money(quantity * close * fx)
+            existing = connection.execute(
+                """SELECT * FROM paper_position_valuation_observations
+                   WHERE account_id = ? AND position_id = ? AND captured_at = ?""",
+                (account_id, position_id, timestamp),
+            ).fetchone()
+            if existing is not None:
+                observation = self._position_valuation_from_row(existing)
+                if (observation.quote_currency != currency
+                        or observation.close_price != close
+                        or observation.fx_rate != fx
+                        or observation.quantity != quantity
+                        or observation.source != clean_source):
+                    raise ValueError("Position valuation conflicts with persisted evidence.")
+                return observation
+            observation_id = _new_id("POSVAL")
+            connection.execute(
+                """INSERT INTO paper_position_valuation_observations(
+                       observation_id, account_id, position_id, symbol,
+                       captured_at, quote_currency, close_price, fx_rate,
+                       quantity, market_value_portfolio, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (observation_id, account_id, position_id, position["symbol"],
+                 timestamp, currency, str(close), str(fx), str(quantity),
+                 str(value), clean_source),
+            )
+        return self.get_position_valuation_observation(observation_id)
+
+    def get_position_valuation_observation(
+        self, observation_id: str,
+    ) -> PositionValuationObservation:
+        connection = connect_database(self.database_path)
+        try:
+            row = connection.execute(
+                "SELECT * FROM paper_position_valuation_observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            raise ValueError(f"Unknown position valuation: {observation_id}.")
+        return self._position_valuation_from_row(row)
+
+    def list_position_valuation_observations(
+        self, account_id: str, *, captured_at: datetime | None = None,
+    ) -> tuple[PositionValuationObservation, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            if captured_at is None:
+                rows = connection.execute(
+                    """SELECT * FROM paper_position_valuation_observations
+                       WHERE account_id = ?
+                       ORDER BY captured_at, position_id, observation_id""",
+                    (account_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """SELECT * FROM paper_position_valuation_observations
+                       WHERE account_id = ? AND captured_at = ?
+                       ORDER BY position_id, observation_id""",
+                    (account_id, _timestamp(captured_at)),
+                ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._position_valuation_from_row(row) for row in rows)
 
     @staticmethod
     def _incident_from_row(

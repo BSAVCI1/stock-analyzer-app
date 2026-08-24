@@ -2,6 +2,7 @@
 
 from .metrics import (
     calculate_benchmark_comparisons,
+    calculate_concentration,
     calculate_breakdowns,
     calculate_equity_performance,
     calculate_performance,
@@ -10,6 +11,8 @@ from .metrics import (
 )
 from .models import (
     BenchmarkComparison,
+    ConcentrationHolding,
+    ConcentrationSummary,
     DecisionTrace,
     EquityPerformance,
     PerformanceBreakdown,
@@ -28,6 +31,7 @@ from .service import (
 )
 from .view import (
     benchmark_comparison_rows,
+    concentration_rows,
     broker_reconciliation_item_rows,
     broker_reconciliation_summary_rows,
     closed_trade_rows,
@@ -52,6 +56,8 @@ from .view import (
 __all__ = [
     "DecisionTrace",
     "BenchmarkComparison",
+    "ConcentrationHolding",
+    "ConcentrationSummary",
     "EquityPerformance",
     "PerformanceBreakdown",
     "PerformanceSummary",
@@ -64,12 +70,14 @@ __all__ = [
     "SectionProvenance",
     "calculate_breakdowns",
     "calculate_benchmark_comparisons",
+    "calculate_concentration",
     "calculate_equity_performance",
     "calculate_performance",
     "calculate_reliability",
     "make_provenance",
     "broker_reconciliation_item_rows",
     "benchmark_comparison_rows",
+    "concentration_rows",
     "broker_reconciliation_summary_rows",
     "closed_trade_rows",
     "decision_trace_rows",
