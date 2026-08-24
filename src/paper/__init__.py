@@ -41,6 +41,8 @@ from .migrations import (
 )
 from .models import (
     AccountReconciliation,
+    AlertFeedbackJournalEntry,
+    AlertUsefulness,
     AccountStatus,
     BenchmarkObservation,
     ClosedPaperTrade,
@@ -49,6 +51,7 @@ from .models import (
     NotificationChannel,
     NotificationRecord,
     NotificationStatus,
+    ManualAlertAction,
     OperationalIncident,
     OrderStatus,
     PaperAccount,
@@ -89,6 +92,8 @@ __all__ = [
     "EVENT_RISK_POLICY_VERSION",
     "SCHEMA_VERSION",
     "AccountReconciliation",
+    "AlertFeedbackJournalEntry",
+    "AlertUsefulness",
     "AccountStatus",
     "BenchmarkObservation",
     "ClosedPaperTrade",
@@ -110,6 +115,7 @@ __all__ = [
     "NotificationChannel",
     "NotificationRecord",
     "NotificationStatus",
+    "ManualAlertAction",
     "OperationalIncident",
     "OrderProposalRejected",
     "OrderStatus",

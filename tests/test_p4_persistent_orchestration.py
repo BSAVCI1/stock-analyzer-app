@@ -128,7 +128,7 @@ def test_cycle_persists_outcomes_and_checkpoint(
     finally:
         connection.close()
 
-    assert version == 17
+    assert version == 18
     assert {
         "paper_orchestration_invocations",
         "paper_orchestration_checkpoints",

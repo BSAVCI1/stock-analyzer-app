@@ -485,6 +485,24 @@ def actionability_rows(
     )
 
 
+def alert_feedback_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "journal_id": item.journal_id,
+            "notification_id": item.notification_id,
+            "usefulness": item.usefulness.value,
+            "manual_action": item.manual_action.value,
+            "operator": item.operator,
+            "rationale": item.rationale,
+            "broker_reference": item.broker_reference,
+            "recorded_at": _timestamp(item.recorded_at),
+        }
+        for item in snapshot.alert_feedback
+    )
+
+
 def scan_rows(
     snapshot: PortfolioDashboardSnapshot,
 ) -> tuple[dict[str, object], ...]:

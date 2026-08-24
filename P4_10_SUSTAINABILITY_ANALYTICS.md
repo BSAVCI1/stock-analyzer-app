@@ -133,3 +133,27 @@ supporting scan-result, signal and order IDs retained as provenance.
 
 These metrics describe actionability only. They do not claim that an order was
 profitable or that a rejected watchlist idea was incorrect.
+
+## P4.10.5 alert usefulness and manual-copy journal
+
+Operator feedback is immutable evidence attached to one successfully sent
+notification. Each assessment records whether the alert was useful, what the
+operator did (`COPIED_AS_IS`, `COPIED_MODIFIED`, `DISMISSED` or `NO_ACTION`),
+the named operator, rationale, timestamp and—when copied—the paper-broker
+reference. Identical retries are idempotent and conflicting reassessments are
+rejected rather than overwriting history.
+
+```bash
+python -m src.jobs.cli alert-feedback record NOT-123 \
+  --usefulness USEFUL --manual-action COPIED_MODIFIED \
+  --operator "Salih AVCI" \
+  --rationale "Copied after reducing quantity." \
+  --broker-reference "IBKR-PAPER-123" \
+  --recorded-at 2026-08-24T20:15:00+00:00
+```
+
+The dashboard reports three separate measures: assessment coverage over sent
+notifications, usefulness over assessed alerts, and manual-copy rate over
+assessed alerts. Unassessed notifications are not silently treated as
+not-useful. A copy decision is evidence of operator action only; it is not
+treated as broker execution, strategy success or investment performance.

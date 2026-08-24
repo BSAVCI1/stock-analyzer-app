@@ -263,6 +263,9 @@ class PortfolioDashboardRepository:
             account_id
         )
 
+    def list_alert_feedback(self, account_id: str):
+        return self.paper.list_alert_feedback(account_id)
+
     def list_system_events(
         self,
         account_id: str,

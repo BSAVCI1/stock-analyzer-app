@@ -12,9 +12,13 @@ from src.automation import (
 )
 from src.jobs import JobRun
 from src.paper import (
+    AlertFeedbackJournalEntry,
+    AlertUsefulness,
     BenchmarkObservation,
     ClosedPaperTrade,
     NotificationRecord,
+    NotificationStatus,
+    ManualAlertAction,
     PaperAccount,
     PersistedSignal,
     PaperPositionRecord,
@@ -32,6 +36,7 @@ from .models import (
     ConcentrationSummary,
     ActionabilityCohort,
     ActionabilitySummary,
+    AlertUsefulnessSummary,
     PerformanceBreakdown,
     PerformanceSummary,
     Provenance,
@@ -41,6 +46,61 @@ from .models import (
 
 
 ZERO = Decimal("0")
+
+
+def calculate_alert_usefulness(
+    notifications: tuple[NotificationRecord, ...],
+    feedback: tuple[AlertFeedbackJournalEntry, ...],
+) -> AlertUsefulnessSummary:
+    sent = tuple(
+        item for item in notifications if item.status is NotificationStatus.SENT
+    )
+    sent_ids = {item.notification_id for item in sent}
+    assessed = tuple(
+        item for item in feedback if item.notification_id in sent_ids
+    )
+    useful = sum(
+        item.usefulness is AlertUsefulness.USEFUL for item in assessed
+    )
+    copied_as_is = sum(
+        item.manual_action is ManualAlertAction.COPIED_AS_IS for item in assessed
+    )
+    copied_modified = sum(
+        item.manual_action is ManualAlertAction.COPIED_MODIFIED for item in assessed
+    )
+    dismissed = sum(
+        item.manual_action is ManualAlertAction.DISMISSED for item in assessed
+    )
+    no_action = sum(
+        item.manual_action is ManualAlertAction.NO_ACTION for item in assessed
+    )
+    return AlertUsefulnessSummary(
+        sent_alerts=len(sent), assessed_alerts=len(assessed),
+        useful_alerts=useful, not_useful_alerts=len(assessed) - useful,
+        copied_as_is=copied_as_is, copied_modified=copied_modified,
+        dismissed=dismissed, no_action=no_action,
+        assessment_coverage_pct=(
+            len(assessed) / len(sent) * 100 if sent else None
+        ),
+        usefulness_rate_pct=(
+            useful / len(assessed) * 100 if assessed else None
+        ),
+        manual_copy_rate_pct=(
+            (copied_as_is + copied_modified) / len(assessed) * 100
+            if assessed else None
+        ),
+        provenance=make_provenance(
+            tables=("paper_notifications", "paper_alert_feedback_journal"),
+            record_ids=(
+                *(item.notification_id for item in sent),
+                *(item.journal_id for item in assessed),
+            ),
+            calculation=(
+                "Useful and manual-copy assessments divided by assessed sent "
+                "notification records; coverage divided by all sent records."
+            ),
+        ),
+    )
 
 
 def _cohort_key(item) -> str:

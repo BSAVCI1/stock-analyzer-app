@@ -367,6 +367,31 @@ class NotificationRecord:
     ] = field(default_factory=dict)
 
 
+class AlertUsefulness(str, Enum):
+    USEFUL = "USEFUL"
+    NOT_USEFUL = "NOT_USEFUL"
+
+
+class ManualAlertAction(str, Enum):
+    COPIED_AS_IS = "COPIED_AS_IS"
+    COPIED_MODIFIED = "COPIED_MODIFIED"
+    DISMISSED = "DISMISSED"
+    NO_ACTION = "NO_ACTION"
+
+
+@dataclass(frozen=True, slots=True)
+class AlertFeedbackJournalEntry:
+    journal_id: str
+    account_id: str
+    notification_id: str
+    usefulness: AlertUsefulness
+    manual_action: ManualAlertAction
+    operator: str
+    rationale: str
+    broker_reference: str | None
+    recorded_at: datetime
+
+
 @dataclass(frozen=True, slots=True)
 class SystemEventRecord:
     event_id: str

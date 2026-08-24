@@ -32,8 +32,10 @@ from src.product_config import (
 )
 
 from src.paper import (
+    AlertUsefulness,
     IncidentSeverity,
     IncidentStatus,
+    ManualAlertAction,
 )
 
 from src.execution_adapters import (
@@ -427,6 +429,24 @@ def build_parser() -> argparse.ArgumentParser:
     valuation.add_argument("--close-price")
     valuation.add_argument("--fx-rate")
     valuation.add_argument("--source")
+
+    feedback = commands.add_parser(
+        "alert-feedback",
+        help="Record or list immutable operator feedback for sent alerts.",
+    )
+    _add_runtime_arguments(feedback)
+    feedback.add_argument("action", choices=("record", "list"))
+    feedback.add_argument("notification_id", nargs="?")
+    feedback.add_argument(
+        "--usefulness", choices=tuple(item.value for item in AlertUsefulness)
+    )
+    feedback.add_argument(
+        "--manual-action", choices=tuple(item.value for item in ManualAlertAction)
+    )
+    feedback.add_argument("--operator")
+    feedback.add_argument("--rationale")
+    feedback.add_argument("--broker-reference")
+    feedback.add_argument("--recorded-at")
 
     return parser
 
@@ -1530,6 +1550,59 @@ def _run_position_valuation(runtime: PaperJobRuntime, args) -> int:
     return 0
 
 
+def _alert_feedback_payload(entry) -> dict[str, object]:
+    return {
+        "journal_id": entry.journal_id,
+        "account_id": entry.account_id,
+        "notification_id": entry.notification_id,
+        "usefulness": entry.usefulness.value,
+        "manual_action": entry.manual_action.value,
+        "operator": entry.operator,
+        "rationale": entry.rationale,
+        "broker_reference": entry.broker_reference,
+        "recorded_at": entry.recorded_at,
+    }
+
+
+def _run_alert_feedback(runtime: PaperJobRuntime, args) -> int:
+    repository = runtime.paper_repository
+    account_id = runtime.settings.account_id
+    if args.action == "list":
+        entries = repository.list_alert_feedback(account_id)
+        if args.notification_id:
+            entries = tuple(
+                item for item in entries
+                if item.notification_id == args.notification_id
+            )
+        _write_json({
+            "account_id": account_id,
+            "entries": [_alert_feedback_payload(item) for item in entries],
+            "total": len(entries),
+        })
+        return 0
+    if not all((args.notification_id, args.usefulness, args.manual_action,
+                args.operator, args.rationale, args.recorded_at)):
+        raise ValueError(
+            "notification_id, --usefulness, --manual-action, --operator, "
+            "--rationale and --recorded-at are required for record."
+        )
+    recorded_at = datetime.fromisoformat(args.recorded_at)
+    if recorded_at.tzinfo is None or recorded_at.utcoffset() is None:
+        raise ValueError("--recorded-at must be timezone-aware.")
+    entry = repository.record_alert_feedback(
+        account_id=account_id,
+        notification_id=args.notification_id,
+        usefulness=AlertUsefulness(args.usefulness),
+        manual_action=ManualAlertAction(args.manual_action),
+        operator=args.operator,
+        rationale=args.rationale,
+        broker_reference=args.broker_reference,
+        recorded_at=recorded_at,
+    )
+    _write_json(_alert_feedback_payload(entry))
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1595,6 +1668,9 @@ def main(
 
         if args.command == "position-valuation":
             return _run_position_valuation(runtime, args)
+
+        if args.command == "alert-feedback":
+            return _run_alert_feedback(runtime, args)
 
         parser.error(
             f"Unsupported command: "

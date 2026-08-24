@@ -47,7 +47,7 @@ def test_schema_version_fifteen_adds_incident_log(tmp_path) -> None:
     finally:
         connection.close()
 
-    assert version == SCHEMA_VERSION == 17
+    assert version == SCHEMA_VERSION == 18
     assert "paper_operational_incidents" in tables
 
 

@@ -39,6 +39,8 @@ from .valuation import (
 from .migrations import initialize_database
 from .models import (
     AccountReconciliation,
+    AlertFeedbackJournalEntry,
+    AlertUsefulness,
     AccountStatus,
     BenchmarkObservation,
     ClosedPaperTrade,
@@ -47,6 +49,7 @@ from .models import (
     NotificationChannel,
     NotificationRecord,
     NotificationStatus,
+    ManualAlertAction,
     OperationalIncident,
     OrderStatus,
     PaperAccount,
@@ -2499,6 +2502,105 @@ class PaperRepository:
             )
             for row in rows
         )
+
+    @staticmethod
+    def _alert_feedback_from_row(row: sqlite3.Row) -> AlertFeedbackJournalEntry:
+        return AlertFeedbackJournalEntry(
+            journal_id=row["journal_id"], account_id=row["account_id"],
+            notification_id=row["notification_id"],
+            usefulness=AlertUsefulness(row["usefulness"]),
+            manual_action=ManualAlertAction(row["manual_action"]),
+            operator=row["operator"], rationale=row["rationale"],
+            broker_reference=row["broker_reference"],
+            recorded_at=_datetime(row["recorded_at"]),
+        )
+
+    def record_alert_feedback(
+        self, *, account_id: str, notification_id: str,
+        usefulness: AlertUsefulness, manual_action: ManualAlertAction,
+        operator: str, rationale: str, recorded_at: datetime,
+        broker_reference: str | None = None,
+    ) -> AlertFeedbackJournalEntry:
+        usefulness = AlertUsefulness(usefulness)
+        manual_action = ManualAlertAction(manual_action)
+        clean_operator = str(operator).strip()
+        clean_rationale = str(rationale).strip()
+        clean_reference = (
+            str(broker_reference).strip() if broker_reference else None
+        )
+        if not clean_operator or not clean_rationale:
+            raise ValueError("operator and rationale are required.")
+        recorded_timestamp = _timestamp(recorded_at)
+        recorded_utc = _datetime(recorded_timestamp)
+        copied = manual_action in (
+            ManualAlertAction.COPIED_AS_IS, ManualAlertAction.COPIED_MODIFIED,
+        )
+        if copied and not clean_reference:
+            raise ValueError("broker_reference is required for copied alerts.")
+        if not copied and clean_reference:
+            raise ValueError("broker_reference is only valid for copied alerts.")
+        with transaction(self.database_path) as connection:
+            notification = connection.execute(
+                "SELECT * FROM paper_notifications WHERE notification_id = ? AND account_id = ?",
+                (notification_id, account_id),
+            ).fetchone()
+            if notification is None:
+                raise ValueError(f"Unknown notification: {notification_id}.")
+            if notification["status"] != NotificationStatus.SENT.value:
+                raise ValueError("Alert feedback requires a sent notification.")
+            sent_at = _datetime(notification["sent_at"])
+            if sent_at is not None and recorded_utc < sent_at:
+                raise ValueError("Alert feedback cannot predate alert delivery.")
+            existing = connection.execute(
+                "SELECT * FROM paper_alert_feedback_journal WHERE notification_id = ?",
+                (notification_id,),
+            ).fetchone()
+            if existing is not None:
+                entry = self._alert_feedback_from_row(existing)
+                if (
+                    entry.usefulness != usefulness
+                    or entry.manual_action != manual_action
+                    or entry.operator != clean_operator
+                    or entry.rationale != clean_rationale
+                    or entry.broker_reference != clean_reference
+                    or entry.recorded_at != recorded_utc
+                ):
+                    raise ValueError("Alert feedback conflicts with persisted evidence.")
+                return entry
+            journal_id = _new_id("ALERTJ")
+            connection.execute(
+                """INSERT INTO paper_alert_feedback_journal(
+                       journal_id, account_id, notification_id, usefulness,
+                       manual_action, operator, rationale, broker_reference, recorded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (journal_id, account_id, notification_id, usefulness.value,
+                 manual_action.value, clean_operator, clean_rationale,
+                 clean_reference, recorded_timestamp),
+            )
+        return self.get_alert_feedback(journal_id)
+
+    def get_alert_feedback(self, journal_id: str) -> AlertFeedbackJournalEntry:
+        row = self._read_one(
+            "SELECT * FROM paper_alert_feedback_journal WHERE journal_id = ?",
+            (journal_id,),
+        )
+        if row is None:
+            raise ValueError(f"Unknown alert feedback: {journal_id}.")
+        return self._alert_feedback_from_row(row)
+
+    def list_alert_feedback(
+        self, account_id: str,
+    ) -> tuple[AlertFeedbackJournalEntry, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            rows = connection.execute(
+                """SELECT * FROM paper_alert_feedback_journal
+                   WHERE account_id = ? ORDER BY recorded_at, journal_id""",
+                (account_id,),
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._alert_feedback_from_row(row) for row in rows)
 
     def list_pending_notifications(
         self,
