@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "release_id": "REPLACE-WITH-RELEASE-ID",
+  "generated_at": "2026-08-24T21:00:00+00:00",
+  "account_id": "REPLACE-WITH-PAPER-ACCOUNT",
+  "execution_mode": "PAPER",
+  "live_execution_enabled": false,
+  "unresolved_operational_failures": 0
+}
