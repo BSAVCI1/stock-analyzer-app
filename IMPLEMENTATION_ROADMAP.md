@@ -1073,6 +1073,10 @@ currency/balance validation were implemented in P4.11.9 after the target-Mac
 rehearsal correctly exposed that the earlier EUR 100,000 deployment-test
 account must remain isolated from release evidence.
 
+A controlled, persisted application notification probe was implemented in
+P4.11.10 after the target-Mac rehearsal confirmed that passive dispatch cannot
+produce delivery evidence when no eligible event is queued.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks

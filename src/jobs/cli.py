@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import sys
 from typing import Sequence
+import uuid
 
 from src.backtest import RegressionEvidence
 from src.portfolio_dashboard import (
@@ -47,6 +48,7 @@ from src.paper import (
     IncidentSeverity,
     IncidentStatus,
     ManualAlertAction,
+    NotificationChannel,
 )
 
 from src.execution_adapters import (
@@ -226,6 +228,19 @@ def build_parser() -> argparse.ArgumentParser:
             "notifications."
         ),
     )
+
+    notification_probe = commands.add_parser(
+        "notification-probe",
+        help="Send one persisted operational notification probe.",
+    )
+    _add_runtime_arguments(notification_probe)
+    notification_probe.add_argument(
+        "--channel",
+        required=True,
+        choices=("EMAIL", "TELEGRAM"),
+    )
+    notification_probe.add_argument("--operator", required=True)
+    notification_probe.add_argument("--reason", required=True)
 
     p3_release = commands.add_parser(
         "p3-release-status",
@@ -914,6 +929,55 @@ def _run_dispatch(
     )
 
     return 1 if report.failed else 0
+
+
+def _run_notification_probe(runtime: PaperJobRuntime, args) -> int:
+    channel = NotificationChannel(args.channel)
+    if channel not in runtime.notification_channels:
+        raise ValueError(f"{channel.value} sender is not configured.")
+
+    at = datetime.now(timezone.utc)
+    probe_id = "PROBE-" + uuid.uuid4().hex
+    queued = runtime.paper_repository.queue_notification(
+        account_id=runtime.settings.account_id,
+        event_type="OPERATIONAL_NOTIFICATION_PROBE",
+        reference_type="OPERATIONAL_PROBE",
+        reference_id=probe_id,
+        channel=channel,
+        payload={
+            "subject": "BSAVCI operational notification probe",
+            "text": (
+                f"P4 operational delivery probe requested by {args.operator}. "
+                f"Reason: {args.reason}"
+            ),
+        },
+        created_at=at,
+    )
+    dispatch = runtime.notification_service.dispatch_pending(
+        runtime.settings.account_id,
+        attempted_at=at,
+    )
+    result = runtime.paper_repository.get_notification(queued.notification_id)
+    _write_json({
+        "probe_id": probe_id,
+        "notification_id": result.notification_id,
+        "account_id": result.account_id,
+        "channel": result.channel.value,
+        "status": result.status.value,
+        "reference_type": result.reference_type,
+        "reference_id": result.reference_id,
+        "sent_at": result.sent_at,
+        "attempt_count": result.attempt_count,
+        "provider_message_id": result.provider_message_id,
+        "operator": args.operator,
+        "reason": args.reason,
+        "dispatch": {
+            "processed": dispatch.processed,
+            "sent": dispatch.sent,
+            "failed": dispatch.failed,
+        },
+    })
+    return 0 if result.status.value == "SENT" else 1
 
 
 def _broker_reconciliation_run_payload(
@@ -1961,6 +2025,9 @@ def main(
                 runtime,
                 args,
             )
+
+        if args.command == "notification-probe":
+            return _run_notification_probe(runtime, args)
 
         if args.command == "p3-release-status":
             return _run_p3_release_status(
