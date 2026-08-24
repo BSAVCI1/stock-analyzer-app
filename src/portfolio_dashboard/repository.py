@@ -229,6 +229,9 @@ class PortfolioDashboardRepository:
             account_id
         )
 
+    def list_position_valuation_observations(self, account_id: str):
+        return self.paper.list_position_valuation_observations(account_id)
+
     def list_jobs(
         self,
         account_id: str,

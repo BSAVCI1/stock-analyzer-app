@@ -451,6 +451,24 @@ def benchmark_comparison_rows(
     )
 
 
+def concentration_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    summary = snapshot.concentration
+    return tuple(
+        {
+            "captured_at": _timestamp(summary.captured_at),
+            "symbol": row.symbol,
+            "market_value": _decimal_text(row.market_value),
+            "portfolio_weight_pct": row.portfolio_weight_pct,
+            "equity_weight_pct": row.equity_weight_pct,
+            "position_ids": ", ".join(row.position_ids),
+            "sufficient_evidence": summary.sufficient_evidence,
+        }
+        for row in summary.holdings
+    )
+
+
 def scan_rows(
     snapshot: PortfolioDashboardSnapshot,
 ) -> tuple[dict[str, object], ...]:

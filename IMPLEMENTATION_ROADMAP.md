@@ -1011,7 +1011,8 @@ Measure whether the bot creates useful decisions, not merely activity.
   implemented in P4.10.2)
 - Expectancy, drawdown, profit factor and concentration (cost-adjusted
   expectancy and profit factor implemented in P4.10.1; drawdown retained from
-  persisted equity snapshots; concentration pending)
+  persisted equity snapshots; immutable position valuations, symbol weights,
+  top-three weight and HHI concentration implemented in P4.10.3)
 - Watchlist conversion and stale-signal rate
 - Alert usefulness and manual-copy journal
 - Operational reliability metrics

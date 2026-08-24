@@ -24,6 +24,7 @@ from src.paper import (
     PaperAccount,
     PaperOrderRecord,
     PaperPositionRecord,
+    PositionValuationObservation,
     SystemEventRecord,
 )
 from src.scanner import MarketScanReport
@@ -137,6 +138,33 @@ class BenchmarkComparison:
 
 
 @dataclass(frozen=True, slots=True)
+class ConcentrationHolding:
+    symbol: str
+    market_value: Decimal
+    portfolio_weight_pct: float
+    equity_weight_pct: float
+    position_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ConcentrationSummary:
+    sufficient_evidence: bool
+    reason: str | None
+    captured_at: datetime | None
+    position_count: int
+    symbol_count: int
+    invested_market_value: Decimal
+    equity: Decimal | None
+    invested_equity_pct: float | None
+    largest_symbol: str | None
+    largest_symbol_weight_pct: float | None
+    top_three_weight_pct: float | None
+    hhi: float | None
+    holdings: tuple[ConcentrationHolding, ...]
+    provenance: Provenance
+
+
+@dataclass(frozen=True, slots=True)
 class PerformanceBreakdown:
     dimension: str
     key: str
@@ -230,6 +258,11 @@ class PortfolioDashboardSnapshot:
         BenchmarkComparison,
         ...,
     ]
+
+    position_valuation_observations: tuple[
+        PositionValuationObservation, ...,
+    ]
+    concentration: ConcentrationSummary
 
     performance: PerformanceSummary
     equity_performance: EquityPerformance

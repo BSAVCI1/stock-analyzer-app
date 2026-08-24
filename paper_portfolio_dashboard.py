@@ -11,6 +11,7 @@ import streamlit as st
 
 from src.portfolio_dashboard import (
     benchmark_comparison_rows,
+    concentration_rows,
     PortfolioDashboardRepository,
     PortfolioDashboardService,
     broker_reconciliation_item_rows,
@@ -480,6 +481,27 @@ with equity_tab:
     else:
         st.dataframe(
             benchmark_data,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader("Portfolio concentration")
+    concentration = snapshot.concentration
+    if not concentration.sufficient_evidence:
+        st.info(concentration.reason or "Insufficient concentration evidence.")
+    else:
+        columns = st.columns(4)
+        values = (
+            ("Invested / equity", format_percent(concentration.invested_equity_pct)),
+            ("Largest symbol", concentration.largest_symbol or "N/A"),
+            ("Largest weight", format_percent(concentration.largest_symbol_weight_pct)),
+            ("Top three", format_percent(concentration.top_three_weight_pct)),
+        )
+        for column, (label, value) in zip(columns, values):
+            with column:
+                st.metric(label, value)
+        st.dataframe(
+            pd.DataFrame(concentration_rows(snapshot)),
             use_container_width=True,
             hide_index=True,
         )

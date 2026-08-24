@@ -12,6 +12,7 @@ from src.paper import PersistedSignal
 
 from .metrics import (
     calculate_benchmark_comparisons,
+    calculate_concentration,
     calculate_breakdowns,
     calculate_equity_performance,
     calculate_performance,
@@ -261,6 +262,10 @@ class PortfolioDashboardService:
             )
         )
 
+        position_valuation_observations = (
+            self.repository.list_position_valuation_observations(account_id)
+        )
+
         all_jobs = (
             self.repository.list_jobs(
                 account_id
@@ -411,6 +416,10 @@ class PortfolioDashboardService:
                 benchmark_observations,
                 equity_snapshots,
             )
+        )
+
+        concentration = calculate_concentration(
+            open_positions, position_valuation_observations, equity_snapshots,
         )
 
         breakdowns = (
@@ -661,6 +670,8 @@ class PortfolioDashboardService:
             benchmark_comparisons=(
                 benchmark_comparisons
             ),
+            position_valuation_observations=position_valuation_observations,
+            concentration=concentration,
             performance=performance,
             equity_performance=(
                 equity_performance

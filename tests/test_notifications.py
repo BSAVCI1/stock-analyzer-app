@@ -123,7 +123,7 @@ def test_schema_version_four_and_job_table(
     finally:
         connection.close()
 
-    assert version == 16
+    assert version == 17
 
     assert "paper_job_runs" in tables
 
