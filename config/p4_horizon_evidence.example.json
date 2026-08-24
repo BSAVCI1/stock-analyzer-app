@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "release_id": "REPLACE-WITH-RELEASE-ID",
+  "observed_at": "2026-08-24T20:00:00+00:00",
+  "horizons": [
+    {
+      "horizon": "swing",
+      "strategy_version": "p4.3-swing-v1",
+      "decision": "NOT_OBSERVED",
+      "out_of_sample_passed": false,
+      "walk_forward_passed": false,
+      "costs_included": false,
+      "minimum_trade_count_met": false,
+      "parameter_stability_passed": false,
+      "acceptance_report_id": "",
+      "validation_report_id": "",
+      "threshold_manifest_id": ""
+    },
+    {
+      "horizon": "medium_term",
+      "strategy_version": "p4.3-medium-term-v1",
+      "decision": "NOT_OBSERVED",
+      "out_of_sample_passed": false,
+      "walk_forward_passed": false,
+      "costs_included": false,
+      "minimum_trade_count_met": false,
+      "parameter_stability_passed": false,
+      "acceptance_report_id": "",
+      "validation_report_id": "",
+      "threshold_manifest_id": ""
+    }
+  ]
+}
