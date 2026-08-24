@@ -19,6 +19,7 @@ from .metrics import (
     calculate_equity_performance,
     calculate_performance,
     calculate_reliability,
+    calculate_operational_reliability,
     make_provenance,
 )
 from .models import (
@@ -462,6 +463,12 @@ class PortfolioDashboardService:
             )
         )
 
+        operational_reliability = calculate_operational_reliability(
+            jobs=all_jobs,
+            notifications=notifications,
+            system_events=system_events,
+        )
+
         sections = (
             SectionProvenance(
                 section="account",
@@ -650,6 +657,10 @@ class PortfolioDashboardService:
                     .provenance
                 ),
             ),
+            SectionProvenance(
+                section="operational_reliability",
+                provenance=operational_reliability.provenance,
+            ),
         )
 
         return PortfolioDashboardSnapshot(
@@ -709,6 +720,7 @@ class PortfolioDashboardService:
                 system_events
             ),
             reliability=reliability,
+            operational_reliability=operational_reliability,
             section_provenance=sections,
             metadata={
                 "account_id": account_id,

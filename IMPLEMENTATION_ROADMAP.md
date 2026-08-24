@@ -1019,14 +1019,16 @@ Measure whether the bot creates useful decisions, not merely activity.
 - Alert usefulness and manual-copy journal (immutable named-operator feedback,
   usefulness/coverage metrics, copy-as-is versus modified decisions and broker
   reference evidence implemented in P4.10.5)
-- Operational reliability metrics
+- Operational reliability metrics (all-history job success and start
+  timeliness, completed-cycle evidence coverage, terminal notification
+  delivery and critical-event counts implemented in P4.10.6)
 
 **Gate**
 - Metrics are reproducible from persisted records
 - Results are not mixed across strategy versions
 - No headline metric hides transaction costs
 
-**Status:** In progress
+**Status:** Complete
 **Dependencies:** P4.2-P4.9
 **Relative effort:** M
 

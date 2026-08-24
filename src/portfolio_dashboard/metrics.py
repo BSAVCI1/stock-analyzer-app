@@ -42,6 +42,7 @@ from .models import (
     Provenance,
     ReliabilityMetric,
     ReliabilitySummary,
+    OperationalReliabilitySummary,
 )
 
 
@@ -1186,4 +1187,90 @@ def calculate_reliability(
             notification_metric
         ),
         system_events=event_metric,
+    )
+
+
+def calculate_operational_reliability(
+    *, jobs: tuple[JobRun, ...],
+    notifications: tuple[NotificationRecord, ...],
+    system_events: tuple[SystemEventRecord, ...],
+    start_tolerance_seconds: int = 300,
+) -> OperationalReliabilitySummary:
+    if start_tolerance_seconds < 0:
+        raise ValueError("start_tolerance_seconds cannot be negative.")
+    terminal_statuses = {
+        "COMPLETED", "SKIPPED", "FAILED", "COMPLETED_WITH_ERRORS",
+    }
+    successful_statuses = {"COMPLETED", "SKIPPED"}
+    terminal = tuple(
+        item for item in jobs if item.status.value in terminal_statuses
+    )
+    successful = tuple(
+        item for item in terminal if item.status.value in successful_statuses
+    )
+    delays = tuple(
+        max(0.0, (item.started_at - item.scheduled_for).total_seconds())
+        for item in jobs
+    )
+    on_time = sum(delay <= start_tolerance_seconds for delay in delays)
+    completed_cycles = tuple(
+        item for item in jobs
+        if item.job_type.value == "MARKET_CYCLE" and item.status.value == "COMPLETED"
+    )
+    evidence_complete = tuple(
+        item for item in completed_cycles
+        if item.scan_id is not None and item.execution_run_id is not None
+    )
+    terminal_notifications = tuple(
+        item for item in notifications
+        if item.status.value in {"SENT", "FAILED"}
+    )
+    delivered = tuple(
+        item for item in terminal_notifications if item.status.value == "SENT"
+    )
+    critical_events = tuple(
+        item for item in system_events
+        if item.severity.strip().upper() in {"ERROR", "CRITICAL"}
+    )
+    ordered_jobs = tuple(sorted(jobs, key=lambda x: (x.scheduled_for, x.job_run_id)))
+    return OperationalReliabilitySummary(
+        window_started_at=(ordered_jobs[0].scheduled_for if ordered_jobs else None),
+        window_ended_at=(ordered_jobs[-1].scheduled_for if ordered_jobs else None),
+        job_count=len(jobs), terminal_job_count=len(terminal),
+        successful_job_count=len(successful),
+        job_success_rate_pct=(
+            len(successful) / len(terminal) * 100 if terminal else None
+        ),
+        on_time_job_count=on_time,
+        on_time_start_rate_pct=(on_time / len(jobs) * 100 if jobs else None),
+        average_start_delay_seconds=(sum(delays) / len(delays) if delays else None),
+        maximum_start_delay_seconds=(max(delays) if delays else None),
+        completed_market_cycles=len(completed_cycles),
+        evidence_complete_cycles=len(evidence_complete),
+        cycle_evidence_rate_pct=(
+            len(evidence_complete) / len(completed_cycles) * 100
+            if completed_cycles else None
+        ),
+        terminal_notifications=len(terminal_notifications),
+        delivered_notifications=len(delivered),
+        notification_delivery_rate_pct=(
+            len(delivered) / len(terminal_notifications) * 100
+            if terminal_notifications else None
+        ),
+        critical_system_events=len(critical_events),
+        start_tolerance_seconds=start_tolerance_seconds,
+        provenance=make_provenance(
+            tables=("paper_job_runs", "paper_notifications", "paper_system_events"),
+            record_ids=(
+                *(item.job_run_id for item in jobs),
+                *(item.notification_id for item in terminal_notifications),
+                *(item.event_id for item in critical_events),
+            ),
+            calculation=(
+                "All persisted job runs in the account history; start delay is "
+                f"measured against scheduled_for with {start_tolerance_seconds}s tolerance; "
+                "delivery uses sent/failed terminal notifications; completed market "
+                "cycles require both scan and execution IDs for complete evidence."
+            ),
+        ),
     )

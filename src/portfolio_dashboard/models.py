@@ -253,6 +253,29 @@ class ReliabilitySummary:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationalReliabilitySummary:
+    window_started_at: datetime | None
+    window_ended_at: datetime | None
+    job_count: int
+    terminal_job_count: int
+    successful_job_count: int
+    job_success_rate_pct: float | None
+    on_time_job_count: int
+    on_time_start_rate_pct: float | None
+    average_start_delay_seconds: float | None
+    maximum_start_delay_seconds: float | None
+    completed_market_cycles: int
+    evidence_complete_cycles: int
+    cycle_evidence_rate_pct: float | None
+    terminal_notifications: int
+    delivered_notifications: int
+    notification_delivery_rate_pct: float | None
+    critical_system_events: int
+    start_tolerance_seconds: int
+    provenance: Provenance
+
+
+@dataclass(frozen=True, slots=True)
 class PortfolioDashboardSnapshot:
     generated_at: datetime
 
@@ -342,6 +365,7 @@ class PortfolioDashboardSnapshot:
     ]
 
     reliability: ReliabilitySummary
+    operational_reliability: OperationalReliabilitySummary
 
     section_provenance: tuple[
         SectionProvenance,
