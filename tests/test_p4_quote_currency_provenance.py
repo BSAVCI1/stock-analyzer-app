@@ -110,7 +110,7 @@ def test_latest_schema_is_seven(
     finally:
         connection.close()
 
-    assert version == 15
+    assert version == 16
     assert "quote_currency" in columns
 
 
@@ -186,7 +186,7 @@ def test_genuine_v6_upgrades_to_v7(
     finally:
         connection.close()
 
-    assert after == 15
+    assert after == 16
     assert "quote_currency" in after_columns
 
 

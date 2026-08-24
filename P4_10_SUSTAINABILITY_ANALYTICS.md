@@ -41,7 +41,52 @@ Examples are `SWING|p4.3-swing-v1` and
 gross P&L, fees, slippage, total costs, net P&L, expectancy and profit factor,
 with the contributing persisted trade IDs attached as provenance.
 
-This baseline intentionally does not yet supply benchmark/cash comparison,
-concentration, watchlist conversion, alert usefulness or manual-copy journal
-metrics. Those remain separate P4.10 slices so their data contracts can be
-tested without weakening the cost and version boundaries above.
+This baseline intentionally does not yet supply concentration, watchlist
+conversion, alert usefulness or manual-copy journal metrics. Those remain
+separate P4.10 slices so their data contracts can be tested without weakening
+the cost and version boundaries above.
+
+## P4.10.2 benchmark and nominal-cash comparison
+
+Benchmark observations are immutable persisted evidence. Each record stores
+the symbol, timestamp, quote-currency close, quote-to-portfolio FX rate,
+portfolio-currency price and source. Repeating the same observation is
+idempotent; conflicting values for the same account, symbol and timestamp are
+rejected instead of overwriting history.
+
+Record an operator-verified observation when an automated source has not yet
+been selected:
+
+```bash
+python -m src.jobs.cli benchmark record VWCE.DE \
+  --captured-at 2026-08-19T20:00:00+00:00 \
+  --quote-currency EUR \
+  --close-price 100.00 \
+  --fx-rate 1 \
+  --source "operator-verified-close"
+```
+
+List persisted evidence:
+
+```bash
+python -m src.jobs.cli benchmark list VWCE.DE
+```
+
+The dashboard compares each symbol independently. A comparison requires at
+least two observations at different timestamps and two equity snapshots
+aligned at or before those endpoints. If this evidence is missing, the result
+is explicitly marked insufficient.
+
+The benchmark result is portfolio-currency price return, so the stored FX rate
+is included. It is not yet a dividend-adjusted total return. The cash baseline
+is nominal 0%; interest and inflation are not assumed. The report displays:
+
+- account return over the aligned equity window;
+- benchmark portfolio-currency price return;
+- nominal cash return;
+- excess return versus the benchmark; and
+- excess return versus nominal cash.
+
+Multiple benchmark symbols may be recorded and are never blended into one
+headline. Benchmark selection policy and automated observation capture remain
+future configuration work.

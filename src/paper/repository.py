@@ -40,6 +40,7 @@ from .migrations import initialize_database
 from .models import (
     AccountReconciliation,
     AccountStatus,
+    BenchmarkObservation,
     ClosedPaperTrade,
     IncidentSeverity,
     IncidentStatus,
@@ -2724,6 +2725,143 @@ class PaperRepository:
         return self.get_notification(
             notification_id
         )
+
+    @staticmethod
+    def _benchmark_from_row(
+        row: sqlite3.Row,
+    ) -> BenchmarkObservation:
+        return BenchmarkObservation(
+            observation_id=row["observation_id"],
+            account_id=row["account_id"],
+            symbol=row["symbol"],
+            captured_at=_datetime(row["captured_at"]),
+            quote_currency=row["quote_currency"],
+            close_price=money(row["close_price"]),
+            fx_rate=money(row["fx_rate"]),
+            portfolio_price=money(row["portfolio_price"]),
+            source=row["source"],
+        )
+
+    def save_benchmark_observation(
+        self,
+        *,
+        account_id: str,
+        symbol: str,
+        captured_at: datetime,
+        quote_currency: str,
+        close_price: object,
+        fx_rate: object,
+        source: str,
+    ) -> BenchmarkObservation:
+        clean_symbol = str(symbol).strip().upper()
+        currency = str(quote_currency).strip().upper()
+        clean_source = str(source).strip()
+        close = money(close_price)
+        fx = money(fx_rate)
+        portfolio_price = money(close * fx)
+
+        if not clean_symbol or not currency or not clean_source:
+            raise ValueError(
+                "symbol, quote_currency and source are required."
+            )
+        if close <= 0 or fx <= 0:
+            raise ValueError("close_price and fx_rate must be positive.")
+
+        timestamp = _timestamp(captured_at)
+        with transaction(self.database_path) as connection:
+            account = connection.execute(
+                "SELECT account_id FROM paper_accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if account is None:
+                raise ValueError(f"Unknown account: {account_id}.")
+
+            existing = connection.execute(
+                """
+                SELECT * FROM paper_benchmark_observations
+                WHERE account_id = ? AND symbol = ? AND captured_at = ?
+                """,
+                (account_id, clean_symbol, timestamp),
+            ).fetchone()
+            if existing is not None:
+                observation = self._benchmark_from_row(existing)
+                if (
+                    observation.quote_currency != currency
+                    or observation.close_price != close
+                    or observation.fx_rate != fx
+                    or observation.source != clean_source
+                ):
+                    raise ValueError(
+                        "Benchmark observation conflicts with persisted evidence."
+                    )
+                return observation
+
+            observation_id = _new_id("BENCH")
+            connection.execute(
+                """
+                INSERT INTO paper_benchmark_observations(
+                    observation_id, account_id, symbol, captured_at,
+                    quote_currency, close_price, fx_rate,
+                    portfolio_price, source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    observation_id, account_id, clean_symbol, timestamp,
+                    currency, str(close), str(fx), str(portfolio_price),
+                    clean_source,
+                ),
+            )
+
+        return self.get_benchmark_observation(observation_id)
+
+    def get_benchmark_observation(
+        self,
+        observation_id: str,
+    ) -> BenchmarkObservation:
+        connection = connect_database(self.database_path)
+        try:
+            row = connection.execute(
+                "SELECT * FROM paper_benchmark_observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            raise ValueError(
+                f"Unknown benchmark observation: {observation_id}."
+            )
+        return self._benchmark_from_row(row)
+
+    def list_benchmark_observations(
+        self,
+        account_id: str,
+        *,
+        symbol: str | None = None,
+    ) -> tuple[BenchmarkObservation, ...]:
+        connection = connect_database(self.database_path)
+        try:
+            if symbol is None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM paper_benchmark_observations
+                    WHERE account_id = ?
+                    ORDER BY symbol, captured_at, observation_id
+                    """,
+                    (account_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM paper_benchmark_observations
+                    WHERE account_id = ? AND symbol = ?
+                    ORDER BY captured_at, observation_id
+                    """,
+                    (account_id, str(symbol).strip().upper()),
+                ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._benchmark_from_row(row) for row in rows)
 
     @staticmethod
     def _incident_from_row(

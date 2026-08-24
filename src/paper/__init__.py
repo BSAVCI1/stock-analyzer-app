@@ -42,6 +42,7 @@ from .migrations import (
 from .models import (
     AccountReconciliation,
     AccountStatus,
+    BenchmarkObservation,
     ClosedPaperTrade,
     IncidentSeverity,
     IncidentStatus,
@@ -88,6 +89,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "AccountReconciliation",
     "AccountStatus",
+    "BenchmarkObservation",
     "ClosedPaperTrade",
     "IncidentSeverity",
     "IncidentStatus",

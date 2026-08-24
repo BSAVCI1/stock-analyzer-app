@@ -423,6 +423,34 @@ def performance_breakdown_rows(
     )
 
 
+def benchmark_comparison_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "symbol": row.symbol,
+            "observation_count": row.observation_count,
+            "sufficient_evidence": row.sufficient_evidence,
+            "reason": row.reason,
+            "period_started_at": _timestamp(
+                row.period_started_at
+            ) if row.period_started_at else None,
+            "period_ended_at": _timestamp(
+                row.period_ended_at
+            ) if row.period_ended_at else None,
+            "account_return_pct": row.account_return_pct,
+            "benchmark_return_pct": row.benchmark_return_pct,
+            "cash_return_pct": row.cash_return_pct,
+            "excess_vs_benchmark_pct": row.excess_vs_benchmark_pct,
+            "excess_vs_cash_pct": row.excess_vs_cash_pct,
+            "source_record_ids": ", ".join(
+                row.provenance.record_ids
+            ),
+        }
+        for row in snapshot.benchmark_comparisons
+    )
+
+
 def scan_rows(
     snapshot: PortfolioDashboardSnapshot,
 ) -> tuple[dict[str, object], ...]:

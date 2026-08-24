@@ -17,6 +17,7 @@ from src.automation import (
 )
 from src.jobs import JobRun
 from src.paper import (
+    BenchmarkObservation,
     AccountReconciliation,
     ClosedPaperTrade,
     NotificationRecord,
@@ -120,6 +121,22 @@ class EquityPerformance:
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkComparison:
+    symbol: str
+    observation_count: int
+    sufficient_evidence: bool
+    reason: str | None
+    period_started_at: datetime | None
+    period_ended_at: datetime | None
+    account_return_pct: float | None
+    benchmark_return_pct: float | None
+    cash_return_pct: float
+    excess_vs_benchmark_pct: float | None
+    excess_vs_cash_pct: float | None
+    provenance: Provenance
+
+
+@dataclass(frozen=True, slots=True)
 class PerformanceBreakdown:
     dimension: str
     key: str
@@ -201,6 +218,16 @@ class PortfolioDashboardSnapshot:
 
     equity_snapshots: tuple[
         EquitySnapshot,
+        ...,
+    ]
+
+    benchmark_observations: tuple[
+        BenchmarkObservation,
+        ...,
+    ]
+
+    benchmark_comparisons: tuple[
+        BenchmarkComparison,
         ...,
     ]
 
