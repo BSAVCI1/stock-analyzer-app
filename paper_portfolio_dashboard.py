@@ -32,6 +32,7 @@ from src.portfolio_dashboard import (
     performance_breakdown_rows,
     provenance_rows,
     reliability_rows,
+    operational_reliability_rows,
     scan_result_rows,
     scan_rows,
     system_event_rows,
@@ -691,6 +692,25 @@ with reliability_tab:
     st.subheader(
         "Operational reliability"
     )
+
+    operational = snapshot.operational_reliability
+    reliability_columns = st.columns(4)
+    reliability_values = (
+        ("Job success", format_percent(operational.job_success_rate_pct)),
+        ("On-time starts", format_percent(operational.on_time_start_rate_pct)),
+        ("Cycle evidence", format_percent(operational.cycle_evidence_rate_pct)),
+        ("Critical events", str(operational.critical_system_events)),
+    )
+    for column, (label, value) in zip(reliability_columns, reliability_values):
+        with column:
+            st.metric(label, value)
+
+    show_table(
+        operational_reliability_rows(snapshot),
+        empty_message="No completed operational evidence is available.",
+    )
+
+    st.subheader("Component status counts")
 
     show_table(
         reliability_rows(snapshot),

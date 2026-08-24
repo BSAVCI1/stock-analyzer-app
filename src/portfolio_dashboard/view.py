@@ -748,25 +748,33 @@ def reliability_rows(
         {
             "name": metric.name,
             "total": metric.total,
-            "successful":
-            metric.successful,
+            "successful": metric.successful,
             "failed": metric.failed,
-            "pending_or_other":
-            metric.pending_or_other,
-            "success_rate_pct":
-            metric.success_rate_pct,
-            "source_table":
-            ", ".join(
-                metric.provenance
-                .source_tables
-            ),
-            "source_record_count":
-            metric.provenance
-            .record_count,
+            "pending_or_other": metric.pending_or_other,
+            "success_rate_pct": metric.success_rate_pct,
+            "source_table": ", ".join(metric.provenance.source_tables),
+            "source_record_count": metric.provenance.record_count,
         }
         for metric in metrics
     )
 
+
+def operational_reliability_rows(
+    snapshot: PortfolioDashboardSnapshot,
+) -> tuple[dict[str, object], ...]:
+    item = snapshot.operational_reliability
+    return (
+        {"metric": "Job success", "value_pct": item.job_success_rate_pct,
+         "numerator": item.successful_job_count, "denominator": item.terminal_job_count},
+        {"metric": "On-time start", "value_pct": item.on_time_start_rate_pct,
+         "numerator": item.on_time_job_count, "denominator": item.job_count},
+        {"metric": "Cycle evidence complete", "value_pct": item.cycle_evidence_rate_pct,
+         "numerator": item.evidence_complete_cycles,
+         "denominator": item.completed_market_cycles},
+        {"metric": "Notification delivery", "value_pct": item.notification_delivery_rate_pct,
+         "numerator": item.delivered_notifications,
+         "denominator": item.terminal_notifications},
+    )
 
 def provenance_row(
     section: str,

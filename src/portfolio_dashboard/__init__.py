@@ -9,6 +9,7 @@ from .metrics import (
     calculate_equity_performance,
     calculate_performance,
     calculate_reliability,
+    calculate_operational_reliability,
     make_provenance,
 )
 from .models import (
@@ -26,6 +27,7 @@ from .models import (
     Provenance,
     ReliabilityMetric,
     ReliabilitySummary,
+    OperationalReliabilitySummary,
     SectionProvenance,
 )
 from .repository import (
@@ -55,6 +57,7 @@ from .view import (
     performance_breakdown_rows,
     provenance_rows,
     reliability_rows,
+    operational_reliability_rows,
     scan_result_rows,
     scan_rows,
     system_event_rows,
@@ -77,6 +80,7 @@ __all__ = [
     "Provenance",
     "ReliabilityMetric",
     "ReliabilitySummary",
+    "OperationalReliabilitySummary",
     "SectionProvenance",
     "calculate_breakdowns",
     "calculate_benchmark_comparisons",
@@ -86,6 +90,7 @@ __all__ = [
     "calculate_equity_performance",
     "calculate_performance",
     "calculate_reliability",
+    "calculate_operational_reliability",
     "make_provenance",
     "broker_reconciliation_item_rows",
     "benchmark_comparison_rows",
@@ -107,6 +112,7 @@ __all__ = [
     "performance_breakdown_rows",
     "provenance_rows",
     "reliability_rows",
+    "operational_reliability_rows",
     "scan_result_rows",
     "scan_rows",
     "system_event_rows",

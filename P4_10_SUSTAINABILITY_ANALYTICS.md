@@ -157,3 +157,26 @@ notifications, usefulness over assessed alerts, and manual-copy rate over
 assessed alerts. Unassessed notifications are not silently treated as
 not-useful. A copy decision is evidence of operator action only; it is not
 treated as broker execution, strategy success or investment performance.
+
+## P4.10.6 operational reliability
+
+Operational reliability is calculated across the complete persisted account
+history rather than the dashboard's recent-row display limits. The report
+keeps each denominator visible and separate:
+
+- successful terminal jobs divided by all terminal jobs;
+- jobs started within five minutes of `scheduled_for` divided by all jobs;
+- completed market cycles carrying both scan and execution IDs divided by all
+  completed market cycles; and
+- sent notifications divided by sent-plus-failed terminal notifications.
+
+Average and maximum non-negative start delay are also retained, together with
+the count of error/critical system events and the exact observation window.
+Pending jobs and notifications remain visible in source records but do not
+enter terminal-success denominators. Empty evidence returns `null`, never an
+invented 100% success rate.
+
+These measures are operational evidence, not performance evidence. No
+composite score is created that could hide a weak component behind stronger
+ones. With this slice, the P4.10 actionability and sustainability analytics
+deliverables are complete.
