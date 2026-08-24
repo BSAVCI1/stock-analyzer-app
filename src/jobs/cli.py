@@ -34,6 +34,7 @@ from src.p4_notification_evidence import build_notification_delivery_checks
 from src.p4_recovery_evidence import build_recovery_control_checks
 from src.p4_horizon_evidence import build_strategy_horizon_check
 from src.p4_evidence_assembly import assemble_p4_release_evidence
+from src.p4_operational_rehearsal import build_p4_operational_rehearsal
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -315,6 +316,15 @@ def build_parser() -> argparse.ArgumentParser:
             f"--{flag}", required=True,
             help=f"Path to the {flag} JSON evidence file.",
         )
+
+    p4_rehearsal = commands.add_parser(
+        "p4-release-rehearsal",
+        help="Produce a read-only P4 operational acceptance gap plan.",
+    )
+    p4_rehearsal.add_argument(
+        "--manifest", required=True,
+        help="Path to an assembled P4 release manifest JSON file.",
+    )
 
     p3_release.add_argument(
         "--regression-passed",
@@ -735,6 +745,22 @@ def _run_p4_assemble_evidence(args) -> int:
         ],
     })
     return 0 if report.release_ready else 1
+
+
+def _run_p4_release_rehearsal(args) -> int:
+    payload = _read_json_object(args.manifest, "P4 release manifest")
+    gate = evaluate_p4_release_gate(p4_evidence_from_mapping(payload))
+    report = build_p4_operational_rehearsal(gate)
+    _write_json({
+        "release_id": report.release_id,
+        "status": report.status,
+        "safe_to_start_p5": report.safe_to_start_p5,
+        "blocking_checks": report.blocking_checks,
+        "reasons": report.reasons,
+        "next_actions": report.next_actions,
+        "read_only": True,
+    })
+    return 0 if report.safe_to_start_p5 else 1
 
 
 def _job_payload(
@@ -1910,6 +1936,9 @@ def main(
 
         if args.command == "p4-assemble-evidence":
             return _run_p4_assemble_evidence(args)
+
+        if args.command == "p4-release-rehearsal":
+            return _run_p4_release_rehearsal(args)
 
         runtime = _runtime_from_args(
             args
