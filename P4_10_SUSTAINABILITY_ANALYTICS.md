@@ -113,3 +113,23 @@ each symbol's share of invested market value and total equity, the largest
 symbol weight, top-three weight, invested share of equity and the
 Herfindahl-Hirschman Index (HHI). No diversification judgment or policy limit
 is inferred; the slice provides reproducible evidence only.
+
+## P4.10.4 watchlist conversion and stale signals
+
+Watchlist conversion is measured as a persisted decision journey, not as the
+number of rows in one scan. For each symbol and combined strategy cohort
+(`strategy_horizon|strategy_version`), the metric opens an episode when the
+scanner first records `WATCH` or `PREPARE`. A later `ACTIONABLE` result in the
+same cohort converts the episode. `REJECT` or `STALE` closes it as abandoned;
+an unresolved episode remains open. Repeated watch results do not inflate the
+denominator, and strategy versions are never blended.
+
+The stale-signal rate has a separate contract. A signal is mature when it has
+expired by the report timestamp or already produced an order. A mature signal
+is stale when no persisted order references it. Signals that have not yet
+expired are excluded from both numerator and denominator. The dashboard shows
+the conversion funnel by cohort and the aggregate stale-signal rate, with the
+supporting scan-result, signal and order IDs retained as provenance.
+
+These metrics describe actionability only. They do not claim that an order was
+profitable or that a rejected watchlist idea was incorrect.
