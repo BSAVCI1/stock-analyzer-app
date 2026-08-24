@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "release_id": "REPLACE-WITH-RELEASE-ID",
+  "account_id": "REPLACE-WITH-PAPER-ACCOUNT",
+  "observed_at": "2026-08-24T19:30:00+00:00",
+  "execution_mode": "PAPER",
+  "recovery_controls": {
+    "restart_recovery_verified": false,
+    "idempotent_replay_verified": false,
+    "stale_data_breaker_verified": false,
+    "reconciliation_breaker_verified": false,
+    "loss_limit_pause_verified": false,
+    "provider_outage_verified": false,
+    "incidents_closed": false,
+    "unresolved_critical_incidents": 0,
+    "restart_evidence_ids": [],
+    "replay_evidence_ids": [],
+    "circuit_breaker_evidence_ids": [],
+    "provider_outage_evidence_ids": [],
+    "incident_evidence_ids": []
+  },
+  "kill_switch": {
+    "activation_verified": false,
+    "new_orders_blocked": false,
+    "pending_order_policy_verified": false,
+    "audit_trail_persisted": false,
+    "recovery_verified": false,
+    "final_state": "NOT_OBSERVED",
+    "operator": "REPLACE-WITH-OPERATOR",
+    "reason": "REPLACE-WITH-TEST-REASON",
+    "activation_evidence_ids": [],
+    "blocked_order_evidence_ids": [],
+    "audit_evidence_ids": [],
+    "recovery_evidence_ids": []
+  }
+}
