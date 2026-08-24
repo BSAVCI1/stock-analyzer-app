@@ -15,6 +15,7 @@ from src.jobs import (
     JobRun,
 )
 from src.paper import (
+    BenchmarkObservation,
     DEFAULT_DATABASE_PATH,
     ClosedPaperTrade,
     NotificationRecord,
@@ -219,6 +220,14 @@ class PortfolioDashboardRepository:
                 snapshots.append(snapshot)
 
         return tuple(snapshots)
+
+    def list_benchmark_observations(
+        self,
+        account_id: str,
+    ) -> tuple[BenchmarkObservation, ...]:
+        return self.paper.list_benchmark_observations(
+            account_id
+        )
 
     def list_jobs(
         self,

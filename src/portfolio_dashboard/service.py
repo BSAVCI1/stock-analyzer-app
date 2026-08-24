@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from src.paper import PersistedSignal
 
 from .metrics import (
+    calculate_benchmark_comparisons,
     calculate_breakdowns,
     calculate_equity_performance,
     calculate_performance,
@@ -253,6 +254,13 @@ class PortfolioDashboardService:
             )
         )
 
+        benchmark_observations = (
+            self.repository
+            .list_benchmark_observations(
+                account_id
+            )
+        )
+
         all_jobs = (
             self.repository.list_jobs(
                 account_id
@@ -394,6 +402,13 @@ class PortfolioDashboardService:
         equity_performance = (
             calculate_equity_performance(
                 account,
+                equity_snapshots,
+            )
+        )
+
+        benchmark_comparisons = (
+            calculate_benchmark_comparisons(
+                benchmark_observations,
                 equity_snapshots,
             )
         )
@@ -639,6 +654,12 @@ class PortfolioDashboardService:
             decision_traces=traces,
             equity_snapshots=(
                 equity_snapshots
+            ),
+            benchmark_observations=(
+                benchmark_observations
+            ),
+            benchmark_comparisons=(
+                benchmark_comparisons
             ),
             performance=performance,
             equity_performance=(

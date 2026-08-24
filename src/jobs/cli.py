@@ -399,6 +399,22 @@ def build_parser() -> argparse.ArgumentParser:
     incident.add_argument("--reference-type")
     incident.add_argument("--reference-id")
 
+    benchmark = commands.add_parser(
+        "benchmark",
+        help="Record or list persisted benchmark observations.",
+    )
+    _add_runtime_arguments(benchmark)
+    benchmark.add_argument(
+        "action",
+        choices=("record", "list"),
+    )
+    benchmark.add_argument("symbol", nargs="?")
+    benchmark.add_argument("--captured-at")
+    benchmark.add_argument("--quote-currency")
+    benchmark.add_argument("--close-price")
+    benchmark.add_argument("--fx-rate")
+    benchmark.add_argument("--source")
+
     return parser
 
 
@@ -1386,6 +1402,72 @@ def _run_incident(runtime: PaperJobRuntime, args) -> int:
     return 0
 
 
+def _benchmark_payload(observation) -> dict[str, object]:
+    return {
+        "observation_id": observation.observation_id,
+        "account_id": observation.account_id,
+        "symbol": observation.symbol,
+        "captured_at": observation.captured_at,
+        "quote_currency": observation.quote_currency,
+        "close_price": observation.close_price,
+        "fx_rate": observation.fx_rate,
+        "portfolio_price": observation.portfolio_price,
+        "source": observation.source,
+    }
+
+
+def _run_benchmark(runtime: PaperJobRuntime, args) -> int:
+    repository = runtime.paper_repository
+    account_id = runtime.settings.account_id
+
+    if args.action == "list":
+        observations = repository.list_benchmark_observations(
+            account_id,
+            symbol=args.symbol,
+        )
+        _write_json(
+            {
+                "account_id": account_id,
+                "observations": [
+                    _benchmark_payload(item)
+                    for item in observations
+                ],
+                "total": len(observations),
+            }
+        )
+        return 0
+
+    if not all(
+        (
+            args.symbol,
+            args.captured_at,
+            args.quote_currency,
+            args.close_price,
+            args.fx_rate,
+            args.source,
+        )
+    ):
+        raise ValueError(
+            "symbol, --captured-at, --quote-currency, --close-price, "
+            "--fx-rate and --source are required for record."
+        )
+
+    captured_at = datetime.fromisoformat(args.captured_at)
+    if captured_at.tzinfo is None or captured_at.utcoffset() is None:
+        raise ValueError("--captured-at must be timezone-aware.")
+    observation = repository.save_benchmark_observation(
+        account_id=account_id,
+        symbol=args.symbol,
+        captured_at=captured_at,
+        quote_currency=args.quote_currency,
+        close_price=args.close_price,
+        fx_rate=args.fx_rate,
+        source=args.source,
+    )
+    _write_json(_benchmark_payload(observation))
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -1445,6 +1527,9 @@ def main(
 
         if args.command == "incident":
             return _run_incident(runtime, args)
+
+        if args.command == "benchmark":
+            return _run_benchmark(runtime, args)
 
         parser.error(
             f"Unsupported command: "

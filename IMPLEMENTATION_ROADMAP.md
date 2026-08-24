@@ -1006,7 +1006,9 @@ Measure whether the bot creates useful decisions, not merely activity.
   P4.10.1)
 - Separate swing and medium-term results (combined horizon and strategy-version
   cohorts implemented in P4.10.1)
-- Benchmark and cash comparison
+- Benchmark and cash comparison (immutable portfolio-currency benchmark
+  observations, aligned price-return comparison and nominal-cash baseline
+  implemented in P4.10.2)
 - Expectancy, drawdown, profit factor and concentration (cost-adjusted
   expectancy and profit factor implemented in P4.10.1; drawdown retained from
   persisted equity snapshots; concentration pending)

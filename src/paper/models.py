@@ -416,6 +416,19 @@ class OperationalIncident:
 
 
 @dataclass(frozen=True, slots=True)
+class BenchmarkObservation:
+    observation_id: str
+    account_id: str
+    symbol: str
+    captured_at: datetime
+    quote_currency: str
+    close_price: Decimal
+    fx_rate: Decimal
+    portfolio_price: Decimal
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
 class AccountReconciliation:
     account_id: str
     stored_cash_balance: Decimal

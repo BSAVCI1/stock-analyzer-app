@@ -12,6 +12,7 @@ from src.automation import (
 )
 from src.jobs import JobRun
 from src.paper import (
+    BenchmarkObservation,
     ClosedPaperTrade,
     NotificationRecord,
     PaperAccount,
@@ -22,6 +23,7 @@ from src.scanner import MarketScanReport
 
 from .models import (
     EquityPerformance,
+    BenchmarkComparison,
     PerformanceBreakdown,
     PerformanceSummary,
     Provenance,
@@ -31,6 +33,106 @@ from .models import (
 
 
 ZERO = Decimal("0")
+
+
+def calculate_benchmark_comparisons(
+    observations: tuple[BenchmarkObservation, ...],
+    equity_snapshots: tuple[EquitySnapshot, ...],
+) -> tuple[BenchmarkComparison, ...]:
+    grouped: dict[str, list[BenchmarkObservation]] = defaultdict(list)
+    for observation in observations:
+        grouped[observation.symbol].append(observation)
+
+    snapshots = tuple(
+        sorted(
+            equity_snapshots,
+            key=lambda item: (item.captured_at, item.snapshot_id),
+        )
+    )
+    comparisons = []
+
+    for symbol in sorted(grouped):
+        marks = tuple(
+            sorted(
+                grouped[symbol],
+                key=lambda item: (item.captured_at, item.observation_id),
+            )
+        )
+        record_ids = tuple(mark.observation_id for mark in marks)
+        reason = None
+        start = marks[0] if marks else None
+        end = marks[-1] if marks else None
+        start_equity = None
+        end_equity = None
+
+        if len(marks) < 2:
+            reason = "At least two benchmark observations are required."
+        elif start is not None and end is not None and start.captured_at == end.captured_at:
+            reason = "Benchmark observations must span two timestamps."
+        else:
+            start_candidates = tuple(
+                item for item in snapshots
+                if item.captured_at <= start.captured_at
+            )
+            end_candidates = tuple(
+                item for item in snapshots
+                if item.captured_at <= end.captured_at
+            )
+            start_equity = start_candidates[-1] if start_candidates else None
+            end_equity = end_candidates[-1] if end_candidates else None
+            if start_equity is None or end_equity is None:
+                reason = "Equity snapshots do not bracket the benchmark period."
+            elif start_equity.snapshot_id == end_equity.snapshot_id:
+                reason = "Two aligned equity snapshots are required."
+            elif start_equity.equity <= ZERO or start.portfolio_price <= ZERO:
+                reason = "Starting equity and benchmark price must be positive."
+
+        sufficient = reason is None
+        account_return = None
+        benchmark_return = None
+        if sufficient:
+            account_return = float(
+                (end_equity.equity - start_equity.equity)
+                / start_equity.equity
+                * Decimal("100")
+            )
+            benchmark_return = float(
+                (end.portfolio_price - start.portfolio_price)
+                / start.portfolio_price
+                * Decimal("100")
+            )
+
+        comparisons.append(
+            BenchmarkComparison(
+                symbol=symbol,
+                observation_count=len(marks),
+                sufficient_evidence=sufficient,
+                reason=reason,
+                period_started_at=(start.captured_at if start else None),
+                period_ended_at=(end.captured_at if end else None),
+                account_return_pct=account_return,
+                benchmark_return_pct=benchmark_return,
+                cash_return_pct=0.0,
+                excess_vs_benchmark_pct=(
+                    account_return - benchmark_return
+                    if sufficient else None
+                ),
+                excess_vs_cash_pct=(account_return if sufficient else None),
+                provenance=make_provenance(
+                    tables=("paper_benchmark_observations", "paper_equity_snapshots"),
+                    record_ids=(
+                        *record_ids,
+                        *((start_equity.snapshot_id, end_equity.snapshot_id) if sufficient else ()),
+                    ),
+                    calculation=(
+                        "Portfolio-currency benchmark price return and nominal "
+                        "cash comparison aligned to persisted equity snapshots."
+                    ),
+                ),
+            )
+        )
+
+    return tuple(comparisons)
 
 
 def make_provenance(

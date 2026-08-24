@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.portfolio_dashboard import (
+    benchmark_comparison_rows,
     PortfolioDashboardRepository,
     PortfolioDashboardService,
     broker_reconciliation_item_rows,
@@ -467,6 +468,21 @@ with equity_tab:
     ):
         with column:
             st.metric(label, value)
+
+    st.subheader("Benchmark and cash comparison")
+    benchmark_data = pd.DataFrame(
+        benchmark_comparison_rows(snapshot)
+    )
+    if benchmark_data.empty:
+        st.info(
+            "No persisted benchmark observations are available."
+        )
+    else:
+        st.dataframe(
+            benchmark_data,
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.subheader("Persisted equity curve")
 

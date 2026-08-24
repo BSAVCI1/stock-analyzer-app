@@ -323,7 +323,7 @@ def test_schema_version_five_and_tables(
     finally:
         connection.close()
 
-    assert version == 15
+    assert version == 16
 
     assert (
         "paper_broker_reconciliation_runs"
@@ -384,7 +384,7 @@ def test_version_four_database_upgrades(
     finally:
         connection.close()
 
-    assert version == 15
+    assert version == 16
     assert run_table is not None
 
 
