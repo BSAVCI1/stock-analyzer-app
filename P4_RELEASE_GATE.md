@@ -118,3 +118,20 @@ requires a named operator and reason, verified activation, blocked new orders,
 pending-order policy, persisted audit history, verified recovery and an
 `INACTIVE` final state. Each category requires traceable evidence IDs. The
 repository example is deliberately blocked and cannot approve release.
+
+## Strategy-horizon acceptance evidence (P4.11.6)
+
+Swing and medium-term acceptance is evaluated independently:
+
+```bash
+python -m src.jobs.cli p4-horizon-evidence \
+  --evidence config/p4_horizon_evidence.example.json
+```
+
+The check requires exactly one decision for each enabled horizon and the
+approved `p4.3-swing-v1` and `p4.3-medium-term-v1` versions. Each must be
+accepted with out-of-sample, walk-forward, transaction-cost, minimum-trade and
+parameter-stability evidence, plus traceable acceptance, validation and
+threshold IDs. Aggregate results, duplicate horizons, version mismatches,
+rejections or missing evidence block release. The repository example is
+deliberately blocked.
