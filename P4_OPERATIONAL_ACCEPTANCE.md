@@ -54,6 +54,11 @@ Operational drills must use the documented paper controls. Stop and investigate
 any unexpected order, live capability, failed notification, unhealthy service,
 or unresolved incident; do not edit evidence to hide it.
 
+Use `notification-probe` once per configured channel to create a genuine,
+persisted delivery record without waiting for a trading opportunity. The probe
+requires a named operator and reason, uses the normal sender and records the
+provider message ID. Credentials remain mounted from private files.
+
 ## 3. Assemble and rehearse the gate
 
 Use paths outside the repository for private evidence when practical:
