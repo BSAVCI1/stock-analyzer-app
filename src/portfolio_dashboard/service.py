@@ -14,6 +14,7 @@ from .metrics import (
     calculate_benchmark_comparisons,
     calculate_concentration,
     calculate_actionability,
+    calculate_alert_usefulness,
     calculate_breakdowns,
     calculate_equity_performance,
     calculate_performance,
@@ -290,6 +291,8 @@ class PortfolioDashboardService:
             )
         )
 
+        alert_feedback = self.repository.list_alert_feedback(account_id)
+
         system_events = (
             self.repository
             .list_system_events(
@@ -430,6 +433,10 @@ class PortfolioDashboardService:
             orders=all_orders,
             scans=all_scan_reports,
             at=at.astimezone(timezone.utc),
+        )
+
+        alert_usefulness = calculate_alert_usefulness(
+            notifications, alert_feedback,
         )
 
         breakdowns = (
@@ -683,6 +690,8 @@ class PortfolioDashboardService:
             position_valuation_observations=position_valuation_observations,
             concentration=concentration,
             actionability=actionability,
+            alert_feedback=alert_feedback,
+            alert_usefulness=alert_usefulness,
             performance=performance,
             equity_performance=(
                 equity_performance

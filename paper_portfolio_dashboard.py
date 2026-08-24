@@ -12,6 +12,7 @@ import streamlit as st
 from src.portfolio_dashboard import (
     benchmark_comparison_rows,
     actionability_rows,
+    alert_feedback_rows,
     concentration_rows,
     PortfolioDashboardRepository,
     PortfolioDashboardService,
@@ -528,6 +529,24 @@ with equity_tab:
             use_container_width=True,
             hide_index=True,
         )
+
+    st.subheader("Alert usefulness and manual-copy journal")
+    alert_summary = snapshot.alert_usefulness
+    alert_columns = st.columns(4)
+    alert_values = (
+        ("Assessment coverage", format_percent(alert_summary.assessment_coverage_pct)),
+        ("Useful alerts", format_percent(alert_summary.usefulness_rate_pct)),
+        ("Manual-copy rate", format_percent(alert_summary.manual_copy_rate_pct)),
+        ("Assessed / sent", f"{alert_summary.assessed_alerts} / {alert_summary.sent_alerts}"),
+    )
+    for column, (label, value) in zip(alert_columns, alert_values):
+        with column:
+            st.metric(label, value)
+    alert_data = pd.DataFrame(alert_feedback_rows(snapshot))
+    if alert_data.empty:
+        st.info("No operator alert feedback has been recorded.")
+    else:
+        st.dataframe(alert_data, use_container_width=True, hide_index=True)
 
     st.subheader("Persisted equity curve")
 

@@ -17,6 +17,7 @@ from src.automation import (
 )
 from src.jobs import JobRun
 from src.paper import (
+    AlertFeedbackJournalEntry,
     BenchmarkObservation,
     AccountReconciliation,
     ClosedPaperTrade,
@@ -192,6 +193,22 @@ class ActionabilitySummary:
 
 
 @dataclass(frozen=True, slots=True)
+class AlertUsefulnessSummary:
+    sent_alerts: int
+    assessed_alerts: int
+    useful_alerts: int
+    not_useful_alerts: int
+    copied_as_is: int
+    copied_modified: int
+    dismissed: int
+    no_action: int
+    assessment_coverage_pct: float | None
+    usefulness_rate_pct: float | None
+    manual_copy_rate_pct: float | None
+    provenance: Provenance
+
+
+@dataclass(frozen=True, slots=True)
 class PerformanceBreakdown:
     dimension: str
     key: str
@@ -291,6 +308,8 @@ class PortfolioDashboardSnapshot:
     ]
     concentration: ConcentrationSummary
     actionability: ActionabilitySummary
+    alert_feedback: tuple[AlertFeedbackJournalEntry, ...]
+    alert_usefulness: AlertUsefulnessSummary
 
     performance: PerformanceSummary
     equity_performance: EquityPerformance

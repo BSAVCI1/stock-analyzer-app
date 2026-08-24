@@ -1016,7 +1016,9 @@ Measure whether the bot creates useful decisions, not merely activity.
 - Watchlist conversion and stale-signal rate (version-safe watch/preparation
   episodes, later actionable conversion, abandoned/open outcomes and expired
   unordered-signal rate implemented in P4.10.4)
-- Alert usefulness and manual-copy journal
+- Alert usefulness and manual-copy journal (immutable named-operator feedback,
+  usefulness/coverage metrics, copy-as-is versus modified decisions and broker
+  reference evidence implemented in P4.10.5)
 - Operational reliability metrics
 
 **Gate**

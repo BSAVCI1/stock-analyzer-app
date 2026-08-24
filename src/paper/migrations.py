@@ -11,7 +11,7 @@ from .database import (
 )
 
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 
 _SCHEMA_V1 = """
@@ -1009,6 +1009,30 @@ PRAGMA user_version = 17;
 """
 
 
+_SCHEMA_V18 = """
+CREATE TABLE paper_alert_feedback_journal (
+    journal_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    notification_id TEXT NOT NULL UNIQUE,
+    usefulness TEXT NOT NULL CHECK(usefulness IN ('USEFUL', 'NOT_USEFUL')),
+    manual_action TEXT NOT NULL CHECK(manual_action IN (
+        'COPIED_AS_IS', 'COPIED_MODIFIED', 'DISMISSED', 'NO_ACTION'
+    )),
+    operator TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    broker_reference TEXT,
+    recorded_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES paper_accounts(account_id),
+    FOREIGN KEY(notification_id) REFERENCES paper_notifications(notification_id)
+);
+
+CREATE INDEX idx_alert_feedback_account_time
+ON paper_alert_feedback_journal(account_id, recorded_at, journal_id);
+
+PRAGMA user_version = 18;
+"""
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
 ) -> None:
@@ -1184,6 +1208,12 @@ def apply_migrations(
             _SCHEMA_V17
         )
         current_version = 17
+
+    if current_version < 18:
+        connection.executescript(
+            _SCHEMA_V18
+        )
+        current_version = 18
 
     if current_version != SCHEMA_VERSION:
         raise RuntimeError(

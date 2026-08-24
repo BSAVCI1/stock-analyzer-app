@@ -436,7 +436,7 @@ def test_schema_version_three(
     finally:
         connection.close()
 
-        assert version == 17
+        assert version == 18
 
     assert {
         "paper_execution_runs",
