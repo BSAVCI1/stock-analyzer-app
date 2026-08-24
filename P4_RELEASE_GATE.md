@@ -101,3 +101,20 @@ a timezone-aware delivery time and attempt count is mandatory; configured
 credentials or channels alone are not proof. Pending or failed delivery blocks
 that channel. The repository example deliberately contains no sent records and
 therefore returns a blocking result.
+
+## Recovery and kill-switch evidence (P4.11.5)
+
+Recovery controls and the global kill switch are evaluated independently:
+
+```bash
+python -m src.jobs.cli p4-recovery-evidence \
+  --evidence config/p4_recovery_evidence.example.json
+```
+
+Recovery evidence requires verified restart recovery, idempotent replay, stale
+data and reconciliation breakers, loss-limit pause, provider-outage handling,
+closed incidents and no unresolved critical incident. Kill-switch evidence
+requires a named operator and reason, verified activation, blocked new orders,
+pending-order policy, persisted audit history, verified recovery and an
+`INACTIVE` final state. Each category requires traceable evidence IDs. The
+repository example is deliberately blocked and cannot approve release.

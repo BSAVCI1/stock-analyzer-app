@@ -1051,6 +1051,10 @@ Independent email and Telegram application-level sent evidence, including
 source linkage, retry/deduplication assertions and blocking pending/failure
 counts, was implemented in P4.11.4.
 
+Independent recovery-controls and global kill-switch drill evidence, including
+restart/replay, circuit breakers, outage handling, incident closure, order
+blocking, audit persistence and safe recovery, was implemented in P4.11.5.
+
 **Deliverables**
 - P0-P4 regression evidence
 - Paper-only invariant checks
