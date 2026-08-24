@@ -67,3 +67,20 @@ portfolio, EUR 100 target/hard ceiling, and approved risk/exposure limits. A
 pass carries a deterministic SHA-256 evidence ID over the canonical policy.
 Any missing or changed invariant is emitted as explicit `FAIL` evidence and
 returns exit code `1`.
+
+## Scheduler and deployment evidence (P4.11.3)
+
+Record genuine health, completed-cycle, restart and persistent-storage IDs in
+a copy of the deliberately blocked example, then evaluate it:
+
+```bash
+python -m src.jobs.cli p4-scheduler-evidence \
+  --evidence config/p4_scheduler_evidence.example.json
+```
+
+Both the validated Mac local-device runtime and a future external always-on
+runtime are supported. The check requires paper mode, an enabled managed
+scheduler, healthy container/liveness/readiness/worker observations, verified
+restart recovery, verified persistent storage and at least one completed paper
+cycle. Labels without evidence IDs cannot pass. The repository example is
+intentionally blocked and is not release evidence.

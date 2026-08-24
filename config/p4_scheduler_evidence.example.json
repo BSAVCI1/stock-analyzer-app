@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "deployment_id": "REPLACE-WITH-DEPLOYMENT-ID",
+  "observed_at": "2026-08-24T18:30:00+00:00",
+  "runtime_target": "LOCAL_DEVICE",
+  "execution_mode": "PAPER",
+  "scheduler_enabled": false,
+  "managed_cycle_enabled": false,
+  "container_healthy": false,
+  "liveness_ok": false,
+  "readiness_ok": false,
+  "worker_heartbeat_current": false,
+  "restart_verified": false,
+  "persistent_storage_verified": false,
+  "health_evidence_ids": [],
+  "completed_cycle_ids": [],
+  "restart_evidence_ids": [],
+  "storage_evidence_ids": []
+}
