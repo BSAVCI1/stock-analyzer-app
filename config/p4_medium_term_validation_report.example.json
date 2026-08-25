@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "horizon": "medium_term",
+  "strategy_version": "p4.3-medium-term-v1",
+  "generated_at": "2026-08-24T22:00:00+00:00",
+  "dataset_id": "REPLACE-WITH-IMMUTABLE-DATASET-ID",
+  "cost_model_id": "REPLACE-WITH-APPROVED-COST-MODEL-ID",
+  "validation": {
+    "out_of_sample_passed": false,
+    "walk_forward_passed": false,
+    "costs_included": false,
+    "observed_trade_count": 1,
+    "minimum_trade_count": 20,
+    "parameter_stability": 0.0,
+    "minimum_parameter_stability": 0.5
+  }
+}

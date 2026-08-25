@@ -34,6 +34,7 @@ from src.p4_scheduler_evidence import build_scheduler_deployment_check
 from src.p4_notification_evidence import build_notification_delivery_checks
 from src.p4_recovery_evidence import build_recovery_control_checks
 from src.p4_horizon_evidence import build_strategy_horizon_check
+from src.p4_horizon_report_builder import build_horizon_evidence
 from src.p4_evidence_assembly import assemble_p4_release_evidence
 from src.p4_operational_rehearsal import build_p4_operational_rehearsal
 
@@ -317,6 +318,19 @@ def build_parser() -> argparse.ArgumentParser:
     p4_horizon.add_argument(
         "--evidence", required=True,
         help="Path to a strategy-horizon evidence JSON file.",
+    )
+
+    p4_horizon_build = commands.add_parser(
+        "p4-build-horizon-evidence",
+        help="Derive fail-closed P4 evidence from two validation reports.",
+    )
+    p4_horizon_build.add_argument("--release-id", required=True)
+    p4_horizon_build.add_argument("--observed-at", required=True)
+    p4_horizon_build.add_argument("--swing-report", required=True)
+    p4_horizon_build.add_argument("--medium-term-report", required=True)
+    p4_horizon_build.add_argument(
+        "--threshold-manifest",
+        default="config/approved_signal_thresholds.json",
     )
 
     p4_assemble = commands.add_parser(
@@ -705,6 +719,23 @@ def _run_p4_horizon_evidence(args) -> int:
             "details": check.details,
         },
     })
+    return 0 if check.status.value == "PASS" else 1
+
+
+def _run_p4_build_horizon_evidence(args) -> int:
+    evidence = build_horizon_evidence(
+        release_id=args.release_id,
+        observed_at=args.observed_at,
+        swing_report=_read_json_object(args.swing_report, "swing report"),
+        medium_term_report=_read_json_object(
+            args.medium_term_report, "medium-term report"
+        ),
+        threshold_manifest=_read_json_object(
+            args.threshold_manifest, "threshold manifest"
+        ),
+    )
+    check = build_strategy_horizon_check(evidence)
+    _write_json(evidence)
     return 0 if check.status.value == "PASS" else 1
 
 
@@ -1997,6 +2028,9 @@ def main(
 
         if args.command == "p4-horizon-evidence":
             return _run_p4_horizon_evidence(args)
+
+        if args.command == "p4-build-horizon-evidence":
+            return _run_p4_build_horizon_evidence(args)
 
         if args.command == "p4-assemble-evidence":
             return _run_p4_assemble_evidence(args)
