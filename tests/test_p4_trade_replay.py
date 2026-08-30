@@ -199,3 +199,34 @@ def test_default_gate_rejects_exact_two_risk_reward_after_costs() -> None:
 
     assert result["trade_count"] == 0
     assert result["economic_rejection_count"] == 1
+
+
+def test_replay_counts_non_actionable_signal_reasons() -> None:
+    dataset = _dataset(ambiguous_entry_bar=False)
+    index = pd.to_datetime(
+        [row["at"] for row in dataset["instruments"][0]["rows"]], utc=True
+    )
+
+    def evaluator(history, symbol, parameters):
+        return ReplaySignal(
+            actionable=False,
+            atr=1.0,
+            rejection_codes=("PULLBACK_ZONE", "RSI_RESET"),
+        )
+
+    result = replay_trend_pullback(
+        dataset,
+        parameters={"buy_score": 75},
+        test_start=index[199].to_pydatetime(),
+        test_end=index[205].to_pydatetime(),
+        signal_evaluator=evaluator,
+        fee_estimator=_one_dollar_fee,
+        economic_evaluator=_accept_economics,
+    )
+
+    assert result["signal_evaluation_count"] == 7
+    assert result["actionable_signal_count"] == 0
+    assert result["signal_rejection_counts"] == {
+        "PULLBACK_ZONE": 7,
+        "RSI_RESET": 7,
+    }
