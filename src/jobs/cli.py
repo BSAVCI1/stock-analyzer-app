@@ -38,6 +38,7 @@ from src.p4_horizon_report_builder import build_horizon_evidence
 from src.p4_evidence_assembly import assemble_p4_release_evidence
 from src.p4_operational_rehearsal import build_p4_operational_rehearsal
 from src.p4_validation_dataset import capture_horizon_dataset
+from src.p4_validation_report import build_validation_report
 from src.data.market_data import load_market_snapshot
 
 from src.product_config import (
@@ -351,6 +352,18 @@ def build_parser() -> argparse.ArgumentParser:
     p4_dataset.add_argument(
         "--captured-at",
         help="Timezone-aware ISO timestamp; defaults to current UTC time.",
+    )
+
+    p4_validation = commands.add_parser(
+        "p4-build-validation-report",
+        help="Derive a horizon report from costed walk-forward observations.",
+    )
+    p4_validation.add_argument(
+        "--observation", required=True,
+        help="Path to a detailed cost-aware walk-forward observation JSON.",
+    )
+    p4_validation.add_argument(
+        "--policy", default=str(DEFAULT_PRODUCT_POLICY_PATH),
     )
 
     p4_assemble = commands.add_parser(
@@ -789,6 +802,29 @@ def _run_p4_capture_validation_dataset(args) -> int:
         universe_policy_version=str(universe.get("policy_version", "")),
     ))
     return 0
+
+
+def _run_p4_build_validation_report(args) -> int:
+    policy = _read_json_object(args.policy, "product policy")
+    cost_model = policy.get("cost_model")
+    if not isinstance(cost_model, dict):
+        raise ValueError("product policy cost_model must be an object.")
+    report = build_validation_report(
+        _read_json_object(args.observation, "validation observation"),
+        approved_cost_model_id=str(
+            cost_model.get("reference_profile_version", "")
+        ),
+    )
+    _write_json(report)
+    validation = report["validation"]
+    return 0 if all((
+        validation["out_of_sample_passed"],
+        validation["walk_forward_passed"],
+        validation["costs_included"],
+        validation["observed_trade_count"] >= validation["minimum_trade_count"],
+        validation["parameter_stability"]
+        >= validation["minimum_parameter_stability"],
+    )) else 1
 
 
 def _read_json_object(path_value: str, label: str) -> dict[str, object]:
@@ -2086,6 +2122,9 @@ def main(
 
         if args.command == "p4-capture-validation-dataset":
             return _run_p4_capture_validation_dataset(args)
+
+        if args.command == "p4-build-validation-report":
+            return _run_p4_build_validation_report(args)
 
         if args.command == "p4-assemble-evidence":
             return _run_p4_assemble_evidence(args)
