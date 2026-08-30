@@ -48,15 +48,20 @@ def _capture(horizon="swing"):
 def test_swing_capture_is_sorted_deduplicated_and_fingerprinted() -> None:
     result, calls = _capture()
     assert result["dataset_id"].startswith("sha256:")
+    assert result["schema_version"] == 2
     assert result["strategy_version"] == "p4.3-swing-v1"
     assert [item["symbol"] for item in result["instruments"]] == ["AAPL", "MSFT"]
     assert all(item["row_count"] == 252 for item in result["instruments"])
+    assert result["fx"]["symbol"] == "USDEUR=X"
+    assert result["fx"]["row_count"] == 252
+    assert len(calls) == 3
     assert all(call[1] == {"period": "2y", "interval": "1d", "min_rows": 252} for call in calls)
 
 
 def test_medium_term_capture_uses_independent_weekly_history() -> None:
     result, calls = _capture("medium_term")
     assert result["strategy_version"] == "p4.3-medium-term-v1"
+    assert len(calls) == 3
     assert all(call[1] == {"period": "5y", "interval": "1wk", "min_rows": 156} for call in calls)
 
 
@@ -84,7 +89,9 @@ def test_invalid_horizon_fails_closed() -> None:
 def test_cli_uses_versioned_policy_and_universe(tmp_path, monkeypatch, capsys) -> None:
     policy = tmp_path / "policy.json"
     universe = tmp_path / "universe.json"
-    policy.write_text(json.dumps({"policy_version": "p4.3-1"}))
+    policy.write_text(json.dumps({
+        "policy_version": "p4.3-1", "portfolio": {"currency": "EUR"}
+    }))
     universe.write_text(json.dumps({
         "policy_version": "universe-v1",
         "base_symbols": ["AAPL", "MSFT"],

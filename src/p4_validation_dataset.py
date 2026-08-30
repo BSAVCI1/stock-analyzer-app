@@ -61,6 +61,10 @@ def _rows(frame: pd.DataFrame, symbol: str) -> list[dict[str, object]]:
         clean[column] = pd.to_numeric(clean[column], errors="coerce")
     if clean.isna().any().any():
         raise ValueError(f"{symbol} history contains non-numeric values.")
+    if (clean[["Open", "High", "Low", "Close"]] <= 0).any().any():
+        raise ValueError(f"{symbol} history contains non-positive prices.")
+    if (clean["Volume"] < 0).any():
+        raise ValueError(f"{symbol} history contains negative volume.")
     return [
         {
             "at": at.isoformat(),
@@ -83,6 +87,8 @@ def capture_horizon_dataset(
     loader: SnapshotLoader,
     policy_version: str,
     universe_policy_version: str,
+    quote_currency: str = "USD",
+    portfolio_currency: str = "EUR",
 ) -> dict[str, Any]:
     """Download and fingerprint one horizon without mixing its observations."""
 
@@ -93,6 +99,10 @@ def capture_horizon_dataset(
         raise ValueError("loader must be callable.")
     capture_time = _timestamp(captured_at, "captured_at")
     period, interval, minimum_rows = _SETTINGS[name]
+    quote = str(quote_currency).strip().upper()
+    portfolio = str(portfolio_currency).strip().upper()
+    if not quote or not portfolio or quote == portfolio:
+        raise ValueError("distinct quote and portfolio currencies are required.")
     instruments = []
     for symbol in _symbols(symbols):
         snapshot = loader(
@@ -111,17 +121,42 @@ def capture_horizon_dataset(
             "last_observation": rows[-1]["at"],
             "rows": rows,
         })
+    fx_symbol = f"{quote}{portfolio}=X"
+    fx_snapshot = loader(
+        fx_symbol, period=period, interval=interval, min_rows=minimum_rows
+    )
+    if fx_snapshot.symbol != fx_symbol:
+        raise ValueError(
+            f"Provider returned {fx_snapshot.symbol} for {fx_symbol}."
+        )
+    fx_rows = _rows(fx_snapshot.history, fx_symbol)
+    fx_rates = [
+        {"at": row["at"], "rate": row["close"]}
+        for row in fx_rows
+    ]
     body: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "horizon": name,
         "strategy_version": _VERSIONS[name],
         "captured_at": capture_time,
         "provider": "YAHOO_FINANCE",
         "period": period,
         "interval": interval,
+        "quote_currency": quote,
+        "portfolio_currency": portfolio,
         "policy_version": str(policy_version).strip(),
         "universe_policy_version": str(universe_policy_version).strip(),
         "instruments": instruments,
+        "fx": {
+            "symbol": fx_symbol,
+            "provider_fetched_at": _timestamp(
+                fx_snapshot.fetched_at_utc, "fx.provider_fetched_at"
+            ),
+            "row_count": len(fx_rates),
+            "first_observation": fx_rates[0]["at"],
+            "last_observation": fx_rates[-1]["at"],
+            "rates": fx_rates,
+        },
     }
     if not body["policy_version"] or not body["universe_policy_version"]:
         raise ValueError("policy versions must be non-empty.")
