@@ -800,6 +800,11 @@ def _run_p4_capture_validation_dataset(args) -> int:
         loader=load_market_snapshot,
         policy_version=str(policy.get("policy_version", "")),
         universe_policy_version=str(universe.get("policy_version", "")),
+        quote_currency="USD",
+        portfolio_currency=str(
+            policy.get("portfolio", {}).get("currency", "")
+            if isinstance(policy.get("portfolio"), dict) else ""
+        ),
     ))
     return 0
 
