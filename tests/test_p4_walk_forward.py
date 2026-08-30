@@ -187,3 +187,32 @@ def test_diagnostics_aggregate_pre_trade_rejections() -> None:
         study["folds"]
     )
     assert all(fold["economic_rejection_count"] == 3 for fold in study["folds"])
+
+
+def test_diagnostics_aggregate_signal_qualification_funnel() -> None:
+    def replay(dataset, *, parameters, test_start, test_end):
+        return {
+            "trade_count": 0,
+            "gross_pnl": 0.0,
+            "execution_costs": 0.0,
+            "net_pnl": 0.0,
+            "trades": [],
+            "signal_evaluation_count": 10,
+            "actionable_signal_count": 0,
+            "signal_rejection_counts": {"PULLBACK_ZONE": 8, "RSI_RESET": 3},
+        }
+
+    study = run_walk_forward_study(
+        _dataset(),
+        parameter_candidates=_candidates(),
+        generated_at=datetime(2026, 8, 30, tzinfo=timezone.utc),
+        cost_model_id="ibkr-reference-2026-08-09-v2",
+        replay_runner=replay,
+    )
+
+    fold_count = len(study["folds"])
+    assert study["diagnostics"]["signal_evaluation_count"] == 10 * fold_count
+    assert study["diagnostics"]["signal_rejection_counts"] == {
+        "PULLBACK_ZONE": 8 * fold_count,
+        "RSI_RESET": 3 * fold_count,
+    }

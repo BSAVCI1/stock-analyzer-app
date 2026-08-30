@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,6 +34,7 @@ class ReplaySignal:
     atr: float
     stop_price: float | None = None
     target_price: float | None = None
+    rejection_codes: tuple[str, ...] = ()
 
 
 SignalEvaluator = Callable[
@@ -62,11 +64,20 @@ def _default_signal(
     )
     risk = apply_risk_management(analysis, result)
     order = risk.order
+    rejection_codes = tuple(sorted({
+        evidence.code
+        for evidence in result.evidence
+        if evidence.direction.value != "BULLISH"
+        and evidence.code not in {"SETUP_CONFIRMED", "SETUP_FORMING"}
+    }))
+    if order is None and risk.risk_vetoes:
+        rejection_codes += ("RISK_VETO",)
     return ReplaySignal(
         actionable=order is not None,
         atr=analysis.indicators.atr,
         stop_price=(float(order.stop_price) if order is not None else None),
         target_price=(float(order.targets[0]) if order is not None else None),
+        rejection_codes=tuple(sorted(set(rejection_codes))),
     )
 
 
@@ -185,6 +196,9 @@ def replay_trend_pullback(
     trades: list[dict[str, object]] = []
     economic_rejections = 0
     risk_geometry_rejections = 0
+    signal_evaluations = 0
+    actionable_signals = 0
+    signal_rejections: Counter[str] = Counter()
 
     for item in instruments:
         if not isinstance(item, Mapping):
@@ -198,9 +212,13 @@ def replay_trend_pullback(
             decision = signal_evaluator(history, symbol, parameters)
             if not isinstance(decision, ReplaySignal):
                 raise ValueError("signal_evaluator must return ReplaySignal.")
+            signal_evaluations += 1
             if not decision.actionable:
+                codes = decision.rejection_codes or ("UNCLASSIFIED_NON_ACTIONABLE",)
+                signal_rejections.update(codes)
                 position += 1
                 continue
+            actionable_signals += 1
             if decision.atr <= 0:
                 raise ValueError("actionable signal ATR must be positive.")
             entry_position = position + 1
@@ -289,6 +307,9 @@ def replay_trend_pullback(
         "currency": "EUR",
         "economic_rejection_count": economic_rejections,
         "risk_geometry_rejection_count": risk_geometry_rejections,
+        "signal_evaluation_count": signal_evaluations,
+        "actionable_signal_count": actionable_signals,
+        "signal_rejection_counts": dict(sorted(signal_rejections.items())),
         "trades": trades,
     }
 

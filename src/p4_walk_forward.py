@@ -104,6 +104,9 @@ def _diagnostics(result: Mapping[str, object]) -> dict[str, object]:
             losers += 1
         else:
             breakeven += 1
+    raw_signal_rejections = result.get("signal_rejection_counts", {})
+    if not isinstance(raw_signal_rejections, Mapping):
+        raise ValueError("signal_rejection_counts must be an object.")
     return {
         "winning_trades": winners,
         "losing_trades": losers,
@@ -119,6 +122,12 @@ def _diagnostics(result: Mapping[str, object]) -> dict[str, object]:
         "risk_geometry_rejection_count": int(
             result.get("risk_geometry_rejection_count", 0)
         ),
+        "signal_evaluation_count": int(result.get("signal_evaluation_count", 0)),
+        "actionable_signal_count": int(result.get("actionable_signal_count", 0)),
+        "signal_rejection_counts": dict(sorted(
+            (str(key), int(value))
+            for key, value in raw_signal_rejections.items()
+        )),
         "exit_reason_counts": dict(sorted(reasons.items())),
         "symbol_counts": dict(sorted(symbols.items())),
     }
@@ -128,11 +137,13 @@ def _aggregate_diagnostics(folds: Sequence[Mapping[str, object]]) -> dict[str, o
     totals: Counter[str] = Counter()
     reasons: Counter[str] = Counter()
     symbols: Counter[str] = Counter()
+    signal_rejections: Counter[str] = Counter()
     numeric_keys = (
         "winning_trades", "losing_trades", "breakeven_trades",
         "gross_profitable_trades", "gross_gains_erased_by_costs",
         "gross_profit", "gross_loss", "execution_costs",
         "economic_rejection_count", "risk_geometry_rejection_count",
+        "signal_evaluation_count", "actionable_signal_count",
     )
     for fold in folds:
         diagnostics = fold["diagnostics"]
@@ -140,10 +151,12 @@ def _aggregate_diagnostics(folds: Sequence[Mapping[str, object]]) -> dict[str, o
             totals[key] += diagnostics[key]
         reasons.update(diagnostics["exit_reason_counts"])
         symbols.update(diagnostics["symbol_counts"])
+        signal_rejections.update(diagnostics["signal_rejection_counts"])
     return {
         **dict(totals),
         "exit_reason_counts": dict(sorted(reasons.items())),
         "symbol_counts": dict(sorted(symbols.items())),
+        "signal_rejection_counts": dict(sorted(signal_rejections.items())),
     }
 
 
