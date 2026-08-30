@@ -39,6 +39,7 @@ from src.p4_evidence_assembly import assemble_p4_release_evidence
 from src.p4_operational_rehearsal import build_p4_operational_rehearsal
 from src.p4_validation_dataset import capture_horizon_dataset
 from src.p4_validation_report import build_validation_report
+from src.p4_walk_forward import run_walk_forward_study
 from src.data.market_data import load_market_snapshot
 
 from src.product_config import (
@@ -365,6 +366,20 @@ def build_parser() -> argparse.ArgumentParser:
     p4_validation.add_argument(
         "--policy", default=str(DEFAULT_PRODUCT_POLICY_PATH),
     )
+
+    p4_walk_forward = commands.add_parser(
+        "p4-run-walk-forward",
+        help="Run training-only selection and untouched horizon test folds.",
+    )
+    p4_walk_forward.add_argument("--dataset", required=True)
+    p4_walk_forward.add_argument(
+        "--parameter-grid",
+        default="config/p4_trend_pullback_parameter_grid.json",
+    )
+    p4_walk_forward.add_argument(
+        "--policy", default=str(DEFAULT_PRODUCT_POLICY_PATH),
+    )
+    p4_walk_forward.add_argument("--generated-at")
 
     p4_assemble = commands.add_parser(
         "p4-assemble-evidence",
@@ -830,6 +845,26 @@ def _run_p4_build_validation_report(args) -> int:
         validation["parameter_stability"]
         >= validation["minimum_parameter_stability"],
     )) else 1
+
+
+def _run_p4_walk_forward(args) -> int:
+    dataset = _read_json_object(args.dataset, "validation dataset")
+    grid = _read_json_object(args.parameter_grid, "parameter grid")
+    policy = _read_json_object(args.policy, "product policy")
+    candidates = grid.get("candidates")
+    if grid.get("schema_version") != 1 or not isinstance(candidates, list):
+        raise ValueError("parameter grid schema or candidates are invalid.")
+    cost_model = policy.get("cost_model")
+    if not isinstance(cost_model, dict):
+        raise ValueError("product policy cost_model must be an object.")
+    study = run_walk_forward_study(
+        dataset,
+        parameter_candidates=candidates,
+        generated_at=_parse_datetime(args.generated_at),
+        cost_model_id=str(cost_model.get("reference_profile_version", "")),
+    )
+    _write_json(study)
+    return 0
 
 
 def _read_json_object(path_value: str, label: str) -> dict[str, object]:
@@ -2130,6 +2165,9 @@ def main(
 
         if args.command == "p4-build-validation-report":
             return _run_p4_build_validation_report(args)
+
+        if args.command == "p4-run-walk-forward":
+            return _run_p4_walk_forward(args)
 
         if args.command == "p4-assemble-evidence":
             return _run_p4_assemble_evidence(args)
