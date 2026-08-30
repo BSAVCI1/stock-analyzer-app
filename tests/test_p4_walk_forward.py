@@ -163,3 +163,27 @@ def test_diagnostics_explain_cost_drag_and_exit_mix() -> None:
     assert diagnostics["winning_trades"] == len(study["folds"])
     assert diagnostics["gross_gains_erased_by_costs"] == len(study["folds"])
     assert diagnostics["exit_reason_counts"]["STOP"] == len(study["folds"])
+
+
+def test_diagnostics_aggregate_pre_trade_rejections() -> None:
+    def replay(dataset, *, parameters, test_start, test_end):
+        return {
+            "trade_count": 0, "gross_pnl": 0.0,
+            "execution_costs": 0.0, "net_pnl": 0.0, "trades": [],
+            "economic_rejection_count": 3,
+            "risk_geometry_rejection_count": 1,
+        }
+
+    study = run_walk_forward_study(
+        _dataset(), parameter_candidates=_candidates(),
+        generated_at=datetime(2026, 8, 30, tzinfo=timezone.utc),
+        cost_model_id="ibkr-reference-2026-08-09-v2", replay_runner=replay,
+    )
+
+    assert study["diagnostics"]["economic_rejection_count"] == 3 * len(
+        study["folds"]
+    )
+    assert study["diagnostics"]["risk_geometry_rejection_count"] == len(
+        study["folds"]
+    )
+    assert all(fold["economic_rejection_count"] == 3 for fold in study["folds"])
