@@ -113,6 +113,12 @@ def _diagnostics(result: Mapping[str, object]) -> dict[str, object]:
         "gross_profit": gross_profit,
         "gross_loss": gross_loss,
         "execution_costs": total_costs,
+        "economic_rejection_count": int(
+            result.get("economic_rejection_count", 0)
+        ),
+        "risk_geometry_rejection_count": int(
+            result.get("risk_geometry_rejection_count", 0)
+        ),
         "exit_reason_counts": dict(sorted(reasons.items())),
         "symbol_counts": dict(sorted(symbols.items())),
     }
@@ -126,6 +132,7 @@ def _aggregate_diagnostics(folds: Sequence[Mapping[str, object]]) -> dict[str, o
         "winning_trades", "losing_trades", "breakeven_trades",
         "gross_profitable_trades", "gross_gains_erased_by_costs",
         "gross_profit", "gross_loss", "execution_costs",
+        "economic_rejection_count", "risk_geometry_rejection_count",
     )
     for fold in folds:
         diagnostics = fold["diagnostics"]
@@ -213,6 +220,12 @@ def run_walk_forward_study(
             "gross_pnl": float(test_result["gross_pnl"]),
             "execution_costs": float(test_result["execution_costs"]),
             "net_pnl": float(test_result["net_pnl"]),
+            "economic_rejection_count": int(
+                test_result.get("economic_rejection_count", 0)
+            ),
+            "risk_geometry_rejection_count": int(
+                test_result.get("risk_geometry_rejection_count", 0)
+            ),
             "trade_ids": [
                 f"{trade['symbol']}:{trade['entry_at']}:{trade['exit_at']}"
                 for trade in test_result.get("trades", [])
