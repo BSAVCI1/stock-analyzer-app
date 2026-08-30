@@ -10,12 +10,14 @@ from typing import Any
 
 import pandas as pd
 
-from src.analysis import Signal, evaluate_trend_pullback
+from src.analysis import apply_risk_management, evaluate_trend_pullback
 from src.analysis.regime import classify_history
 from src.analysis.trend_pullback import TrendPullbackThresholds
 from src.costs import (
     IBKRPricingPlan,
     IBKRTradeSide,
+    IBKREconomicDecision,
+    calculate_us_long_trade_economics,
     calculate_us_stock_reference_fees,
 )
 from src.data import MarketSnapshot
@@ -29,12 +31,15 @@ _MAX_HOLDING = {"swing": 20, "medium_term": 65}
 class ReplaySignal:
     actionable: bool
     atr: float
+    stop_price: float | None = None
+    target_price: float | None = None
 
 
 SignalEvaluator = Callable[
     [pd.DataFrame, str, Mapping[str, object]], ReplaySignal
 ]
 FeeEstimator = Callable[[float, float, IBKRTradeSide], float]
+EconomicEvaluator = Callable[[float, float, float, float, float], bool]
 
 
 def _default_signal(
@@ -55,9 +60,13 @@ def _default_signal(
         classify_history(clean),
         TrendPullbackThresholds(**dict(parameters)),
     )
+    risk = apply_risk_management(analysis, result)
+    order = risk.order
     return ReplaySignal(
-        actionable=result.signal is Signal.BUY and not result.vetoed,
+        actionable=order is not None,
         atr=analysis.indicators.atr,
+        stop_price=(float(order.stop_price) if order is not None else None),
+        target_price=(float(order.targets[0]) if order is not None else None),
     )
 
 
@@ -72,6 +81,28 @@ def _default_fee(quantity: float, value: float, side: IBKRTradeSide) -> float:
     if not estimate.complete:
         raise ValueError("IBKR US stock cost estimate is incomplete.")
     return float(estimate.total_known_cost)
+
+
+def _default_economics(
+    quantity: float,
+    entry: float,
+    stop: float,
+    target: float,
+    usd_to_eur: float,
+) -> bool:
+    economics = calculate_us_long_trade_economics(
+        quantity=quantity,
+        entry_price_usd=entry,
+        stop_price_usd=stop,
+        target_price_usd=target,
+        usd_to_portfolio_rate=usd_to_eur,
+        pricing_plan=IBKRPricingPlan.FIXED,
+        minimum_net_reward_to_risk=2.0,
+        fractional=True,
+        include_entry_fx_conversion=False,
+        include_exit_fx_conversion=False,
+    )
+    return economics.decision is IBKREconomicDecision.ACCEPT
 
 
 def _frame(rows: object, symbol: str) -> pd.DataFrame:
@@ -128,6 +159,7 @@ def replay_trend_pullback(
     target_order_value_usd: float = 100.0,
     signal_evaluator: SignalEvaluator = _default_signal,
     fee_estimator: FeeEstimator = _default_fee,
+    economic_evaluator: EconomicEvaluator = _default_economics,
 ) -> dict[str, Any]:
     """Replay one out-of-sample window without looking beyond its end."""
 
@@ -151,6 +183,8 @@ def replay_trend_pullback(
         raise ValueError("dataset instruments must be a non-empty array.")
     rates = _fx_series(dataset)
     trades: list[dict[str, object]] = []
+    economic_rejections = 0
+    risk_geometry_rejections = 0
 
     for item in instruments:
         if not isinstance(item, Mapping):
@@ -175,8 +209,27 @@ def replay_trend_pullback(
             entry_at = index[entry_position]
             entry = float(frame["Open"].iloc[entry_position])
             quantity = target_value / entry
-            stop = entry - 1.5 * decision.atr
-            target = entry + 3.0 * decision.atr
+            stop = (
+                float(decision.stop_price)
+                if decision.stop_price is not None
+                else entry - 1.5 * decision.atr
+            )
+            target = (
+                float(decision.target_price)
+                if decision.target_price is not None
+                else entry + 3.0 * decision.atr
+            )
+            if not stop < entry < target:
+                risk_geometry_rejections += 1
+                position += 1
+                continue
+            entry_fx = _rate_at(rates, entry_at)
+            if not economic_evaluator(
+                quantity, entry, stop, target, entry_fx
+            ):
+                economic_rejections += 1
+                position += 1
+                continue
             final_position = min(
                 entry_position + _MAX_HOLDING[horizon],
                 int(index.searchsorted(end, side="right")) - 1,
@@ -201,7 +254,7 @@ def replay_trend_pullback(
             exit_fee = fee_estimator(
                 quantity, quantity * exit_price, IBKRTradeSide.SELL
             )
-            entry_fx, exit_fx = _rate_at(rates, entry_at), _rate_at(rates, exit_at)
+            exit_fx = _rate_at(rates, exit_at)
             gross_eur = quantity * exit_price * exit_fx - quantity * entry * entry_fx
             costs_eur = entry_fee * entry_fx + exit_fee * exit_fx
             trades.append({
@@ -234,6 +287,8 @@ def replay_trend_pullback(
         ),
         "net_pnl": sum(float(item["net_pnl_eur"]) for item in trades),
         "currency": "EUR",
+        "economic_rejection_count": economic_rejections,
+        "risk_geometry_rejection_count": risk_geometry_rejections,
         "trades": trades,
     }
 
