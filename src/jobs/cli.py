@@ -37,6 +37,8 @@ from src.p4_horizon_evidence import build_strategy_horizon_check
 from src.p4_horizon_report_builder import build_horizon_evidence
 from src.p4_evidence_assembly import assemble_p4_release_evidence
 from src.p4_operational_rehearsal import build_p4_operational_rehearsal
+from src.p4_validation_dataset import capture_horizon_dataset
+from src.data.market_data import load_market_snapshot
 
 from src.product_config import (
     DEFAULT_PRODUCT_POLICY_PATH,
@@ -331,6 +333,24 @@ def build_parser() -> argparse.ArgumentParser:
     p4_horizon_build.add_argument(
         "--threshold-manifest",
         default="config/approved_signal_thresholds.json",
+    )
+
+    p4_dataset = commands.add_parser(
+        "p4-capture-validation-dataset",
+        help="Capture an immutable, horizon-specific Yahoo validation dataset.",
+    )
+    p4_dataset.add_argument(
+        "--horizon", required=True, choices=("swing", "medium_term")
+    )
+    p4_dataset.add_argument(
+        "--policy", default=str(DEFAULT_PRODUCT_POLICY_PATH)
+    )
+    p4_dataset.add_argument(
+        "--universe", default="config/stock_universe.json"
+    )
+    p4_dataset.add_argument(
+        "--captured-at",
+        help="Timezone-aware ISO timestamp; defaults to current UTC time.",
     )
 
     p4_assemble = commands.add_parser(
@@ -737,6 +757,38 @@ def _run_p4_build_horizon_evidence(args) -> int:
     check = build_strategy_horizon_check(evidence)
     _write_json(evidence)
     return 0 if check.status.value == "PASS" else 1
+
+
+def _run_p4_capture_validation_dataset(args) -> int:
+    policy = _read_json_object(args.policy, "product policy")
+    universe = _read_json_object(args.universe, "stock universe")
+    base = universe.get("base_symbols")
+    included = universe.get("include_symbols", [])
+    excluded = universe.get("exclude_symbols", [])
+    if not isinstance(base, list) or not isinstance(included, list):
+        raise ValueError("stock universe symbol collections must be arrays.")
+    if not isinstance(excluded, list):
+        raise ValueError("stock universe exclude_symbols must be an array.")
+    excluded_set = {str(symbol).strip().upper() for symbol in excluded}
+    symbols = [
+        str(symbol).strip().upper()
+        for symbol in (*base, *included)
+        if str(symbol).strip().upper() not in excluded_set
+    ]
+    captured_at = (
+        _parse_datetime(args.captured_at)
+        if args.captured_at
+        else datetime.now(timezone.utc)
+    )
+    _write_json(capture_horizon_dataset(
+        horizon=args.horizon,
+        symbols=symbols,
+        captured_at=captured_at,
+        loader=load_market_snapshot,
+        policy_version=str(policy.get("policy_version", "")),
+        universe_policy_version=str(universe.get("policy_version", "")),
+    ))
+    return 0
 
 
 def _read_json_object(path_value: str, label: str) -> dict[str, object]:
@@ -2031,6 +2083,9 @@ def main(
 
         if args.command == "p4-build-horizon-evidence":
             return _run_p4_build_horizon_evidence(args)
+
+        if args.command == "p4-capture-validation-dataset":
+            return _run_p4_capture_validation_dataset(args)
 
         if args.command == "p4-assemble-evidence":
             return _run_p4_assemble_evidence(args)
