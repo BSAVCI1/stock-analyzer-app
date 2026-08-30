@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 import json
@@ -70,6 +71,75 @@ def _ranking(result: Mapping[str, object], candidate: Mapping[str, object]) -> t
     )
 
 
+def _diagnostics(result: Mapping[str, object]) -> dict[str, object]:
+    trades = result.get("trades")
+    expected = int(result.get("trade_count", 0))
+    if not isinstance(trades, list) or len(trades) != expected:
+        raise ValueError("replay trade details must match trade_count.")
+    reasons: Counter[str] = Counter()
+    symbols: Counter[str] = Counter()
+    winners = losers = breakeven = gross_winners = 0
+    gross_profit = gross_loss = total_costs = 0.0
+    for position, trade in enumerate(trades, start=1):
+        if not isinstance(trade, Mapping):
+            raise ValueError(f"trade {position} must be an object.")
+        reason = str(trade.get("exit_reason", "")).strip()
+        symbol = str(trade.get("symbol", "")).strip().upper()
+        if not reason or not symbol:
+            raise ValueError(f"trade {position} requires symbol and exit_reason.")
+        gross = float(trade.get("gross_pnl_eur"))
+        costs = float(trade.get("execution_costs_eur"))
+        net = float(trade.get("net_pnl_eur"))
+        reasons[reason] += 1
+        symbols[symbol] += 1
+        total_costs += costs
+        if gross > 0:
+            gross_winners += 1
+            gross_profit += gross
+        elif gross < 0:
+            gross_loss += gross
+        if net > 0:
+            winners += 1
+        elif net < 0:
+            losers += 1
+        else:
+            breakeven += 1
+    return {
+        "winning_trades": winners,
+        "losing_trades": losers,
+        "breakeven_trades": breakeven,
+        "gross_profitable_trades": gross_winners,
+        "gross_gains_erased_by_costs": max(0, gross_winners - winners),
+        "gross_profit": gross_profit,
+        "gross_loss": gross_loss,
+        "execution_costs": total_costs,
+        "exit_reason_counts": dict(sorted(reasons.items())),
+        "symbol_counts": dict(sorted(symbols.items())),
+    }
+
+
+def _aggregate_diagnostics(folds: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    totals: Counter[str] = Counter()
+    reasons: Counter[str] = Counter()
+    symbols: Counter[str] = Counter()
+    numeric_keys = (
+        "winning_trades", "losing_trades", "breakeven_trades",
+        "gross_profitable_trades", "gross_gains_erased_by_costs",
+        "gross_profit", "gross_loss", "execution_costs",
+    )
+    for fold in folds:
+        diagnostics = fold["diagnostics"]
+        for key in numeric_keys:
+            totals[key] += diagnostics[key]
+        reasons.update(diagnostics["exit_reason_counts"])
+        symbols.update(diagnostics["symbol_counts"])
+    return {
+        **dict(totals),
+        "exit_reason_counts": dict(sorted(reasons.items())),
+        "symbol_counts": dict(sorted(symbols.items())),
+    }
+
+
 def run_walk_forward_study(
     dataset: Mapping[str, object],
     *,
@@ -130,6 +200,7 @@ def run_walk_forward_study(
             test_start=test_start.to_pydatetime(),
             test_end=test_end.to_pydatetime(),
         )
+        diagnostics = _diagnostics(test_result)
         folds.append({
             "train_start": train_start.isoformat(),
             "train_end": train_end.isoformat(),
@@ -146,6 +217,7 @@ def run_walk_forward_study(
                 f"{trade['symbol']}:{trade['entry_at']}:{trade['exit_at']}"
                 for trade in test_result.get("trades", [])
             ],
+            "diagnostics": diagnostics,
         })
         train_end_position += test_size
 
@@ -166,6 +238,7 @@ def run_walk_forward_study(
             "minimum_net_expectancy": minimum_net_expectancy,
         },
         "folds": folds,
+        "diagnostics": _aggregate_diagnostics(folds),
     }
 
 
