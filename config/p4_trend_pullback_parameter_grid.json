@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "strategy": "trend_pullback",
+  "candidates": [
+    {
+      "buy_score": 75.0,
+      "max_close_above_ma20_pct": 1.5,
+      "max_close_below_ma20_pct": 4.0,
+      "min_macd_histogram": 0.0,
+      "min_support_buffer_pct": 0.5,
+      "rsi_max": 60.0,
+      "rsi_min": 40.0,
+      "watch_score": 55.0
+    },
+    {
+      "buy_score": 75.0,
+      "max_close_above_ma20_pct": 1.5,
+      "max_close_below_ma20_pct": 4.0,
+      "min_macd_histogram": 0.0,
+      "min_support_buffer_pct": 0.5,
+      "rsi_max": 65.0,
+      "rsi_min": 40.0,
+      "watch_score": 55.0
+    },
+    {
+      "buy_score": 75.0,
+      "max_close_above_ma20_pct": 1.5,
+      "max_close_below_ma20_pct": 4.0,
+      "min_macd_histogram": 0.0,
+      "min_support_buffer_pct": 0.5,
+      "rsi_max": 70.0,
+      "rsi_min": 40.0,
+      "watch_score": 55.0
+    }
+  ]
+}
